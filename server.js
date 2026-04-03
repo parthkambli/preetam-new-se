@@ -19,6 +19,10 @@ const fitnessMemberRoutes = require('./routes/fitness-member');
 
 const fitnessEventRoutes = require('./routes/fitnessEventRoutes');
 
+const fitnessStaffRoleRoutes = require("./routes/fitness-staffRole");
+const fitnessEmpTypeRoutes = require("./routes/fitness-staffEmpType");
+const fitnessStaffRoutes = require("./routes/fitness-staff");
+
 const path = require('path');
 
 // Load environment variables
@@ -60,6 +64,11 @@ app.use('/api/events', eventRoutes);
 app.use('/api/fitness/member', fitnessMemberRoutes);
 
 app.use('/api/fitness/events', fitnessEventRoutes);
+
+app.use("/api/fitness/roles", fitnessStaffRoleRoutes);
+app.use("/api/fitness/types", fitnessEmpTypeRoutes);
+app.use("/api/fitness/staff", fitnessStaffRoutes);
+
 
 // Health check route
 app.get('/api/health', (req, res) => {
