@@ -10,6 +10,8 @@ const followupRoutes = require('./routes/followups');
 const studentRoutes = require('./routes/students');
 const staffRoutes = require('./routes/staffRoutes');
 const activityRoutes = require('./routes/activityRoutes');
+const fitnessActivity = require('./routes/fitness-Activity');
+const fitnessSchedule = require('./routes/fitness-Schedule');
 
 const feeRoutes = require('./routes/fees');
 const healthRecordRoutes = require('./routes/healthRecordRoutes');
@@ -60,6 +62,8 @@ app.use('/api/events', eventRoutes);
 app.use('/api/fitness/member', fitnessMemberRoutes);
 
 app.use('/api/fitness/events', fitnessEventRoutes);
+app.use('/api/fitness-activities', fitnessActivity);
+app.use('/api/fitness-schedules', fitnessSchedule);
 
 // Health check route
 app.get('/api/health', (req, res) => {
