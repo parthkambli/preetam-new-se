@@ -10,6 +10,8 @@ const followupRoutes = require('./routes/followups');
 const studentRoutes = require('./routes/students');
 const staffRoutes = require('./routes/Staffroutes');
 const activityRoutes = require('./routes/activityRoutes');
+const fitnessActivity = require('./routes/fitness-Activity');
+const fitnessSchedule = require('./routes/fitness-Schedule');
 
 const feeRoutes = require('./routes/fees');
 const healthRecordRoutes = require('./routes/healthRecordRoutes');
@@ -18,6 +20,10 @@ const eventRoutes = require('./routes/eventRoutes');
 const fitnessMemberRoutes = require('./routes/fitness-member');
 
 const fitnessEventRoutes = require('./routes/fitnessEventRoutes');
+
+const fitnessStaffRoleRoutes = require("./routes/fitness-staffRole");
+const fitnessEmpTypeRoutes = require("./routes/fitness-staffEmpType");
+const fitnessStaffRoutes = require("./routes/fitness-staff");
 
 const path = require('path');
 
@@ -60,6 +66,13 @@ app.use('/api/events', eventRoutes);
 app.use('/api/fitness/member', fitnessMemberRoutes);
 
 app.use('/api/fitness/events', fitnessEventRoutes);
+app.use('/api/fitness-activities', fitnessActivity);
+app.use('/api/fitness-schedules', fitnessSchedule);
+
+app.use("/api/fitness/roles", fitnessStaffRoleRoutes);
+app.use("/api/fitness/types", fitnessEmpTypeRoutes);
+app.use("/api/fitness/staff", fitnessStaffRoutes);
+
 
 // Health check route
 app.get('/api/health', (req, res) => {
