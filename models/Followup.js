@@ -23,11 +23,11 @@ const followupSchema = new mongoose.Schema({
   },
   previousStatus: {
     type: String,
-    enum: ['New', 'Follow Up', 'Follow-up', 'Converted', 'Admitted']
+    enum: ['New', 'Follow Up', 'Converted', 'Admitted']
   },
   newStatus: {
     type: String,
-    enum: ['New', 'Follow Up', 'Follow-up', 'Converted', 'Admitted'],
+    enum: ['New', 'Follow Up', 'Converted', 'Admitted'],
     required: true
   },
   remark: {

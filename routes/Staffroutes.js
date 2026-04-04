@@ -9,14 +9,14 @@ const {
   createStaff,
   updateStaff,
   deleteStaff
-} = require('../controllers/staffController');
+} = require('../controllers/Staffcontroller');
 
 const {
   getAllRoles,
   createRole,
   updateRole,
   deleteRole
-} = require('../controllers/staffRoleController');
+} = require('../controllers/Staffrolecontroller');
 
 const {
   getAllEmploymentTypes,
