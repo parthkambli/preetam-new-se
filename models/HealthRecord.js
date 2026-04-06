@@ -30,7 +30,7 @@ const healthRecordSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ['Stable', 'Critical', 'Improving', 'Under Observation'],
+    enum: ['Stable', 'Critical', 'Recovering', 'Under Observation'],
     required: true,
     default: 'Stable'
   },
