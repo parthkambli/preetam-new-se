@@ -25,3 +25,23 @@ fitnessActivitySchema.pre('save', function (next) {
 module.exports =
   mongoose.models.FitnessActivity ||
   mongoose.model('FitnessActivity', fitnessActivitySchema);
+
+
+
+// const mongoose = require('mongoose');
+
+// const fitnessActivitySchema = new mongoose.Schema(
+//   {
+//     name: {
+//       type: String,
+//       required: true,
+//       trim: true,
+//       unique: true,
+//     },
+//   },
+//   {
+//     timestamps: true,
+//   }
+// );
+
+// module.exports = mongoose.model('FitnessActivity', fitnessActivitySchema);

@@ -1,24 +1,19 @@
 const mongoose = require('mongoose');
-const FitnessSchedule = require('../models/FitnessSchedule');
-const FitnessActivity = require('../models/FitnessActivity');
+const FitnessSchedule = require('../models/fitnessSchedule');
+const FitnessActivity = require('../models/fitnessActivity');
 
-// ➕ Create schedule
 exports.createSchedule = async (req, res) => {
   try {
-    const {
-      activityId,
-      scheduleDate,
-      startTime,
-      endTime,
-      place,
-      instructor
-    } = req.body;
+    const activityId = req.body.activityId || req.body.activity;
+    const scheduleDate = req.body.scheduleDate || req.body.date;
+    const startTime = req.body.startTime || req.body.time;
+    const place = req.body.place;
+    const instructor = req.body.instructor;
 
     if (
       !activityId ||
       !scheduleDate ||
       !startTime ||
-      !endTime ||
       !place ||
       !instructor
     ) {
@@ -28,28 +23,10 @@ exports.createSchedule = async (req, res) => {
       });
     }
 
-    if (!mongoose.Types.ObjectId.isValid(activityId)) {
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid activity ID'
-      });
-    }
-
-    // 🔥 Check activity exists
-    const activity = await FitnessActivity.findById(activityId);
-
-    if (!activity) {
-      return res.status(404).json({
-        success: false,
-        message: 'Selected activity not found'
-      });
-    }
-
     const schedule = await FitnessSchedule.create({
       activityId,
       scheduleDate,
       startTime,
-      endTime,
       place,
       instructor
     });
@@ -130,18 +107,15 @@ exports.getScheduleById = async (req, res) => {
   }
 };
 
-// ✏️ Update schedule
 exports.updateSchedule = async (req, res) => {
   try {
     const { id } = req.params;
-    const {
-      activityId,
-      scheduleDate,
-      startTime,
-      endTime,
-      place,
-      instructor
-    } = req.body;
+
+    const activityId = req.body.activityId || req.body.activity;
+    const scheduleDate = req.body.scheduleDate || req.body.date;
+    const startTime = req.body.startTime || req.body.time;
+    const place = req.body.place;
+    const instructor = req.body.instructor || req.body.instructorName;
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({
@@ -150,14 +124,7 @@ exports.updateSchedule = async (req, res) => {
       });
     }
 
-    if (
-      !activityId ||
-      !scheduleDate ||
-      !startTime ||
-      !endTime ||
-      !place ||
-      !instructor
-    ) {
+    if (!activityId || !scheduleDate || !startTime || !place || !instructor) {
       return res.status(400).json({
         success: false,
         message: 'All fields are required'
@@ -186,7 +153,6 @@ exports.updateSchedule = async (req, res) => {
         activityId,
         scheduleDate,
         startTime,
-        endTime,
         place,
         instructor,
         updatedAt: Date.now()
@@ -216,7 +182,6 @@ exports.updateSchedule = async (req, res) => {
     });
   }
 };
-
 // ❌ Delete schedule
 exports.deleteSchedule = async (req, res) => {
   try {
@@ -252,3 +217,18 @@ exports.deleteSchedule = async (req, res) => {
     });
   }
 };
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

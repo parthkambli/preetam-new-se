@@ -18,12 +18,6 @@ const fitnessScheduleSchema = new mongoose.Schema({
     trim: true
   },
 
-  endTime: {
-    type: String,
-    required: [true, 'End time is required'],
-    trim: true
-  },
-
   place: {
     type: String,
     required: [true, 'Place is required'],
@@ -47,7 +41,6 @@ const fitnessScheduleSchema = new mongoose.Schema({
   }
 });
 
-// 🔄 Auto update updatedAt
 fitnessScheduleSchema.pre('save', function (next) {
   this.updatedAt = Date.now();
   next();
@@ -56,3 +49,38 @@ fitnessScheduleSchema.pre('save', function (next) {
 module.exports =
   mongoose.models.FitnessSchedule ||
   mongoose.model('FitnessSchedule', fitnessScheduleSchema);
+  
+// const mongoose = require('mongoose');
+
+// const fitnessScheduleSchema = new mongoose.Schema(
+//   {
+//     activity: {
+//       type: mongoose.Schema.Types.ObjectId,
+//       ref: 'FitnessActivity',
+//       required: true,
+//     },
+//     date: {
+//       type: String,
+//       required: true,
+//     },
+//     time: {
+//       type: String,
+//       required: true,
+//     },
+//     place: {
+//       type: String,
+//       required: true,
+//       trim: true,
+//     },
+//     instructor: {
+//       type: String,
+//       required: true,
+//       trim: true,
+//     },
+//   },
+//   {
+//     timestamps: true,
+//   }
+// );
+
+// module.exports = mongoose.model('FitnessSchedule', fitnessScheduleSchema);
