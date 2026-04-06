@@ -9,3 +9,5 @@ router.put('/:id', controller.updateSchedule);
 router.delete('/:id', controller.deleteSchedule);
 
 module.exports = router;
+
+
