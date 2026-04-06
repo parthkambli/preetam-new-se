@@ -1,13 +1,73 @@
+/**
+ * Fitness Staff Routes
+ * Mounts all CRUD endpoints under /api/fitness-staff.
+ *
+ * POST   /api/fitness-staff          → createFitnessStaff  (multipart/form-data)
+ * GET    /api/fitness-staff          → getFitnessStaff
+ * GET    /api/fitness-staff/:id      → getFitnessStaffById
+ * PUT    /api/fitness-staff/:id      → updateFitnessStaff  (multipart/form-data)
+ * DELETE /api/fitness-staff/:id      → deleteFitnessStaff
+ */
 
-const router = require("express").Router();
-const upload = require("../middleware/upload");
+const express = require("express");
+const router  = express.Router();
 
-const { createFitnessStaff, getFitnessStaff, getFitnessStaffById, updateFitnessStaff, deleteFitnessStaff } = require('../controllers/fitnessStaffController');
+const {
+  createFitnessStaff,
+  getFitnessStaff,
+  getFitnessStaffById,
+  updateFitnessStaff,
+  deleteFitnessStaff,
+  upload,                        // multer instance from controller
+} = require("../controllers/fitnessStaffController");
 
-router.post("/create", upload.single("photo"), createFitnessStaff );
+// ─── Multer error handler (wraps multer middleware) ───────────────────────────
+/**
+ * Wraps a multer middleware so that multer-specific errors (file type, size)
+ * are returned as clean JSON instead of crashing the request.
+ */
+const multerSingle = (fieldName) => (req, res, next) => {
+  upload.single(fieldName)(req, res, (err) => {
+    if (!err) return next();
+
+    // Multer-specific errors
+    if (err.code === "LIMIT_FILE_SIZE") {
+      return res.status(413).json({
+        success: false,
+        message: "Profile photo must be smaller than 5 MB",
+      });
+    }
+    // fileFilter rejection or other multer errors
+    return res.status(400).json({
+      success: false,
+      message: err.message || "File upload error",
+    });
+  });
+};
+
+// ─── Routes ───────────────────────────────────────────────────────────────────
+
+// Create a new staff member  (accepts an optional profilePhoto file)
+router.post(
+  "/",
+  multerSingle("profilePhoto"),
+  createFitnessStaff
+);
+
+// List all staff members  (supports ?page, ?limit, ?status, ?role, ?search)
 router.get("/", getFitnessStaff);
+
+// Get a single staff member by MongoDB ObjectId
 router.get("/:id", getFitnessStaffById);
-router.put("/:id", upload.single("photo"), updateFitnessStaff);
+
+// Update a staff member  (also accepts an optional profilePhoto file)
+router.put(
+  "/:id",
+  multerSingle("profilePhoto"),
+  updateFitnessStaff
+);
+
+// Delete a staff member (also removes their profile photo from disk)
 router.delete("/:id", deleteFitnessStaff);
 
 module.exports = router;
