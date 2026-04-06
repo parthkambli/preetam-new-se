@@ -43,7 +43,7 @@ const fitnessEnquirySchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ['New', 'Follow-up', 'Converted', 'Admitted'],
+    enum: ['New', 'Follow Up', 'Converted', 'Admitted'],
     default: 'New'
   },
   remark: {
