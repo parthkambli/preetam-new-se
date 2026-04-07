@@ -177,11 +177,6 @@ const fitnessStaffSchema = new mongoose.Schema(
 
     employmentType: {
       type: String,
-      enum: {
-        values: ["Full Time", "Part Time", "Contract"],
-        message: "Employment type must be Full Time, Part Time, or Contract",
-      },
-      default: null,
     },
 
     status: {
@@ -201,6 +196,10 @@ const fitnessStaffSchema = new mongoose.Schema(
     },
 
     // ─── Login / Contact ───────────────────────────────────────────────────────
+    employeeId: {
+  type: String,
+  unique: true
+},
     mobileNumber: {
       type: String,
       required: [true, "Mobile number is required (used as Login ID)"],
