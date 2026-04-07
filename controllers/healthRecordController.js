@@ -612,12 +612,612 @@
 
 
 
+// // controllers/healthRecordController.js
+// const fs = require('fs');
+// const path = require('path');
+// const multer = require('multer');
+// const HealthRecord = require('../models/HealthRecord');
+// const Student = require('../models/Student');   // Required for updating last health checkup
+
+// // ─────────────────────────────────────────────────────────────────────────────
+// // Multer — saves to uploads/student/health-report/
+// const storage = multer.diskStorage({
+//   destination: (req, file, cb) => {
+//     const uploadDir = path.join(__dirname, '..', 'uploads', 'student', 'health-report');
+//     fs.mkdirSync(uploadDir, { recursive: true });
+//     cb(null, uploadDir);
+//   },
+//   filename: (req, file, cb) => {
+//     const unique = Date.now() + '-' + Math.round(Math.random() * 1e9);
+//     cb(null, 'report-' + unique + path.extname(file.originalname));
+//   }
+// });
+
+// const upload = multer({
+//   storage,
+//   limits: { fileSize: 5 * 1024 * 1024 }, // 5 MB
+//   fileFilter: (req, file, cb) => {
+//     const allowed = /jpeg|jpg|png|webp|pdf/;
+//     const extOk = allowed.test(path.extname(file.originalname).toLowerCase());
+//     const mimeOk = allowed.test(file.mimetype);
+//     if (extOk && mimeOk) return cb(null, true);
+//     cb(new Error('Only JPG, PNG, WebP and PDF files are allowed'));
+//   }
+// }).single('reportFile');
+
+// // ─────────────────────────────────────────────────────────────────────────────
+// const deleteFile = (filePath) => {
+//   if (filePath?.startsWith('/uploads/')) {
+//     const full = path.join(__dirname, '..', filePath);
+//     if (fs.existsSync(full)) fs.unlinkSync(full);
+//   }
+// };
+
+// // Fields accepted from frontend + mapping support
+// const ALLOWED_FIELDS = [
+//   'studentId', 'studentName', 'recordType', 'recordDate', 'time',
+//   'doctorName', 'hospitalName', 'height', 'weight', 'bloodPressure',
+//   'temperature', 'pulseRate', 'diagnosis', 'treatment', 'prescription',
+//   'status', 'followUpDate', 'notes'
+// ];
+
+// const pickFields = (body) => ALLOWED_FIELDS.reduce((acc, key) => {
+//   if (body[key] !== undefined && body[key] !== '') {
+//     acc[key] = body[key];
+//   }
+//   return acc;
+// }, {});
+
+// // ─────────────────────────────────────────────────────────────────────────────
+// /** GET /api/health-records */
+// exports.getAllHealthRecords = async (req, res) => {
+//   try {
+//     const { search, status, recordType, studentId, from, to } = req.query;
+//     const query = { organizationId: req.organizationId };
+
+//     if (status) query.status = status;
+//     if (recordType) query.recordType = recordType;
+//     if (studentId) query.studentId = studentId;
+//     if (from || to) {
+//       query.recordDate = {};
+//       if (from) query.recordDate.$gte = new Date(from);
+//       if (to) query.recordDate.$lte = new Date(to);
+//     }
+//     if (search) {
+//       query.$or = [
+//         { studentName: { $regex: search, $options: 'i' } },
+//         { recordId: { $regex: search, $options: 'i' } },
+//         { doctorName: { $regex: search, $options: 'i' } },
+//         { diagnosis: { $regex: search, $options: 'i' } },
+//       ];
+//     }
+
+//     const records = await HealthRecord.find(query)
+//       .sort({ recordDate: -1 })
+//       .populate('studentId', 'fullName studentId admissionIdStr');
+
+//     res.json(records);
+//   } catch (err) {
+//     console.error('getAllHealthRecords:', err.message);
+//     res.status(500).json({ message: 'Server error while fetching health records' });
+//   }
+// };
+
+// // ─────────────────────────────────────────────────────────────────────────────
+// /** GET /api/health-records/:id */
+// exports.getHealthRecordById = async (req, res) => {
+//   try {
+//     const record = await HealthRecord.findOne({
+//       _id: req.params.id,
+//       organizationId: req.organizationId
+//     }).populate('studentId', 'fullName studentId admissionIdStr');
+
+//     if (!record) return res.status(404).json({ message: 'Health record not found' });
+//     res.json(record);
+//   } catch (err) {
+//     console.error('getHealthRecordById:', err.message);
+//     res.status(500).json({ message: 'Server error while fetching health record' });
+//   }
+// };
+
+// // ─────────────────────────────────────────────────────────────────────────────
+// /** POST /api/health-records */
+// exports.createHealthRecord = async (req, res) => {
+//   upload(req, res, async (err) => {
+//     if (err) {
+//       return res.status(400).json({
+//         message: err.code === 'LIMIT_FILE_SIZE'
+//           ? 'Report file size cannot exceed 5 MB'
+//           : err.message || 'File upload failed'
+//       });
+//     }
+
+//     try {
+//       const data = {
+//         ...pickFields(req.body),
+//         organizationId: req.organizationId,
+//       };
+
+//       // Map frontend field names to backend schema
+//       if (req.body.name) data.studentName = req.body.name;
+//       if (req.body.date) data.recordDate = req.body.date;
+//       if (req.body.doctor) data.doctorName = req.body.doctor;
+//       if (req.body.medications) data.prescription = req.body.medications;
+
+//       // Set default recordType if not provided
+//       if (!data.recordType) data.recordType = 'General Checkup';
+
+//       if (req.file) {
+//         data.reportFile = `/uploads/student/health-report/${req.file.filename}`;
+//         data.reportFileName = req.file.originalname;
+//       }
+
+//       // Required field check
+//       if (!data.studentId || !data.recordType || !data.recordDate) {
+//         if (req.file) deleteFile(data.reportFile);
+//         return res.status(400).json({ message: 'Student, record type and date are required' });
+//       }
+
+//       // Create the health record
+//       const record = await HealthRecord.create(data);
+
+//       // ─────── AUTO UPDATE STUDENT'S "LAST HEALTH CHECKUP" ───────
+//       await Student.findByIdAndUpdate(
+//         data.studentId,
+//         {
+//           lastCheckupDate: data.recordDate,
+//           lastCheckupDoctor: data.doctorName || '',
+//           lastCheckupStatus: data.status || 'Normal',
+//           lastCheckupNotes: data.diagnosis || data.notes || '',
+//         },
+//         { new: true }
+//       );
+//       // ───────────────────────────────────────────────────────────
+
+//       const populated = await HealthRecord.findById(record._id)
+//         .populate('studentId', 'fullName studentId admissionIdStr');
+
+//       res.status(201).json({
+//         ...populated.toObject(),
+//         message: 'Health record created successfully'
+//       });
+//     } catch (err) {
+//       if (req.file) deleteFile(`/uploads/student/health-report/${req.file.filename}`);
+//       console.error('createHealthRecord:', err.message);
+//       res.status(500).json({ message: 'Server error while creating health record' });
+//     }
+//   });
+// };
+
+// // ─────────────────────────────────────────────────────────────────────────────
+// // /** PUT /api/health-records/:id */
+// // exports.updateHealthRecord = async (req, res) => {
+// //   upload(req, res, async (err) => {
+// //     if (err) {
+// //       return res.status(400).json({
+// //         message: err.code === 'LIMIT_FILE_SIZE'
+// //           ? 'Report file size cannot exceed 5 MB'
+// //           : err.message || 'File upload failed'
+// //       });
+// //     }
+
+// //     try {
+// //       const record = await HealthRecord.findOne({
+// //         _id: req.params.id,
+// //         organizationId: req.organizationId
+// //       });
+
+// //       if (!record) {
+// //         if (req.file) deleteFile(`/uploads/student/health-report/${req.file.filename}`);
+// //         return res.status(404).json({ message: 'Health record not found' });
+// //       }
+
+// //       const updates = pickFields(req.body);
+
+// //       // Map frontend field names to backend schema for update
+// //       if (req.body.name) updates.studentName = req.body.name;
+// //       if (req.body.date) updates.recordDate = req.body.date;
+// //       if (req.body.doctor) updates.doctorName = req.body.doctor;
+// //       if (req.body.medications) updates.prescription = req.body.medications;
+
+// //       if (req.file) {
+// //         // Delete old file before replacing
+// //         if (record.reportFile) deleteFile(record.reportFile);
+// //         updates.reportFile = `/uploads/student/health-report/${req.file.filename}`;
+// //         updates.reportFileName = req.file.originalname;
+// //       }
+
+// //       Object.assign(record, updates);
+// //       await record.save();
+
+// //       const populated = await HealthRecord.findById(record._id)
+// //         .populate('studentId', 'fullName studentId admissionIdStr');
+
+// //       res.json({
+// //         ...populated.toObject(),
+// //         message: 'Health record updated successfully'
+// //       });
+// //     } catch (err) {
+// //       if (req.file) deleteFile(`/uploads/student/health-report/${req.file.filename}`);
+// //       console.error('updateHealthRecord:', err.message);
+// //       res.status(500).json({ message: 'Server error while updating health record' });
+// //     }
+// //   });
+// // };
+
+// /** PUT /api/health-records/:id */
+// exports.updateHealthRecord = async (req, res) => {
+//   upload(req, res, async (err) => {
+//     if (err) {
+//       return res.status(400).json({
+//         message: err.code === 'LIMIT_FILE_SIZE'
+//           ? 'Report file size cannot exceed 5 MB'
+//           : err.message || 'File upload failed'
+//       });
+//     }
+
+//     try {
+//       const record = await HealthRecord.findOne({
+//         _id: req.params.id,
+//         organizationId: req.organizationId
+//       });
+
+//       if (!record) {
+//         if (req.file) deleteFile(`/uploads/student/health-report/${req.file.filename}`);
+//         return res.status(404).json({ message: 'Health record not found' });
+//       }
+
+//       const updates = pickFields(req.body);
+
+//       // Map frontend field names to backend schema
+//       if (req.body.name) updates.studentName = req.body.name;
+//       if (req.body.date) updates.recordDate = req.body.date;
+//       if (req.body.doctor) updates.doctorName = req.body.doctor;
+//       if (req.body.medications) updates.prescription = req.body.medications;
+
+//       if (req.file) {
+//         if (record.reportFile) deleteFile(record.reportFile);
+//         updates.reportFile = `/uploads/student/health-report/${req.file.filename}`;
+//         updates.reportFileName = req.file.originalname;
+//       }
+
+//       Object.assign(record, updates);
+//       await record.save();
+
+//       // ─────── AUTO UPDATE STUDENT'S "LAST HEALTH CHECKUP" ───────
+//       // Only update if we have the necessary fields
+//       if (record.studentId) {
+//         await Student.findByIdAndUpdate(
+//           record.studentId,
+//           {
+//             lastCheckupDate: record.recordDate,
+//             lastCheckupDoctor: record.doctorName || '',
+//             lastCheckupStatus: record.status || 'Normal',
+//             lastCheckupNotes: record.diagnosis || record.notes || '',
+//           },
+//           { new: true }
+//         );
+//       }
+//       // ───────────────────────────────────────────────────────────
+
+//       const populated = await HealthRecord.findById(record._id)
+//         .populate('studentId', 'fullName studentId admissionIdStr');
+
+//       res.json({
+//         ...populated.toObject(),
+//         message: 'Health record updated successfully'
+//       });
+//     } catch (err) {
+//       if (req.file) deleteFile(`/uploads/student/health-report/${req.file.filename}`);
+//       console.error('updateHealthRecord:', err.message);
+//       res.status(500).json({ message: 'Server error while updating health record' });
+//     }
+//   });
+// };
+
+// // ─────────────────────────────────────────────────────────────────────────────
+// /** DELETE /api/health-records/:id */
+// exports.deleteHealthRecord = async (req, res) => {
+//   try {
+//     const record = await HealthRecord.findOneAndDelete({
+//       _id: req.params.id,
+//       organizationId: req.organizationId
+//     });
+
+//     if (!record) return res.status(404).json({ message: 'Health record not found' });
+//     if (record.reportFile) deleteFile(record.reportFile);
+
+//     res.json({ message: 'Health record deleted successfully' });
+//   } catch (err) {
+//     console.error('deleteHealthRecord:', err.message);
+//     res.status(500).json({ message: 'Server error while deleting health record' });
+//   }
+// };
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// // controllers/healthRecordController.js
+// const fs = require('fs');
+// const path = require('path');
+// const multer = require('multer');
+// const HealthRecord = require('../models/HealthRecord');
+// const Student = require('../models/Student');
+
+// // Multer setup (unchanged)
+// const storage = multer.diskStorage({
+//   destination: (req, file, cb) => {
+//     const uploadDir = path.join(__dirname, '..', 'uploads', 'student', 'health-report');
+//     fs.mkdirSync(uploadDir, { recursive: true });
+//     cb(null, uploadDir);
+//   },
+//   filename: (req, file, cb) => {
+//     const unique = Date.now() + '-' + Math.round(Math.random() * 1e9);
+//     cb(null, 'report-' + unique + path.extname(file.originalname));
+//   }
+// });
+
+// const upload = multer({
+//   storage,
+//   limits: { fileSize: 5 * 1024 * 1024 },
+//   fileFilter: (req, file, cb) => {
+//     const allowed = /jpeg|jpg|png|webp|pdf/;
+//     const extOk = allowed.test(path.extname(file.originalname).toLowerCase());
+//     const mimeOk = allowed.test(file.mimetype);
+//     if (extOk && mimeOk) return cb(null, true);
+//     cb(new Error('Only JPG, PNG, WebP and PDF files are allowed'));
+//   }
+// }).single('reportFile');
+
+// const deleteFile = (filePath) => {
+//   if (filePath?.startsWith('/uploads/')) {
+//     const full = path.join(__dirname, '..', filePath);
+//     if (fs.existsSync(full)) fs.unlinkSync(full);
+//   }
+// };
+
+// const ALLOWED_FIELDS = [
+//   'studentId', 'studentName', 'recordType', 'recordDate', 'time',
+//   'doctorName', 'hospitalName', 'height', 'weight', 'bloodPressure',
+//   'temperature', 'pulseRate', 'diagnosis', 'treatment', 'prescription',
+//   'status', 'followUpDate', 'notes'
+// ];
+
+// const pickFields = (body) => ALLOWED_FIELDS.reduce((acc, key) => {
+//   if (body[key] !== undefined && body[key] !== '') {
+//     acc[key] = body[key];
+//   }
+//   return acc;
+// }, {});
+
+// // GET ALL
+// exports.getAllHealthRecords = async (req, res) => {
+//   try {
+//     const { search, status, recordType, studentId, from, to } = req.query;
+//     const query = { organizationId: req.organizationId };
+
+//     if (status) query.status = status;
+//     if (recordType) query.recordType = recordType;
+//     if (studentId) query.studentId = studentId;
+//     if (from || to) {
+//       query.recordDate = {};
+//       if (from) query.recordDate.$gte = new Date(from);
+//       if (to) query.recordDate.$lte = new Date(to);
+//     }
+//     if (search) {
+//       query.$or = [
+//         { studentName: { $regex: search, $options: 'i' } },
+//         { recordId: { $regex: search, $options: 'i' } },
+//         { doctorName: { $regex: search, $options: 'i' } },
+//         { diagnosis: { $regex: search, $options: 'i' } },
+//       ];
+//     }
+
+//     const records = await HealthRecord.find(query)
+//       .sort({ recordDate: -1 })
+//       .populate('studentId', 'fullName studentId admissionIdStr');
+
+//     res.json(records);
+//   } catch (err) {
+//     console.error('getAllHealthRecords:', err.message);
+//     res.status(500).json({ message: 'Server error while fetching health records' });
+//   }
+// };
+
+// // GET BY ID
+// exports.getHealthRecordById = async (req, res) => {
+//   try {
+//     const record = await HealthRecord.findOne({
+//       _id: req.params.id,
+//       organizationId: req.organizationId
+//     }).populate('studentId', 'fullName studentId admissionIdStr');
+
+//     if (!record) return res.status(404).json({ message: 'Health record not found' });
+//     res.json(record);
+//   } catch (err) {
+//     console.error('getHealthRecordById:', err.message);
+//     res.status(500).json({ message: 'Server error while fetching health record' });
+//   }
+// };
+
+// // CREATE (unchanged)
+// exports.createHealthRecord = async (req, res) => {
+//   upload(req, res, async (err) => {
+//     if (err) {
+//       return res.status(400).json({
+//         message: err.code === 'LIMIT_FILE_SIZE'
+//           ? 'Report file size cannot exceed 5 MB'
+//           : err.message || 'File upload failed'
+//       });
+//     }
+
+//     try {
+//       const data = {
+//         ...pickFields(req.body),
+//         organizationId: req.organizationId,
+//       };
+
+//       if (req.body.name) data.studentName = req.body.name;
+//       if (req.body.date) data.recordDate = req.body.date;
+//       if (req.body.doctor) data.doctorName = req.body.doctor;
+//       if (req.body.medications) data.prescription = req.body.medications;
+
+//       if (!data.recordType) data.recordType = 'General Checkup';
+
+//       if (req.file) {
+//         data.reportFile = `/uploads/student/health-report/${req.file.filename}`;
+//         data.reportFileName = req.file.originalname;
+//       }
+
+//       if (!data.studentId || !data.recordType || !data.recordDate) {
+//         if (req.file) deleteFile(data.reportFile);
+//         return res.status(400).json({ message: 'Student, record type and date are required' });
+//       }
+
+//       const record = await HealthRecord.create(data);
+
+//       await Student.findByIdAndUpdate(
+//         data.studentId,
+//         {
+//           lastCheckupDate: data.recordDate,
+//           lastCheckupDoctor: data.doctorName || '',
+//           lastCheckupStatus: data.status || 'Normal',
+//           lastCheckupNotes: data.diagnosis || data.notes || '',
+//         },
+//         { new: true }
+//       );
+
+//       const populated = await HealthRecord.findById(record._id)
+//         .populate('studentId', 'fullName studentId admissionIdStr');
+
+//       res.status(201).json({
+//         ...populated.toObject(),
+//         message: 'Health record created successfully'
+//       });
+//     } catch (err) {
+//       if (req.file) deleteFile(`/uploads/student/health-report/${req.file.filename}`);
+//       console.error('createHealthRecord:', err.message);
+//       res.status(500).json({ message: 'Server error while creating health record' });
+//     }
+//   });
+// };
+
+// // UPDATED FUNCTION - THIS IS THE IMPORTANT PART
+// exports.updateHealthRecord = async (req, res) => {
+//   upload(req, res, async (err) => {
+//     if (err) {
+//       return res.status(400).json({
+//         message: err.code === 'LIMIT_FILE_SIZE'
+//           ? 'Report file size cannot exceed 5 MB'
+//           : err.message || 'File upload failed'
+//       });
+//     }
+
+//     try {
+//       let record = await HealthRecord.findOne({
+//         _id: req.params.id,
+//         organizationId: req.organizationId
+//       });
+
+//       if (!record) {
+//         if (req.file) deleteFile(`/uploads/student/health-report/${req.file.filename}`);
+//         return res.status(404).json({ message: 'Health record not found' });
+//       }
+
+//       const updates = pickFields(req.body);
+
+//       if (req.body.name) updates.studentName = req.body.name;
+//       if (req.body.date) updates.recordDate = req.body.date;
+//       if (req.body.doctor) updates.doctorName = req.body.doctor;
+//       if (req.body.medications) updates.prescription = req.body.medications;
+
+//       if (req.file) {
+//         if (record.reportFile) deleteFile(record.reportFile);
+//         updates.reportFile = `/uploads/student/health-report/${req.file.filename}`;
+//         updates.reportFileName = req.file.originalname;
+//       }
+
+//       Object.assign(record, updates);
+//       await record.save();
+
+//       // Re-fetch to get fresh data
+//       record = await HealthRecord.findById(record._id);
+
+//       // Update student's last checkup fields
+//       if (record.studentId) {
+//         await Student.findByIdAndUpdate(
+//           record.studentId,
+//           {
+//             lastCheckupDate: record.recordDate,
+//             lastCheckupDoctor: record.doctorName || '',
+//             lastCheckupStatus: record.status || 'Normal',
+//             lastCheckupNotes: record.diagnosis || record.notes || '',
+//           },
+//           { new: true }
+//         );
+//       }
+
+//       const populated = await HealthRecord.findById(record._id)
+//         .populate('studentId', 'fullName studentId admissionIdStr');
+
+//       res.json({
+//         ...populated.toObject(),
+//         message: 'Health record updated successfully'
+//       });
+//     } catch (err) {
+//       if (req.file) deleteFile(`/uploads/student/health-report/${req.file.filename}`);
+//       console.error('updateHealthRecord:', err.message);
+//       res.status(500).json({ message: 'Server error while updating health record' });
+//     }
+//   });
+// };
+
+// // DELETE (unchanged)
+// exports.deleteHealthRecord = async (req, res) => {
+//   try {
+//     const record = await HealthRecord.findOneAndDelete({
+//       _id: req.params.id,
+//       organizationId: req.organizationId
+//     });
+
+//     if (!record) return res.status(404).json({ message: 'Health record not found' });
+//     if (record.reportFile) deleteFile(record.reportFile);
+
+//     res.json({ message: 'Health record deleted successfully' });
+//   } catch (err) {
+//     console.error('deleteHealthRecord:', err.message);
+//     res.status(500).json({ message: 'Server error while deleting health record' });
+//   }
+// };
+
+
+
+
+
+
+
+
+
+
+
+
+
 // controllers/healthRecordController.js
 const fs = require('fs');
 const path = require('path');
 const multer = require('multer');
 const HealthRecord = require('../models/HealthRecord');
-const Student = require('../models/Student');   // Required for updating last health checkup
+const Student = require('../models/Student');
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Multer — saves to uploads/student/health-report/
@@ -653,7 +1253,7 @@ const deleteFile = (filePath) => {
   }
 };
 
-// Fields accepted from frontend + mapping support
+// Fields accepted from frontend
 const ALLOWED_FIELDS = [
   'studentId', 'studentName', 'recordType', 'recordDate', 'time',
   'doctorName', 'hospitalName', 'height', 'weight', 'bloodPressure',
@@ -744,7 +1344,6 @@ exports.createHealthRecord = async (req, res) => {
       if (req.body.doctor) data.doctorName = req.body.doctor;
       if (req.body.medications) data.prescription = req.body.medications;
 
-      // Set default recordType if not provided
       if (!data.recordType) data.recordType = 'General Checkup';
 
       if (req.file) {
@@ -752,16 +1351,14 @@ exports.createHealthRecord = async (req, res) => {
         data.reportFileName = req.file.originalname;
       }
 
-      // Required field check
       if (!data.studentId || !data.recordType || !data.recordDate) {
         if (req.file) deleteFile(data.reportFile);
         return res.status(400).json({ message: 'Student, record type and date are required' });
       }
 
-      // Create the health record
       const record = await HealthRecord.create(data);
 
-      // ─────── AUTO UPDATE STUDENT'S "LAST HEALTH CHECKUP" ───────
+      // AUTO UPDATE STUDENT'S LAST HEALTH CHECKUP
       await Student.findByIdAndUpdate(
         data.studentId,
         {
@@ -772,7 +1369,6 @@ exports.createHealthRecord = async (req, res) => {
         },
         { new: true }
       );
-      // ───────────────────────────────────────────────────────────
 
       const populated = await HealthRecord.findById(record._id)
         .populate('studentId', 'fullName studentId admissionIdStr');
@@ -790,7 +1386,7 @@ exports.createHealthRecord = async (req, res) => {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-/** PUT /api/health-records/:id */
+/** PUT /api/health-records/:id - FIXED VERSION */
 exports.updateHealthRecord = async (req, res) => {
   upload(req, res, async (err) => {
     if (err) {
@@ -802,7 +1398,8 @@ exports.updateHealthRecord = async (req, res) => {
     }
 
     try {
-      const record = await HealthRecord.findOne({
+      // 1. Fetch existing record
+      let record = await HealthRecord.findOne({
         _id: req.params.id,
         organizationId: req.organizationId
       });
@@ -812,24 +1409,51 @@ exports.updateHealthRecord = async (req, res) => {
         return res.status(404).json({ message: 'Health record not found' });
       }
 
+      // 2. Prepare updates
       const updates = pickFields(req.body);
 
-      // Map frontend field names to backend schema for update
+      // Map frontend field names (important!)
       if (req.body.name) updates.studentName = req.body.name;
       if (req.body.date) updates.recordDate = req.body.date;
       if (req.body.doctor) updates.doctorName = req.body.doctor;
       if (req.body.medications) updates.prescription = req.body.medications;
 
+      // Handle file upload
       if (req.file) {
-        // Delete old file before replacing
         if (record.reportFile) deleteFile(record.reportFile);
         updates.reportFile = `/uploads/student/health-report/${req.file.filename}`;
         updates.reportFileName = req.file.originalname;
       }
 
+      // 3. Apply updates and save HealthRecord
       Object.assign(record, updates);
       await record.save();
 
+      // 4. Re-fetch fresh record to ensure all fields are updated
+      record = await HealthRecord.findById(record._id);
+
+      // 5. Update Student's Last Health Checkup fields
+      if (record && record.studentId) {
+        const studentUpdatePayload = {
+          lastCheckupDate: record.recordDate || null,
+          lastCheckupDoctor: record.doctorName || '',
+          lastCheckupStatus: record.status || 'Normal',
+          lastCheckupNotes: (record.diagnosis || record.notes || '').trim(),
+        };
+
+        await Student.findByIdAndUpdate(
+          record.studentId,
+          studentUpdatePayload,
+          { new: true }
+        );
+
+        // Debugging log - remove after testing if you want
+        console.log(`✅ Student lastCheckup updated for studentId: ${record.studentId}`, studentUpdatePayload);
+      } else {
+        console.warn('⚠️ Could not update student lastCheckup - studentId missing in health record');
+      }
+
+      // 6. Return populated response
       const populated = await HealthRecord.findById(record._id)
         .populate('studentId', 'fullName studentId admissionIdStr');
 
@@ -863,10 +1487,6 @@ exports.deleteHealthRecord = async (req, res) => {
     res.status(500).json({ message: 'Server error while deleting health record' });
   }
 };
-
-
-
-
 
 
 
