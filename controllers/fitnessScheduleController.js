@@ -10,13 +10,7 @@ exports.createSchedule = async (req, res) => {
     const place = req.body.place;
     const instructor = req.body.instructor;
 
-    if (
-      !activityId ||
-      !scheduleDate ||
-      !startTime ||
-      !place ||
-      !instructor
-    ) {
+    if (!activityId || !scheduleDate || !startTime || !place || !instructor) {
       return res.status(400).json({
         success: false,
         message: 'All fields are required'
@@ -36,7 +30,6 @@ exports.createSchedule = async (req, res) => {
       message: 'Schedule created successfully',
       data: schedule
     });
-
   } catch (error) {
     console.error('createSchedule error:', error);
     return res.status(500).json({
@@ -47,30 +40,27 @@ exports.createSchedule = async (req, res) => {
   }
 };
 
-// 📄 Get all schedules
 exports.getSchedules = async (req, res) => {
   try {
-    const schedules = await FitnessSchedule.find()
-      .populate('activityId', 'name')
-      .sort({ scheduleDate: 1, startTime: 1 });
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
 
-    return res.status(200).json({
-      success: true,
-      count: schedules.length,
-      data: schedules
-    });
+    const tomorrow = new Date(today);
+    tomorrow.setDate(today.getDate() + 1);
 
-  } catch (error) {
-    console.error('getSchedules error:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to fetch schedules',
-      error: error.message
-    });
+    const schedules = await FitnessSchedule.find({
+      scheduleDate: {
+        $gte: today,
+        $lt: tomorrow
+      }
+    }).populate('activityId');
+
+    res.json(schedules);
+
+  } catch (err) {
+    res.status(500).json({ message: err.message });
   }
 };
-
-// 🔍 Get schedule by id
 exports.getScheduleById = async (req, res) => {
   try {
     const { id } = req.params;
@@ -82,8 +72,7 @@ exports.getScheduleById = async (req, res) => {
       });
     }
 
-    const schedule = await FitnessSchedule.findById(id)
-      .populate('activityId', 'name');
+    const schedule = await FitnessSchedule.findById(id).populate('activityId', 'name');
 
     if (!schedule) {
       return res.status(404).json({
@@ -96,7 +85,6 @@ exports.getScheduleById = async (req, res) => {
       success: true,
       data: schedule
     });
-
   } catch (error) {
     console.error('getScheduleById error:', error);
     return res.status(500).json({
@@ -172,7 +160,6 @@ exports.updateSchedule = async (req, res) => {
       message: 'Schedule updated successfully',
       data: updatedSchedule
     });
-
   } catch (error) {
     console.error('updateSchedule error:', error);
     return res.status(500).json({
@@ -182,7 +169,7 @@ exports.updateSchedule = async (req, res) => {
     });
   }
 };
-// ❌ Delete schedule
+
 exports.deleteSchedule = async (req, res) => {
   try {
     const { id } = req.params;
@@ -207,7 +194,6 @@ exports.deleteSchedule = async (req, res) => {
       success: true,
       message: 'Schedule deleted successfully'
     });
-
   } catch (error) {
     console.error('deleteSchedule error:', error);
     return res.status(500).json({
@@ -217,18 +203,3 @@ exports.deleteSchedule = async (req, res) => {
     });
   }
 };
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
