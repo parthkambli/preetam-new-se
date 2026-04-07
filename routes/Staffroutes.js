@@ -101,7 +101,7 @@ const {
   createEmploymentType,
   updateEmploymentType,
   deleteEmploymentType
-} = require('../controllers/employmentTypeController');
+} = require('../controllers/Employmenttypecontroller');
 
 const {
   getAllAttendance,
