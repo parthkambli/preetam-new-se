@@ -109,7 +109,7 @@ const {
   createAttendance,
   updateAttendance,
   deleteAttendance
-} = require('../controllers/staffAttendanceController');
+} = require('../controllers/Staffattendancecontroller');
 
 const router = express.Router();
 
