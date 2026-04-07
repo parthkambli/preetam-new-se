@@ -94,8 +94,12 @@ exports.createFollowup = async (req, res) => {
       if (enquiry) {
         previousStatus = enquiry.status;
         // Update enquiry with new status, remark and nextVisit
-        enquiry.status = newStatus;
-        if (remark) enquiry.remark = remark;
+const fixedStatus = newStatus?.replace('-', ' ');
+
+console.log("Incoming status:", newStatus);
+console.log("Fixed status:", fixedStatus);
+
+enquiry.status = fixedStatus;        if (remark) enquiry.remark = remark;
         if (nextVisit) enquiry.nextVisit = nextVisit;
         await enquiry.save();
       }

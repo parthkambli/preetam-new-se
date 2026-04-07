@@ -416,7 +416,7 @@ const deleteFile = (filePath) => {
 };
 
 // ═════════════════════════════════════════════════════════════════════════════
-// CREATE  POST /api/fitness-staff
+// CREATE  POST /api/fitness/staff/create
 // ═════════════════════════════════════════════════════════════════════════════
 const createFitnessStaff = async (req, res) => {
   try {
@@ -462,7 +462,7 @@ const createFitnessStaff = async (req, res) => {
 };
 
 // ═════════════════════════════════════════════════════════════════════════════
-// READ ALL  GET /api/fitness-staff
+// READ ALL  GET /api/fitness/staff
 // Supports: ?page, ?limit, ?status, ?role, ?search (fullName text search)
 // ═════════════════════════════════════════════════════════════════════════════
 const getFitnessStaff = async (req, res) => {
@@ -501,7 +501,7 @@ const getFitnessStaff = async (req, res) => {
 };
 
 // ═════════════════════════════════════════════════════════════════════════════
-// READ ONE  GET /api/fitness-staff/:id
+// READ ONE  GET /api/fitness/staff/:id
 // ═════════════════════════════════════════════════════════════════════════════
 const getFitnessStaffById = async (req, res) => {
   try {
@@ -526,7 +526,7 @@ const getFitnessStaffById = async (req, res) => {
 };
 
 // ═════════════════════════════════════════════════════════════════════════════
-// UPDATE  PUT /api/fitness-staff/:id
+// UPDATE  PUT /api/fitness/staff/:id
 // ═════════════════════════════════════════════════════════════════════════════
 const updateFitnessStaff = async (req, res) => {
   try {
@@ -596,7 +596,7 @@ const updateFitnessStaff = async (req, res) => {
 };
 
 // ═════════════════════════════════════════════════════════════════════════════
-// DELETE  DELETE /api/fitness-staff/:id
+// DELETE  DELETE /api/fitness/staff/:id
 // ═════════════════════════════════════════════════════════════════════════════
 const deleteFitnessStaff = async (req, res) => {
   try {
