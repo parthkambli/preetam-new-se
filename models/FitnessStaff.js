@@ -151,7 +151,6 @@ const fitnessStaffSchema = new mongoose.Schema(
       type: String,
       required: [true, "Role is required"],
       trim: true,
-      index: true,
     },
 
     gender: {
