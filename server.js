@@ -12,6 +12,11 @@ const staffRoutes = require('./routes/Staffroutes');
 const activityRoutes = require('./routes/activityRoutes');
 const fitnessActivity = require('./routes/fitness-Activity');
 const fitnessSchedule = require('./routes/fitness-Schedule');
+const dashboardRoutes = require('./routes/dashboardRoutes');
+const schoolDashboardRoutes = require('./routes/schoolDashboardRoutes');
+
+
+
 
 
 
@@ -77,6 +82,12 @@ app.use("/api/fitness/types", fitnessEmpTypeRoutes);
 app.use("/api/fitness/staff", fitnessStaffRoutes);
 app.use('/api/fitness/activities', fitnessActivity);
 app.use('/api/fitness/schedules', fitnessSchedule);
+app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/school/dashboard', schoolDashboardRoutes);
+app.use('/api/fees', feeRoutes);
+
+
+
 
 
 
