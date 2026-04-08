@@ -1,4 +1,4 @@
-const StaffRole = require('../models/StaffRole');
+const StaffRole = require('../models/Staffrole');
 
 /**
  * @desc    Get all roles for this organization

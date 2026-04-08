@@ -1,6 +1,6 @@
 const mongoose = require('mongoose');
 const FitnessSchedule = require('../models/fitnessSchedule');
-const FitnessActivity = require('../models/fitnessActivity');
+const FitnessActivity = require('../models/FitnessActivity');
 
 exports.createSchedule = async (req, res) => {
   try {

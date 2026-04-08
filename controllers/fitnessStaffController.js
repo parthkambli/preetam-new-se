@@ -371,15 +371,15 @@ const baseStaffSchema = {
   gender:                Joi.string().valid("Male", "Female", "Other"),
   dateOfBirth:           Joi.date().iso().max("now").allow(null, ""),
   joiningDate:           Joi.date().iso(),
-  employmentType:        Joi.string().valid("Full Time", "Part Time", "Contract").allow(null, ""),
+  employmentType:        Joi.string().trim().allow(null, ""),        // remove .valid(...)
   status:                Joi.string().valid("Active", "Inactive", "Terminated"),
   salary:                Joi.number().min(0).allow(null, ""),
-  mobileNumber:          Joi.string().pattern(/^\d{10,15}$/),
+  mobileNumber:          Joi.string().pattern(/^\d{10}$/),
   emailId:               Joi.string().email().allow(null, ""),
   fullAddress:           Joi.string().trim().max(500).allow(null, ""),
   emergencyContactName:  Joi.string().trim().max(100).allow(null, ""),
   emergencyRelation:     Joi.string().trim().max(100).allow(null, ""),
-  emergencyContactMobile:Joi.string().pattern(/^\d{10,15}$/).allow(null, ""),
+  emergencyContactMobile:Joi.string().pattern(/^\d{10}$/).allow(null, ""),
 };
 
 const createSchema = Joi.object({
@@ -416,7 +416,7 @@ const deleteFile = (filePath) => {
 };
 
 // ═════════════════════════════════════════════════════════════════════════════
-// CREATE  POST /api/fitness-staff
+// CREATE  POST /api/fitness/staff/create
 // ═════════════════════════════════════════════════════════════════════════════
 const createFitnessStaff = async (req, res) => {
   try {
@@ -444,13 +444,31 @@ const createFitnessStaff = async (req, res) => {
       return respond(res, 409, false, "A staff member with this email address already exists");
     }
 
-    // 3. Build document (password stored as plain text)
-    const staffData = {
-      ...value,
-      profilePhoto: req.file ? req.file.path : null,
-    };
+// prevent override
+delete value.employeeId;
 
-    const staff = await FitnessStaff.create(staffData);
+// generate employee ID
+const lastStaff = await FitnessStaff.findOne()
+  .sort({ createdAt: -1 })
+  .select('employeeId');
+
+let nextNumber = 1;
+
+if (lastStaff && lastStaff.employeeId) {
+  const num = parseInt(lastStaff.employeeId.replace('EMP', ''));
+  nextNumber = num + 1;
+}
+
+const employeeId = 'EMP' + String(nextNumber).padStart(4, '0');
+
+// build data
+const staffData = {
+  ...value,
+  employeeId,
+  profilePhoto: req.file ? req.file.path : null,
+};
+
+const staff = await FitnessStaff.create(staffData);
 
     // toJSON transformer strips password automatically
     return respond(res, 201, true, "Staff member created successfully", staff);
@@ -462,7 +480,7 @@ const createFitnessStaff = async (req, res) => {
 };
 
 // ═════════════════════════════════════════════════════════════════════════════
-// READ ALL  GET /api/fitness-staff
+// READ ALL  GET /api/fitness/staff
 // Supports: ?page, ?limit, ?status, ?role, ?search (fullName text search)
 // ═════════════════════════════════════════════════════════════════════════════
 const getFitnessStaff = async (req, res) => {
@@ -501,7 +519,7 @@ const getFitnessStaff = async (req, res) => {
 };
 
 // ═════════════════════════════════════════════════════════════════════════════
-// READ ONE  GET /api/fitness-staff/:id
+// READ ONE  GET /api/fitness/staff/:id
 // ═════════════════════════════════════════════════════════════════════════════
 const getFitnessStaffById = async (req, res) => {
   try {
@@ -526,7 +544,7 @@ const getFitnessStaffById = async (req, res) => {
 };
 
 // ═════════════════════════════════════════════════════════════════════════════
-// UPDATE  PUT /api/fitness-staff/:id
+// UPDATE  PUT /api/fitness/staff/:id
 // ═════════════════════════════════════════════════════════════════════════════
 const updateFitnessStaff = async (req, res) => {
   try {
@@ -596,7 +614,7 @@ const updateFitnessStaff = async (req, res) => {
 };
 
 // ═════════════════════════════════════════════════════════════════════════════
-// DELETE  DELETE /api/fitness-staff/:id
+// DELETE  DELETE /api/fitness/staff/:id
 // ═════════════════════════════════════════════════════════════════════════════
 const deleteFitnessStaff = async (req, res) => {
   try {

@@ -1,4 +1,4 @@
-const FitnessActivity = require('../models/fitnessActivity');
+const FitnessActivity = require('../models/FitnessActivity');
 const mongoose = require('mongoose');
 
 // ➕ Create activity

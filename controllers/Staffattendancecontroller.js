@@ -1,4 +1,4 @@
-const StaffAttendance = require('../models/StaffAttendance');
+const StaffAttendance = require('../models/Staffattendance');
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helper: calculate "9h 09m" from "09:02 AM" and "06:11 PM"

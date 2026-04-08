@@ -25,9 +25,10 @@ const staffSchema = new mongoose.Schema({
   },
   // References the StaffRole collection (NOT the User.role enum)
   role: {
-    type: String,
-    // ref: 'StaffRole'
-  },
+      type: String,
+      required: [true, "Role is required"],
+      trim: true,
+    },
   // References the EmploymentType collection
   employmentType: {
     type: String,
