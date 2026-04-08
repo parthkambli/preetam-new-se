@@ -49,7 +49,7 @@ const multerSingle = (fieldName) => (req, res, next) => {
 
 // Create a new staff member  (accepts an optional profilePhoto file)
 router.post(
-  "/",
+  "/create",
   multerSingle("profilePhoto"),
   createFitnessStaff
 );

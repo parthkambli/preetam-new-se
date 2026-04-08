@@ -101,7 +101,7 @@ const {
   createEmploymentType,
   updateEmploymentType,
   deleteEmploymentType
-} = require('../controllers/employmentTypeController');
+} = require('../controllers/Employmenttypecontroller');
 
 const {
   getAllAttendance,
@@ -109,7 +109,7 @@ const {
   createAttendance,
   updateAttendance,
   deleteAttendance
-} = require('../controllers/staffAttendanceController');
+} = require('../controllers/Staffattendancecontroller');
 
 const router = express.Router();
 

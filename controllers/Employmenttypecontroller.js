@@ -1,4 +1,4 @@
-const EmploymentType = require('../models/EmploymentType');
+const EmploymentType = require('../models/Employmenttype');
 
 /**
  * @desc    Get all employment types for this organization
