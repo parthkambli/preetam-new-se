@@ -1,24 +1,3 @@
-<<<<<<< HEAD
-const express = require('express');
-const cors = require('cors');
-const dotenv = require('dotenv');
-const connectDB = require('./config/db');
-const authRoutes = require('./routes/auth');
-const schoolEnquiryRoutes = require('./routes/school-enquiry');
-const fitnessEnquiryRoutes = require('./routes/fitness-enquiry');
-const schoolAdmissionRoutes = require('./routes/school-admission');
-const followupRoutes = require('./routes/followups');
-const studentRoutes = require('./routes/students');
-const staffRoutes = require('./routes/Staffroutes');
-const activityRoutes = require('./routes/activityRoutes');
-const fitnessActivity = require('./routes/fitness-Activity');
-const fitnessSchedule = require('./routes/fitness-Schedule');
-const dashboardRoutes = require('./routes/dashboardRoutes');
-const schoolDashboardRoutes = require('./routes/schoolDashboardRoutes');
-
-
-
-=======
   const express = require('express');
   const cors = require('cors');
   const dotenv = require('dotenv');
@@ -49,7 +28,6 @@ const schoolDashboardRoutes = require('./routes/schoolDashboardRoutes');
   const fitnessSchedule = require('./routes/fitness-Schedule');
   const fitnessFeeRoutes = require('./routes/fitnessFeeRoutes');
   const fitnessEventRoutes = require('./routes/fitnessEventRoutes');
->>>>>>> 53819e9cee8dc3e2a1f6368f6e0d3a05b4f3f385
 
 
   const path = require('path');
