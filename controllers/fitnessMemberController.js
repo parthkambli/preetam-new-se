@@ -67,7 +67,8 @@ exports.getAllMembers = async (req, res) => {
     }
 
     const members = await FitnessMember.find(query)
-    .populate('staff', 'fullName')
+    // .populate('staff', 'fullName')
+    .populate('responsibleStaff', 'name') 
       .sort({ createdAt: -1 })
       .select('-password');
 

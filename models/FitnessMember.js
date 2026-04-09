@@ -40,10 +40,11 @@ const fitnessMemberSchema = new mongoose.Schema({
     type: String,
     trim: true
   },
-  staff: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'FitnessStaff',
-    default: null
+ responsibleStaff: {
+  type: mongoose.Schema.Types.ObjectId,
+  ref: 'FitnessStaff',
+  default: null
+
   },
   photo: {
     type: String // Path to uploaded image (e.g., /uploads/members/abc123.jpg)
