@@ -1,6 +1,6 @@
 // // controllers/staffController.js
 // const Staff = require('../models/Staff');
-// const User = require('../models/User');
+// const User = require('../models/user');
 
 // // ─────────────────────────────────────────────────────────────────────────────
 // // Common error handler
@@ -329,6 +329,7 @@
 const fs = require('fs');
 const path = require('path');
 const multer = require('multer');
+const bcrypt = require('bcryptjs');
 const Staff = require('../models/Staff');
 const User = require('../models/User');
 
@@ -367,6 +368,18 @@ const deleteOldPhoto = (photoPath) => {
     const fullPath = path.join(__dirname, '..', photoPath);
     if (fs.existsSync(fullPath)) fs.unlinkSync(fullPath);
   }
+};
+
+// Helper function to generate staff user ID
+const generateStaffUserId = (organizationId) => {
+  const prefix = organizationId === 'school' ? 'SCHSTF' : 'FITSTF';
+  const random = Math.floor(1000 + Math.random() * 9000);
+  return `${prefix}${random}`;
+};
+
+// Helper function to map staff role to user role
+const mapStaffRoleToUserRole = (organizationId) => {
+  return organizationId === 'school' ? 'SchoolStaff' : 'FitnessStaff';
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -516,13 +529,12 @@ exports.getStaffById = async (req, res) => {
 
 // ─────────────────────────────────────────────────────────────────────────────
 /**
- * @desc    Create new staff
+ * @desc    Create new staff (works for both SchoolStaff and FitnessStaff)
  * @route   POST /api/staff
  * @access  Private
  */
 exports.createStaff = async (req, res) => {
   upload(req, res, async (err) => {
-    // Handle multer-specific errors first
     if (err) {
       if (err.code === 'LIMIT_FILE_SIZE') {
         return res.status(400).json({ success: false, message: 'Photo size cannot exceed 2MB' });
@@ -533,10 +545,9 @@ exports.createStaff = async (req, res) => {
     try {
       const data = req.body;
 
-      // Run server-side validation
+      // Server-side validation
       const validationErrors = validateStaffData(data);
       if (validationErrors.length > 0) {
-        // Clean up uploaded file if validation fails
         if (req.file) deleteOldPhoto(`/uploads/staff/${req.file.filename}`);
         return res.status(400).json({
           success: false,
@@ -550,24 +561,61 @@ exports.createStaff = async (req, res) => {
         photoUrl = `/uploads/staff/${req.file.filename}`;
       }
 
+      // Map frontend fields to model fields (School form uses slightly different names)
       const staff = new Staff({
-        ...data,
+        fullName: data.fullName?.trim(),
+        role: data.role,
+        gender: data.gender,
+        dateOfBirth: data.dateOfBirth || data.dob || null,
+        joiningDate: data.joiningDate,
+        employmentType: data.employmentType,
+        status: data.status || 'Active',
+        salary: data.salary ? Number(data.salary) : null,
+        mobile: data.mobile?.trim(),
+        email: data.email?.trim() || '',
+        fullAddress: data.fullAddress?.trim() || '',
+        emergencyContactName: data.emergencyContactName?.trim() || '',
+        emergencyContactRelation: data.emergencyContactRelation?.trim() || '',
+        emergencyContactMobile: data.emergencyContactMobile?.trim() || '',
         photo: photoUrl,
         organizationId: req.organizationId,
-        fullName: data.fullName.trim(),
-        mobile: data.mobile.trim(),
       });
 
-      await staff.save();
+      const savedStaff = await staff.save();
+
+      // Create User account - This part already works perfectly for both school & fitness
+      const staffUserId = generateStaffUserId(req.organizationId);
+      const userRole = mapStaffRoleToUserRole(req.organizationId);   // Returns 'SchoolStaff' or 'FitnessStaff'
+
+      const newUser = new User({
+        userId: staffUserId,
+        password: await bcrypt.hash(data.password || 'staff123', 10),
+        fullName: data.fullName?.trim(),
+        mobile: data.mobile?.trim(),
+        email: data.email?.trim() || '',
+        role: userRole,                          // SchoolStaff for school, FitnessStaff for fitness
+        userType: req.organizationId,
+        organizationId: req.organizationId,
+        staffId: savedStaff._id,
+        linkedId: savedStaff._id,
+        isActive: 'Yes'
+      });
+
+      await newUser.save();
 
       res.status(201).json({
         success: true,
-        message: 'Staff member created successfully.',
-        data: staff
+        message: 'Staff member created successfully with login credentials.',
+        data: {
+          staff: savedStaff,
+          userCredentials: {
+            userId: staffUserId,
+            password: data.password || 'staff123'   // plain password shown only once
+          }
+        }
       });
 
     } catch (err) {
-      // Clean up uploaded file if DB save fails
       if (req.file) deleteOldPhoto(`/uploads/staff/${req.file.filename}`);
       handleError(res, err, 'Failed to create staff member. Please try again.');
     }

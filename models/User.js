@@ -1,5 +1,7 @@
 const mongoose = require('mongoose');
 
+// const mongoose = require('mongoose');
+
 const userSchema = new mongoose.Schema({
   userId: {
     type: String,
@@ -13,7 +15,7 @@ const userSchema = new mongoose.Schema({
   },
   role: {
     type: String,
-    enum: ['Student', 'Participant', 'Admin'],
+    enum: ['Student', 'Participant', 'Admin', 'SchoolStaff', 'FitnessStaff'],
     default: 'Student'
   },
   mobile: {
@@ -46,6 +48,10 @@ const userSchema = new mongoose.Schema({
     type: String,
     required: true
   },
+  staffId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Staff'
+  },
   createdAt: {
     type: Date,
     default: Date.now
@@ -67,4 +73,5 @@ userSchema.index({ organizationId: 1, role: 1 });
 userSchema.index({ organizationId: 1, userType: 1 });
 userSchema.index({ linkedId: 1 });
 
-module.exports = mongoose.model('User', userSchema);
+// Prevent model overwrite by checking if it already exists
+module.exports = mongoose.models.User || mongoose.model('User', userSchema);
