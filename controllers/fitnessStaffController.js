@@ -322,6 +322,9 @@ const path = require("path");
 const multer = require("multer");
 const Joi    = require("joi");
 
+const bcrypt = require('bcryptjs');
+const User = require('../models/User');
+
 const FitnessStaff = require("../models/FitnessStaff");
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -415,21 +418,86 @@ const deleteFile = (filePath) => {
   }
 };
 
+// // ═════════════════════════════════════════════════════════════════════════════
+// // CREATE  POST /api/fitness/staff/create
+// // ═════════════════════════════════════════════════════════════════════════════
+// const createFitnessStaff = async (req, res) => {
+//   try {
+//     // 1. Validate request body
+//     const { error, value } = createSchema.validate(req.body, { abortEarly: false });
+//     if (error) {
+//       // Clean up any uploaded file on validation failure
+//       if (req.file) deleteFile(req.file.path);
+//       const messages = error.details.map((d) => d.message);
+//       return respond(res, 422, false, "Validation failed", { errors: messages });
+//     }
+
+//     // 2. Check uniqueness manually for friendlier error messages
+//     const [existingMobile, existingEmail] = await Promise.all([
+//       FitnessStaff.findOne({ mobileNumber: value.mobileNumber }),
+//       value.emailId ? FitnessStaff.findOne({ emailId: value.emailId }) : null,
+//     ]);
+
+//     if (existingMobile) {
+//       if (req.file) deleteFile(req.file.path);
+//       return respond(res, 409, false, "A staff member with this mobile number already exists");
+//     }
+//     if (existingEmail) {
+//       if (req.file) deleteFile(req.file.path);
+//       return respond(res, 409, false, "A staff member with this email address already exists");
+//     }
+
+// // prevent override
+// delete value.employeeId;
+
+// // generate employee ID
+// const lastStaff = await FitnessStaff.findOne()
+//   .sort({ createdAt: -1 })
+//   .select('employeeId');
+
+// let nextNumber = 1;
+
+// if (lastStaff && lastStaff.employeeId) {
+//   const num = parseInt(lastStaff.employeeId.replace('EMP', ''));
+//   nextNumber = num + 1;
+// }
+
+// const employeeId = 'EMP' + String(nextNumber).padStart(4, '0');
+
+// // build data
+// const staffData = {
+//   ...value,
+//   employeeId,
+//   profilePhoto: req.file ? req.file.path : null,
+// };
+
+// const staff = await FitnessStaff.create(staffData);
+
+//     // toJSON transformer strips password automatically
+//     return respond(res, 201, true, "Staff member created successfully", staff);
+//   } catch (err) {
+//     if (req.file) deleteFile(req.file.path);
+//     console.error("[createFitnessStaff]", err);
+//     return respond(res, 500, false, "Internal server error while creating staff member");
+//   }
+// };
+
+
+
 // ═════════════════════════════════════════════════════════════════════════════
 // CREATE  POST /api/fitness/staff/create
 // ═════════════════════════════════════════════════════════════════════════════
 const createFitnessStaff = async (req, res) => {
   try {
-    // 1. Validate request body
+    // Multer puts file in req.file and text fields in req.body
     const { error, value } = createSchema.validate(req.body, { abortEarly: false });
     if (error) {
-      // Clean up any uploaded file on validation failure
       if (req.file) deleteFile(req.file.path);
       const messages = error.details.map((d) => d.message);
       return respond(res, 422, false, "Validation failed", { errors: messages });
     }
 
-    // 2. Check uniqueness manually for friendlier error messages
+    // Uniqueness checks
     const [existingMobile, existingEmail] = await Promise.all([
       FitnessStaff.findOne({ mobileNumber: value.mobileNumber }),
       value.emailId ? FitnessStaff.findOne({ emailId: value.emailId }) : null,
@@ -444,40 +512,71 @@ const createFitnessStaff = async (req, res) => {
       return respond(res, 409, false, "A staff member with this email address already exists");
     }
 
-// prevent override
-delete value.employeeId;
+    // Generate employeeId
+    delete value.employeeId;
 
-// generate employee ID
-const lastStaff = await FitnessStaff.findOne()
-  .sort({ createdAt: -1 })
-  .select('employeeId');
+    const lastStaff = await FitnessStaff.findOne()
+      .sort({ createdAt: -1 })
+      .select('employeeId');
 
-let nextNumber = 1;
+    let nextNumber = 1;
+    if (lastStaff && lastStaff.employeeId) {
+      const num = parseInt(lastStaff.employeeId.replace('EMP', ''));
+      nextNumber = num + 1;
+    }
 
-if (lastStaff && lastStaff.employeeId) {
-  const num = parseInt(lastStaff.employeeId.replace('EMP', ''));
-  nextNumber = num + 1;
-}
+    const employeeId = 'EMP' + String(nextNumber).padStart(4, '0');
 
-const employeeId = 'EMP' + String(nextNumber).padStart(4, '0');
+    // Create FitnessStaff document
+    const staffData = {
+      ...value,
+      employeeId,
+      profilePhoto: req.file ? req.file.path : null,
+    };
 
-// build data
-const staffData = {
-  ...value,
-  employeeId,
-  profilePhoto: req.file ? req.file.path : null,
-};
+    const savedStaff = await FitnessStaff.create(staffData);
 
-const staff = await FitnessStaff.create(staffData);
+    // === Create User with correct role 'FitnessStaff' ===
+    const staffUserId = `FITSTF${Math.floor(1000 + Math.random() * 9000)}`;
+    
+    // Hash the password before saving to User
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(value.password, salt);
 
-    // toJSON transformer strips password automatically
-    return respond(res, 201, true, "Staff member created successfully", staff);
+    const newUser = new User({
+      userId: staffUserId,
+      password: hashedPassword,
+      fullName: value.fullName,
+      mobile: value.mobileNumber,
+      email: value.emailId || '',
+      role: 'FitnessStaff',           // ← This is what you needed
+      userType: 'fitness',
+      organizationId: 'fitness',      // Change if you have dynamic organizationId
+      staffId: savedStaff._id,
+      linkedId: savedStaff._id,
+      isActive: 'Yes'
+    });
+
+    await newUser.save();
+
+    // Success response - show plain password only to admin
+    return respond(res, 201, true, "Staff member created successfully with login credentials", {
+      staff: savedStaff,
+      userCredentials: {
+        userId: staffUserId,
+        password: value.password   // plain password for display only
+      }
+    });
+
   } catch (err) {
     if (req.file) deleteFile(req.file.path);
     console.error("[createFitnessStaff]", err);
     return respond(res, 500, false, "Internal server error while creating staff member");
   }
 };
+
+
+
 
 // ═════════════════════════════════════════════════════════════════════════════
 // READ ALL  GET /api/fitness/staff

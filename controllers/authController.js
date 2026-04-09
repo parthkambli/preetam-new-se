@@ -1,6 +1,7 @@
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const Admin = require('../models/Admin');
+const User = require('../models/User');
 
 /**
  * @desc    Authenticate admin user and generate JWT token
@@ -18,41 +19,98 @@ exports.login = async (req, res) => {
       return res.status(400).json({ message: 'User ID and password are required' });
     }
 
-    // Find admin by userId
+    // Try to find admin first
     const admin = await Admin.findOne({ userId });
-    if (!admin) {
+    if (admin) {
+      // Admin authentication
+      const match = await bcrypt.compare(password, admin.password);
+      if (!match) {
+        return res.status(401).json({ message: 'Invalid credentials' });
+      }
+
+      // Generate JWT token for admin
+      const token = jwt.sign(
+        {
+          id: admin._id,
+          userId: admin.userId,
+          organizations: admin.allowedOrganizations
+        },
+        process.env.JWT_SECRET,
+        { expiresIn: '24h' }
+      );
+
+      return res.json({
+        token,
+        organizations: admin.allowedOrganizations,
+        defaultOrg: admin.allowedOrganizations[0],
+        user: {
+          id: admin._id,
+          userId: admin.userId,
+          fullName: admin.fullName,
+          role: admin.role
+        }
+      });
+    }
+
+    // Try to find staff user
+    const user = await User.findOne({ userId, isActive: 'Yes' })
+      .populate('staffId');
+
+    if (!user) {
       return res.status(401).json({ message: 'Invalid credentials' });
     }
 
-    // Compare password
-    const match = await bcrypt.compare(password, admin.password);
+    // Staff authentication
+    const match = await bcrypt.compare(password, user.password);
     if (!match) {
       return res.status(401).json({ message: 'Invalid credentials' });
     }
 
-    // Generate JWT token
+    // Generate organizations based on staff role
+    const organizations = [];
+    if (user.organizationId === 'school') {
+      organizations.push({ 
+        id: 'school', 
+        name: 'Preetam Senior Citizen School',
+        label: 'Senior Citizen School'
+      });
+    } else if (user.organizationId === 'fitness') {
+      organizations.push({ 
+        id: 'fitness', 
+        name: 'Sport Fitness Club',
+        label: 'Sport Fitness Club'
+      });
+    }
+
+    const defaultOrg = organizations[0];
+
+    // Generate JWT token for staff
     const token = jwt.sign(
       {
-        id: admin._id,
-        userId: admin.userId,
-        organizations: admin.allowedOrganizations
+        id: user._id,
+        userId: user.userId,
+        role: user.role,
+        organizationId: user.organizationId
       },
       process.env.JWT_SECRET,
       { expiresIn: '24h' }
     );
 
-    // Send response
     res.json({
       token,
-      organizations: admin.allowedOrganizations,
-      defaultOrg: admin.allowedOrganizations[0],
+      organizations,
+      defaultOrg,
       user: {
-        id: admin._id,
-        userId: admin.userId,
-        fullName: admin.fullName,
-        role: admin.role
+        id: user._id,
+        userId: user.userId,
+        fullName: user.fullName,
+        role: user.role,
+        userType: user.userType,
+        organizationId: user.organizationId,
+        staffId: user.staffId
       }
     });
+
   } catch (err) {
     console.error('Login error:', err.message);
     res.status(500).json({ message: 'Server error during login' });
