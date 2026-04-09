@@ -28,6 +28,11 @@ const fitnessFeeAllotmentSchema = new mongoose.Schema({
     enum: ['Pending', 'Partially Paid', 'Paid'],
     default: 'Pending'
   },
+  responsibleStaff: {
+  type: mongoose.Schema.Types.ObjectId,
+  ref: 'FitnessStaff',
+  default: null
+},
 
   organizationId: { type: String, required: true },
   createdAt: { type: Date, default: Date.now },

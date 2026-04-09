@@ -1,12 +1,4 @@
 
-
-
-
-
-
-
-
-
 // controllers/fitnessMemberController.js
 const fs = require('fs');
 const path = require('path');
@@ -75,6 +67,7 @@ exports.getAllMembers = async (req, res) => {
     }
 
     const members = await FitnessMember.find(query)
+    .populate('staff', 'fullName')
       .sort({ createdAt: -1 })
       .select('-password');
 
@@ -125,39 +118,74 @@ exports.createMember = async (req, res) => {
     }
 
     try {
-      const memberData = { ...req.body, organizationId: req.organizationId };
+      const mongoose = require('mongoose');
+
+      const memberData = {
+        ...req.body,
+        organizationId: req.organizationId,
+      };
+
+      // ✅ staff safe handling
+      if (req.body.staff && mongoose.Types.ObjectId.isValid(req.body.staff)) {
+        memberData.staff = req.body.staff;
+      } else {
+        memberData.staff = null;
+      }
 
       if (req.file) {
         memberData.photo = `/uploads/members/${req.file.filename}`;
       }
 
-      // Validate required fields
-      if (!memberData.name || !memberData.mobile || !memberData.activity || !memberData.startDate || !memberData.password) {
+      if (
+        !memberData.name ||
+        !memberData.mobile ||
+        !memberData.activity ||
+        !memberData.startDate ||
+        !memberData.password
+      ) {
         if (req.file) deleteOldPhoto(memberData.photo);
-        return res.status(400).json({ message: 'Name, mobile, activity, start date and password are required' });
+        return res.status(400).json({
+          message: 'Name, mobile, activity, start date and password are required'
+        });
       }
 
       const member = new FitnessMember(memberData);
       await member.save();
 
-      // If enquiry was selected → mark it as Admitted
       if (memberData.enquiryId) {
-        await FitnessEnquiry.findByIdAndUpdate(memberData.enquiryId, { status: 'Admitted' });
+        await FitnessEnquiry.findByIdAndUpdate(memberData.enquiryId, {
+          status: 'Admitted'
+        });
       }
 
-      const createdMember = member.toObject();
-      delete createdMember.password;
+      const createdMember = await FitnessMember.findById(member._id)
+        .populate('staff', 'fullName name')
+        .select('-password');
 
       res.status(201).json({
-        ...createdMember,
+        ...createdMember.toObject(),
         message: 'Member added successfully'
       });
     } catch (err) {
       if (req.file) deleteOldPhoto(`/uploads/members/${req.file.filename}`);
-      console.error('Error creating member:', err.message);
+      console.error('Error creating member:', err);
+
       if (err.code === 11000) {
         return res.status(400).json({ message: 'Mobile number already exists' });
       }
+
+      if (err.name === 'ValidationError') {
+        return res.status(400).json({
+          message: Object.values(err.errors).map(e => e.message).join(', ')
+        });
+      }
+
+      if (err.name === 'CastError') {
+        return res.status(400).json({
+          message: `Invalid value for ${err.path}`
+        });
+      }
+
       res.status(500).json({ message: 'Server error while creating member' });
     }
   });
@@ -179,6 +207,8 @@ exports.updateMember = async (req, res) => {
     }
 
     try {
+      const mongoose = require('mongoose');
+
       const member = await FitnessMember.findOne({
         _id: req.params.id,
         organizationId: req.organizationId
@@ -191,8 +221,14 @@ exports.updateMember = async (req, res) => {
 
       const updateData = { ...req.body };
 
+      // ✅ staff safe handling
+      if (req.body.staff && mongoose.Types.ObjectId.isValid(req.body.staff)) {
+        updateData.staff = req.body.staff;
+      } else {
+        updateData.staff = null;
+      }
+
       if (req.file) {
-        // Delete old photo before replacing
         if (member.photo) deleteOldPhoto(member.photo);
         updateData.photo = `/uploads/members/${req.file.filename}`;
       }
@@ -200,24 +236,38 @@ exports.updateMember = async (req, res) => {
       Object.assign(member, updateData);
       await member.save();
 
-      const updated = member.toObject();
-      delete updated.password;
+      const updated = await FitnessMember.findById(member._id)
+        .populate('staff', 'fullName name')
+        .select('-password');
 
       res.json({
-        ...updated,
+        ...updated.toObject(),
         message: 'Member updated successfully'
       });
     } catch (err) {
       if (req.file) deleteOldPhoto(`/uploads/members/${req.file.filename}`);
-      console.error('Error updating member:', err.message);
+      console.error('Error updating member:', err);
+
       if (err.code === 11000) {
         return res.status(400).json({ message: 'Mobile number already exists' });
       }
+
+      if (err.name === 'ValidationError') {
+        return res.status(400).json({
+          message: Object.values(err.errors).map(e => e.message).join(', ')
+        });
+      }
+
+      if (err.name === 'CastError') {
+        return res.status(400).json({
+          message: `Invalid value for ${err.path}`
+        });
+      }
+
       res.status(500).json({ message: 'Server error while updating member' });
     }
   });
 };
-
 // ─────────────────────────────────────────────────────────────────────────────
 /**
  * @desc    Delete member

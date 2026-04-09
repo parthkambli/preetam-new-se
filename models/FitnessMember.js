@@ -19,7 +19,7 @@ const fitnessMemberSchema = new mongoose.Schema({
     required: [true, 'Mobile number is required'],
     trim: true,
     match: [/^\d{10}$/, 'Mobile must be a valid 10-digit number'],
-    unique: true
+    // unique: true
   },
   email: {
     type: String,
@@ -39,6 +39,11 @@ const fitnessMemberSchema = new mongoose.Schema({
   address: {
     type: String,
     trim: true
+  },
+  staff: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'FitnessStaff',
+    default: null
   },
   photo: {
     type: String // Path to uploaded image (e.g., /uploads/members/abc123.jpg)
@@ -155,11 +160,18 @@ fitnessMemberSchema.pre('save', async function (next) {
   next();
 });
 
+
+// ✅ Add this compound unique index (Best Practice)
+fitnessMemberSchema.index(
+  { organizationId: 1, mobile: 1 }, 
+  { unique: true }
+);
+
 // Indexes for performance
 fitnessMemberSchema.index({ organizationId: 1, status: 1 });
-fitnessMemberSchema.index({ organizationId: 1, mobile: 1 });
+// fitnessMemberSchema.index({ organizationId: 1, mobile: 1 });
 fitnessMemberSchema.index({ organizationId: 1, memberId: 1 });
-fitnessMemberSchema.index({ fullName: 'text' }); // name field is used
+fitnessMemberSchema.index({ name: 'text' }); // name field is used
 fitnessMemberSchema.index({ createdAt: -1 });
 
 module.exports = mongoose.model('FitnessMember', fitnessMemberSchema);
