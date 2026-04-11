@@ -90,13 +90,7 @@ app.use('/api/fitness/schedules', fitnessSchedule);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/school/dashboard', schoolDashboardRoutes);
 app.use('/api/fees', feeRoutes);
-
-//fitness reports routes
-
 app.use('/api', fitnessReportsRoutes);
-
-
-
 
 
 
