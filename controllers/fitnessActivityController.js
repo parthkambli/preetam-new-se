@@ -39,12 +39,10 @@ exports.generateRecurringBookings = async (memberId, activityFeeIndex, activityI
       activityId,
       slotId,
       date,
-      memberId,
-      activityFeeIndex,
+      memberId: memberId || null,      activityFeeIndex,
       isRecurring: true,
       isException: false,
-      customerName,
-      phone
+      customerName: customerName || "Walk-in",      phone
     });
   }
 
@@ -481,7 +479,7 @@ exports.getBookings = async (req, res) => {
 
       return {
         _id: b._id,
-        memberId: b.memberId,
+        memberId: b.memberId?.name || b.customerName,
         customerName: b.customerName,
         activityName,
         slotTime,

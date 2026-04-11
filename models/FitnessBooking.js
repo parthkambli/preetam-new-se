@@ -64,10 +64,14 @@ const bookingSchema = new mongoose.Schema({
     required: true
   },
   memberId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'FitnessMember',   // Link to the member
-    required: true
-  },
+  type: mongoose.Schema.Types.ObjectId,
+  ref: "FitnessMember",
+  required: false
+},
+customerName: {
+  type: String,
+  required: true
+},
   activityFeeIndex: {     // Which activityFee in the member's array (0, 1, ...)
     type: Number,
     required: true
