@@ -1155,14 +1155,15 @@ const validateActivityFee = (af, index) => {
     return { error: `${prefix}: discount (₹${discount}) cannot exceed plan fee (₹${planFee}).` };
   }
 
-  const validPlans   = ['Monthly', 'Quarterly', 'Half Yearly', 'Yearly'];
+  const validPlans   = ['Annual', 'Monthly', 'Weekly', 'Daily', 'Hourly'];
   const validModes   = ['Cash', 'Cheque', 'Online', 'UPI', ''];
   const validStatuses = ['Paid', 'Pending'];
   const validMembershipStatuses = ['Active', 'Inactive'];
 
   if (af.plan && !validPlans.includes(af.plan)) {
-    return { error: `${prefix}: invalid plan "${af.plan}".` };
+    return { error: `${prefix}: invalid plan "${af.plan}". Must be one of: ${validPlans.join(', ')}.` };
   }
+
   if (af.paymentMode && !validModes.includes(af.paymentMode)) {
     return { error: `${prefix}: invalid payment mode "${af.paymentMode}".` };
   }
@@ -1229,83 +1230,154 @@ const syncFeesToTables = async (member, orgId, previousAllotmentIds = []) => {
   }
 
   // Upsert allotment + payment for each activityFee
+  // for (let i = 0; i < member.activityFees.length; i++) {
+  //   const af = member.activityFees[i];
+
+  //   // Only sync if there is a fee type selected (otherwise nothing to allot)
+  //   if (!af.feeType) continue;
+
+  //   // Determine feePlan mapping: convert member plan to allotment plan
+  //   const planMap = {
+  //     Monthly:      'Monthly',
+  //     Quarterly:    'Monthly',
+  //     'Half Yearly':'Monthly',
+  //     Yearly:       'Annual',
+  //   };
+  //   const feePlan = planMap[af.plan] || 'Monthly';
+
+  //   let allotment;
+  //   if (af.allotmentId) {
+  //     // Update existing allotment
+  //     allotment = await FeeAllotment.findByIdAndUpdate(
+  //       af.allotmentId,
+  //       {
+  //         memberId:         member._id,
+  //         feeTypeId:        af.feeType,
+  //         amount:           af.finalAmount || af.planFee || 0,
+  //         feePlan,
+  //         dueDate:          af.endDate,
+  //         responsibleStaff: af.staff || null,
+  //         organizationId:   orgId,
+  //         status:           af.paymentStatus === 'Paid' ? 'Paid' : 'Pending',
+  //       },
+  //       { new: true, upsert: false }
+  //     );
+  //   } else {
+  //     // Create new allotment
+  //     allotment = await FeeAllotment.create({
+  //       memberId:         member._id,
+  //       feeTypeId:        af.feeType,
+  //       amount:           af.finalAmount || af.planFee || 0,
+  //       feePlan,
+  //       dueDate:          af.endDate,
+  //       responsibleStaff: af.staff || null,
+  //       organizationId:   orgId,
+  //       status:           af.paymentStatus === 'Paid' ? 'Paid' : 'Pending',
+  //     });
+
+  //     // Save allotmentId back to the activityFee subdoc
+  //     member.activityFees[i].allotmentId = allotment._id;
+  //   }
+
+  //   // If payment status is Paid and finalAmount > 0, upsert a payment record
+  //   if (af.paymentStatus === 'Paid' && (af.finalAmount || af.planFee) > 0 && allotment) {
+  //     const existingPayment = await FeePayment.findOne({
+  //       allotmentId:    allotment._id,
+  //       organizationId: orgId,
+  //     });
+
+  //     const paymentData = {
+  //       memberId:       member._id,
+  //       allotmentId:    allotment._id,
+  //       amount:         af.finalAmount || af.planFee,
+  //       paymentMode:    af.paymentMode || 'Cash',
+  //       paymentDate:    af.paymentDate || new Date(),
+  //       organizationId: orgId,
+  //       description:    `Activity fee - ${af.plan} plan`,
+  //       feePlan,
+  //     };
+
+  //     if (existingPayment) {
+  //       await FeePayment.findByIdAndUpdate(existingPayment._id, paymentData);
+  //     } else {
+  //       await FeePayment.create(paymentData);
+  //     }
+
+  //     // Mark allotment as Paid
+  //     await FeeAllotment.findByIdAndUpdate(allotment._id, { status: 'Paid' });
+  //   }
+  // }
+
   for (let i = 0; i < member.activityFees.length; i++) {
-    const af = member.activityFees[i];
+  const af = member.activityFees[i];
 
-    // Only sync if there is a fee type selected (otherwise nothing to allot)
-    if (!af.feeType) continue;
+  if (!af.feeType) continue;
 
-    // Determine feePlan mapping: convert member plan to allotment plan
-    const planMap = {
-      Monthly:      'Monthly',
-      Quarterly:    'Monthly',
-      'Half Yearly':'Monthly',
-      Yearly:       'Annual',
-    };
-    const feePlan = planMap[af.plan] || 'Monthly';
+  const planMap = {
+  Annual:   'Annual',
+  Monthly:  'Monthly',
+  Weekly:   'Weekly',
+  Daily:    'Daily',
+  Hourly:   'Hourly',
+  };
+  const feePlan = planMap[af.plan] || 'Monthly';
 
-    let allotment;
-    if (af.allotmentId) {
-      // Update existing allotment
-      allotment = await FeeAllotment.findByIdAndUpdate(
-        af.allotmentId,
-        {
-          memberId:         member._id,
-          feeTypeId:        af.feeType,
-          amount:           af.finalAmount || af.planFee || 0,
-          feePlan,
-          dueDate:          af.endDate,
-          responsibleStaff: af.staff || null,
-          organizationId:   orgId,
-          status:           af.paymentStatus === 'Paid' ? 'Paid' : 'Pending',
-        },
-        { new: true, upsert: false }
-      );
-    } else {
-      // Create new allotment
-      allotment = await FeeAllotment.create({
-        memberId:         member._id,
-        feeTypeId:        af.feeType,
-        amount:           af.finalAmount || af.planFee || 0,
+  let allotment;
+
+  if (af.allotmentId) {
+    allotment = await FeeAllotment.findByIdAndUpdate(
+      af.allotmentId,
+      {
+        memberId: member._id,
+        feeTypeId: af.feeType,
+        amount: af.finalAmount || af.planFee || 0,
         feePlan,
-        dueDate:          af.endDate,
+        dueDate: af.endDate,
         responsibleStaff: af.staff || null,
-        organizationId:   orgId,
-        status:           af.paymentStatus === 'Paid' ? 'Paid' : 'Pending',
-      });
-
-      // Save allotmentId back to the activityFee subdoc
-      member.activityFees[i].allotmentId = allotment._id;
-    }
-
-    // If payment status is Paid and finalAmount > 0, upsert a payment record
-    if (af.paymentStatus === 'Paid' && (af.finalAmount || af.planFee) > 0 && allotment) {
-      const existingPayment = await FeePayment.findOne({
-        allotmentId:    allotment._id,
         organizationId: orgId,
-      });
+        status: af.paymentStatus === 'Paid' ? 'Paid' : 'Pending',
+      },
+      { new: true }
+    );
+  } else {
+    allotment = await FeeAllotment.create({
+      memberId: member._id,
+      feeTypeId: af.feeType,
+      amount: af.finalAmount || af.planFee || 0,
+      feePlan,
+      dueDate: af.endDate,
+      responsibleStaff: af.staff || null,
+      organizationId: orgId,
+      status: af.paymentStatus === 'Paid' ? 'Paid' : 'Pending',
+    });
 
-      const paymentData = {
-        memberId:       member._id,
-        allotmentId:    allotment._id,
-        amount:         af.finalAmount || af.planFee,
-        paymentMode:    af.paymentMode || 'Cash',
-        paymentDate:    af.paymentDate || new Date(),
-        organizationId: orgId,
-        description:    `Activity fee - ${af.plan} plan`,
-        feePlan,
-      };
-
-      if (existingPayment) {
-        await FeePayment.findByIdAndUpdate(existingPayment._id, paymentData);
-      } else {
-        await FeePayment.create(paymentData);
-      }
-
-      // Mark allotment as Paid
-      await FeeAllotment.findByIdAndUpdate(allotment._id, { status: 'Paid' });
-    }
+    // Save back allotmentId
+    member.activityFees[i].allotmentId = allotment._id;
   }
+
+  // Handle Payment
+  if (af.paymentStatus === 'Paid' && (af.finalAmount || af.planFee) > 0 && allotment) {
+    await FeePayment.findOneAndUpdate(
+      { allotmentId: allotment._id, organizationId: orgId },
+      {
+        memberId: member._id,
+        allotmentId: allotment._id,
+        amount: af.finalAmount || af.planFee,
+        paymentMode: af.paymentMode || 'Cash',
+        paymentDate: af.paymentDate || new Date(),
+        organizationId: orgId,
+        description: `Activity fee - ${af.plan} plan`,
+        feePlan,
+      },
+      { upsert: true, new: true }
+    );
+
+    await FeeAllotment.findByIdAndUpdate(allotment._id, { status: 'Paid' });
+  }
+}
+
+// Save updated allotmentIds back to member
+await member.save();
 
   // Persist the allotmentId updates back to DB
   await FitnessMember.findByIdAndUpdate(

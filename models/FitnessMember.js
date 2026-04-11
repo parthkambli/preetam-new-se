@@ -202,7 +202,7 @@ const activityFeeSchema = new mongoose.Schema({
   },
   plan: {
     type: String,
-    enum: ['Monthly', 'Quarterly', 'Half Yearly', 'Yearly'],
+    enum: ['Annual', 'Monthly', 'Weekly', 'Daily', 'Hourly'],   // ← Updated
     default: 'Monthly',
   },
   planFee: { type: Number, default: 0, min: [0, 'Plan fee cannot be negative'] },
