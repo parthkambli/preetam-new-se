@@ -240,67 +240,165 @@ exports.updateActivity = async (req, res) => {
     const { id } = req.params;
     const { name, capacity, slots } = req.body;
 
-    if (!mongoose.Types.ObjectId.isValid(id))
+    if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({ success: false, message: 'Invalid Activity ID' });
+    }
 
-    if (!name?.trim())
+    if (!name?.trim()) {
       return res.status(400).json({ success: false, message: 'Name is required' });
+    }
 
-    if (!capacity || Number(capacity) <= 0)
+    if (!capacity || Number(capacity) <= 0) {
       return res.status(400).json({ success: false, message: 'Valid capacity is required' });
+    }
 
-    if (!Array.isArray(slots) || slots.length === 0)
+    if (!Array.isArray(slots) || slots.length === 0) {
       return res.status(400).json({ success: false, message: 'At least one slot is required' });
+    }
 
+    // Validate slots
     for (let slot of slots) {
       if (!slot.startTime || !slot.endTime) {
-        return res.status(400).json({ success: false, message: 'Start time and end time are required for all slots' });
+        return res.status(400).json({
+          success: false,
+          message: 'Start time and end time are required for all slots'
+        });
       }
       if (!slot.staffId) {
-        return res.status(400).json({ success: false, message: 'Instructor (staff) is required for all slots' });
+        return res.status(400).json({
+          success: false,
+          message: 'Instructor (staff) is required for all slots'
+        });
       }
     }
 
+    // Overlap check
     for (let i = 0; i < slots.length; i++) {
       for (let j = i + 1; j < slots.length; j++) {
-        if (isOverlapping(slots[i], slots[j])) {
-          return res.status(400).json({ success: false, message: 'Slots cannot overlap' });
+        if (
+          slots[i].startTime < slots[j].endTime &&
+          slots[j].startTime < slots[i].endTime
+        ) {
+          return res.status(400).json({
+            success: false,
+            message: 'Slots cannot overlap'
+          });
         }
       }
     }
 
-    const existing = await FitnessActivity.findOne({
-      _id: { $ne: id },
-      name: name.trim()
+    const existingActivity = await FitnessActivity.findById(id);
+    if (!existingActivity) {
+      return res.status(404).json({
+        success: false,
+        message: 'Activity not found'
+      });
+    }
+
+    // ✅ PRESERVE SLOT IDs
+    const updatedSlots = slots.map((newSlot) => {
+      if (newSlot._id) return newSlot;
+
+      const matched = existingActivity.slots.find(
+        (oldSlot) =>
+          oldSlot.startTime === newSlot.startTime &&
+          oldSlot.endTime === newSlot.endTime
+      );
+
+      return matched
+        ? { ...newSlot, _id: matched._id }
+        : newSlot;
     });
-    if (existing)
-      return res.status(409).json({ success: false, message: 'Duplicate activity name' });
 
-    const updated = await FitnessActivity.findByIdAndUpdate(
-      id,
-      {
-        name: name.trim(),
-        capacity: Number(capacity),
-        slots,
-        updatedAt: Date.now()
-      },
-      { new: true, runValidators: true }
-    );
+    existingActivity.name = name.trim();
+    existingActivity.capacity = Number(capacity);
+    existingActivity.slots = updatedSlots;
+    existingActivity.updatedAt = Date.now();
 
-    if (!updated)
-      return res.status(404).json({ success: false, message: 'Activity not found' });
+    await existingActivity.save();
 
-    res.json({
+    return res.json({
       success: true,
       message: 'Activity updated successfully',
-      data: updated
+      data: existingActivity
     });
 
   } catch (err) {
     console.error("Update Activity Error:", err);
-    res.status(500).json({ success: false, message: err.message });
+    return res.status(500).json({
+      success: false,
+      message: err.message
+    });
   }
 };
+
+
+// exports.updateActivity = async (req, res) => {
+//   try {
+//     const { id } = req.params;
+//     const { name, capacity, slots } = req.body;
+
+//     if (!mongoose.Types.ObjectId.isValid(id))
+//       return res.status(400).json({ success: false, message: 'Invalid Activity ID' });
+
+//     if (!name?.trim())
+//       return res.status(400).json({ success: false, message: 'Name is required' });
+
+//     if (!capacity || Number(capacity) <= 0)
+//       return res.status(400).json({ success: false, message: 'Valid capacity is required' });
+
+//     if (!Array.isArray(slots) || slots.length === 0)
+//       return res.status(400).json({ success: false, message: 'At least one slot is required' });
+
+//     for (let slot of slots) {
+//       if (!slot.startTime || !slot.endTime) {
+//         return res.status(400).json({ success: false, message: 'Start time and end time are required for all slots' });
+//       }
+//       if (!slot.staffId) {
+//         return res.status(400).json({ success: false, message: 'Instructor (staff) is required for all slots' });
+//       }
+//     }
+
+//     for (let i = 0; i < slots.length; i++) {
+//       for (let j = i + 1; j < slots.length; j++) {
+//         if (isOverlapping(slots[i], slots[j])) {
+//           return res.status(400).json({ success: false, message: 'Slots cannot overlap' });
+//         }
+//       }
+//     }
+
+//     const existing = await FitnessActivity.findOne({
+//       _id: { $ne: id },
+//       name: name.trim()
+//     });
+//     if (existing)
+//       return res.status(409).json({ success: false, message: 'Duplicate activity name' });
+
+//     const updated = await FitnessActivity.findByIdAndUpdate(
+//       id,
+//       {
+//         name: name.trim(),
+//         capacity: Number(capacity),
+//         slots,
+//         updatedAt: Date.now()
+//       },
+//       { new: true, runValidators: true }
+//     );
+
+//     // if (!updated)
+//     //   return res.status(404).json({ success: false, message: 'Activity not found' });
+
+//     // res.json({
+//     //   success: true,
+//     //   message: 'Activity updated successfully',
+//     //   data: updated
+//     // });
+
+//   } catch (err) {
+//     console.error("Update Activity Error:", err);
+//     res.status(500).json({ success: false, message: err.message });
+//   }
+// };
 
 /* =========================
    ❌ DELETE ACTIVITY
@@ -358,8 +456,15 @@ exports.getAvailability = async (req, res) => {
     for (let slot of activity.slots) {
       let fullyAvailableDays = 0;
 
+      let bookedCountForSingleDate = 0; 
+
       for (let d of dates) {
         const count = await FitnessBooking.countDocuments({ slotId: slot._id, date: d });
+
+        if (dates.length === 1) {
+      bookedCountForSingleDate = count;
+    }
+
         const isAvailable = count < activity.capacity;
         if (isAvailable) fullyAvailableDays++;
       }
@@ -374,8 +479,16 @@ exports.getAvailability = async (req, res) => {
         totalDays: dates.length,
         fullyAvailableDays,
         availabilityPercentage: percentage,
+
+            booked: bookedCountForSingleDate,
+
+    totalDays: dates.length,
+    fullyAvailableDays,
+    availabilityPercentage: percentage,
       });
     }
+
+  
 
     res.json({
       success: true,
