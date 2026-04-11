@@ -235,6 +235,86 @@ exports.deleteActivity = async (req, res) => {
   }
 };
 
+// /* =========================
+//    📊 GET AVAILABILITY — Supports BOTH single date and date range
+// ========================= */
+// exports.getAvailability = async (req, res) => {
+//   try {
+//     const { activityId, startDate, endDate, date } = req.query;
+
+//     if (!activityId) {
+//       return res.status(400).json({ success: false, message: 'activityId is required' });
+//     }
+
+//     const activity = await FitnessActivity.findById(activityId);
+//     if (!activity) {
+//       return res.status(404).json({ success: false, message: 'Activity not found' });
+//     }
+
+//     let dates = [];
+
+//     if (date) {
+//       // Single date mode (used by BookActivity page)
+//       if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+//         return res.status(400).json({ success: false, message: 'Invalid date format' });
+//       }
+//       dates = [date];
+//     } else if (startDate && endDate) {
+//       // Date range mode (used by Add Member)
+//       dates = getDatesInRange(startDate, endDate);
+//     } else {
+//       return res.status(400).json({
+//         success: false,
+//         message: 'Either "date" (for single day) or both "startDate" and "endDate" are required'
+//       });
+//     }
+
+//     if (dates.length === 0) {
+//       return res.status(400).json({ success: false, message: 'Invalid date range' });
+//     }
+
+//     const result = [];
+
+//     for (let slot of activity.slots) {
+//       let fullyAvailableDays = 0;
+//       const dailyStatus = [];
+
+//       for (let d of dates) {
+//         const count = await FitnessBooking.countDocuments({ slotId: slot._id, date: d });
+//         const isAvailable = count < activity.capacity;
+
+//         if (isAvailable) fullyAvailableDays++;
+
+//         dailyStatus.push({ date: d, booked: count, available: isAvailable });
+//       }
+
+//       const percentage = Math.round((fullyAvailableDays / dates.length) * 100);
+
+//       result.push({
+//         slotId: slot._id,
+//         startTime: slot.startTime,
+//         endTime: slot.endTime,
+//         capacity: activity.capacity,
+//         totalDays: dates.length,
+//         fullyAvailableDays,
+//         availabilityPercentage: percentage,
+//         // dailyStatus  // Uncomment if you need detailed per-day info
+//       });
+//     }
+
+//     res.json({
+//       success: true,
+//       data: result,
+//       range: { startDate: dates[0], endDate: dates[dates.length - 1], totalDays: dates.length }
+//     });
+
+//   } catch (err) {
+//     console.error("getAvailability error:", err);
+//     res.status(500).json({ success: false, message: err.message });
+//   }
+// };
+
+
 /* =========================
    📊 GET AVAILABILITY — Supports BOTH single date and date range
 ========================= */
@@ -254,18 +334,16 @@ exports.getAvailability = async (req, res) => {
     let dates = [];
 
     if (date) {
-      // Single date mode (used by BookActivity page)
       if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
         return res.status(400).json({ success: false, message: 'Invalid date format' });
       }
       dates = [date];
     } else if (startDate && endDate) {
-      // Date range mode (used by Add Member)
       dates = getDatesInRange(startDate, endDate);
     } else {
       return res.status(400).json({
         success: false,
-        message: 'Either "date" (for single day) or both "startDate" and "endDate" are required'
+        message: 'Either "date" or both "startDate" and "endDate" are required'
       });
     }
 
@@ -277,15 +355,12 @@ exports.getAvailability = async (req, res) => {
 
     for (let slot of activity.slots) {
       let fullyAvailableDays = 0;
-      const dailyStatus = [];
 
       for (let d of dates) {
         const count = await FitnessBooking.countDocuments({ slotId: slot._id, date: d });
         const isAvailable = count < activity.capacity;
 
         if (isAvailable) fullyAvailableDays++;
-
-        dailyStatus.push({ date: d, booked: count, available: isAvailable });
       }
 
       const percentage = Math.round((fullyAvailableDays / dates.length) * 100);
@@ -295,10 +370,10 @@ exports.getAvailability = async (req, res) => {
         startTime: slot.startTime,
         endTime: slot.endTime,
         capacity: activity.capacity,
+        membersOnly: slot.membersOnly,           // ✅ NEW - Important
         totalDays: dates.length,
         fullyAvailableDays,
         availabilityPercentage: percentage,
-        // dailyStatus  // Uncomment if you need detailed per-day info
       });
     }
 
@@ -313,6 +388,7 @@ exports.getAvailability = async (req, res) => {
     res.status(500).json({ success: false, message: err.message });
   }
 };
+
 
 /* =========================
    🎯 BOOK SLOT (Enhanced)
