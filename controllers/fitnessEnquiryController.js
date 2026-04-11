@@ -482,6 +482,22 @@ exports.getAllEnquiries = async (req, res) => {
       query.enquiryDate = { $gte: start, $lt: end };
     }
 
+    if (req.query.fromDate || req.query.toDate) {
+  query.enquiryDate = {};
+
+  if (req.query.fromDate) {
+    const start = new Date(req.query.fromDate);
+    start.setHours(0, 0, 0, 0);
+    query.enquiryDate.$gte = start;
+  }
+
+  if (req.query.toDate) {
+    const end = new Date(req.query.toDate);
+    end.setHours(23, 59, 59, 999);
+    query.enquiryDate.$lte = end;
+  }
+}
+
     if (interestedActivity) {
       if (mongoose.Types.ObjectId.isValid(interestedActivity)) {
         query.interestedActivity = interestedActivity;

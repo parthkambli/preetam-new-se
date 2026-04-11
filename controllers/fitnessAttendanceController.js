@@ -451,18 +451,39 @@ exports.getAttendanceSummary = async (req, res) => {
 exports.getStudentAttendance = async (req, res) => {
   try {
     const { activityId, date } = req.params;
+    const { fromDate, toDate } = req.query;
     const organizationId = req.organizationId;
     const { page, limit } = getValidatedPageAndLimit(req.query);
     const skip = (page - 1) * limit;
 
-    const attendanceDate = new Date(date);
-    attendanceDate.setHours(0, 0, 0, 0);
-
     const query = {
       activity: activityId,
-      attendanceDate,
       organizationId
     };
+
+    // exact date
+    if (date) {
+      const attendanceDate = new Date(date);
+      attendanceDate.setHours(0, 0, 0, 0);
+      query.attendanceDate = attendanceDate;
+    }
+
+    // date range
+    if (fromDate || toDate) {
+      query.attendanceDate = {};
+
+      if (fromDate) {
+        const start = new Date(fromDate);
+        start.setHours(0, 0, 0, 0);
+        query.attendanceDate.$gte = start;
+      }
+
+      if (toDate) {
+        const end = new Date(toDate);
+        end.setHours(23, 59, 59, 999);
+        query.attendanceDate.$lte = end;
+      }
+    }
 
     const [records, total] = await Promise.all([
       FitnessAttendance.find(query)
