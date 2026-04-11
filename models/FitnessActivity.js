@@ -61,6 +61,11 @@ const slotSchema = new mongoose.Schema({
   endTime: {
     type: String,
     required: true
+  },
+  staffId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'FitnessStaff',   // 🔥 must match your model name
+    required: true
   }
 });
 
