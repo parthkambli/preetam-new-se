@@ -85,14 +85,27 @@ exports.createActivity = async (req, res) => {
       }
     }
 
-    // Check for overlapping slots
-    for (let i = 0; i < slots.length; i++) {
-      for (let j = i + 1; j < slots.length; j++) {
-        if (isOverlapping(slots[i], slots[j])) {
-          return res.status(400).json({ success: false, message: 'Slots cannot overlap' });
-        }
-      }
+       // Check for overlapping slots
+for (let i = 0; i < slots.length; i++) {
+  for (let j = i + 1; j < slots.length; j++) {
+
+    const slotA = slots[i];
+    const slotB = slots[j];
+
+    // 🚨 Block ONLY if both are membersOnly
+    if (
+      slotA.membersOnly &&
+      slotB.membersOnly &&
+      isOverlapping(slotA, slotB)
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: 'Member slots cannot overlap'
+      });
     }
+
+  }
+}
 
     const existing = await FitnessActivity.findOne({ name: name.trim() });
     if (existing) 
@@ -178,14 +191,27 @@ exports.updateActivity = async (req, res) => {
       }
     }
 
-    // Check for overlapping slots
-    for (let i = 0; i < slots.length; i++) {
-      for (let j = i + 1; j < slots.length; j++) {
-        if (isOverlapping(slots[i], slots[j])) {
-          return res.status(400).json({ success: false, message: 'Slots cannot overlap' });
-        }
-      }
+        // Check for overlapping slots
+for (let i = 0; i < slots.length; i++) {
+  for (let j = i + 1; j < slots.length; j++) {
+
+    const slotA = slots[i];
+    const slotB = slots[j];
+
+    // 🚨 Block ONLY if both are membersOnly
+    if (
+      slotA.membersOnly &&
+      slotB.membersOnly &&
+      isOverlapping(slotA, slotB)
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: 'Member slots cannot overlap'
+      });
     }
+
+  }
+}
 
     // Check for duplicate name (excluding current activity)
     const existing = await FitnessActivity.findOne({ 
