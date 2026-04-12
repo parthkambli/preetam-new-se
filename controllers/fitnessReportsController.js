@@ -93,6 +93,53 @@ const FeePayment = require('../models/FitnessFeePayment');
 const FeeAllotment = require('../models/FitnessFeeAllotment');
 const { buildDateMatch } = require('../helpers/dateFilterHelper');
 
+// ── Proration helper (inline) ──────────────────────────────────────────────
+// Calculates how much of a membership's fee falls within the filter range.
+// Weekly/Monthly/Annual → prorated by day overlap
+// Daily/Hourly          → full amount if startDate falls within range
+// No date filter        → full amount always
+const getProratedAmount = (finalAmount, plan, startDate, endDate, from, to) => {
+  if (!finalAmount || finalAmount <= 0) return 0;
+
+  // No filter → count everything
+  if (!from && !to) return finalAmount;
+
+  const filterStart = from
+    ? (() => { const d = new Date(from); d.setHours(0, 0, 0, 0); return d; })()
+    : null;
+  const filterEnd = to
+    ? (() => { const d = new Date(to); d.setHours(23, 59, 59, 999); return d; })()
+    : null;
+
+  // Daily / Hourly → count full amount only if startDate is within range
+  if (plan === 'Daily' || plan === 'Hourly') {
+    const s = new Date(startDate);
+    const inRange = (!filterStart || s >= filterStart) &&
+                    (!filterEnd   || s <= filterEnd);
+    return inRange ? finalAmount : 0;
+  }
+
+  // Weekly / Monthly / Annual → prorate by day overlap
+  const memberStart = new Date(startDate);
+  const memberEnd   = new Date(endDate);
+
+  const overlapStart = filterStart
+    ? new Date(Math.max(memberStart.getTime(), filterStart.getTime()))
+    : memberStart;
+  const overlapEnd = filterEnd
+    ? new Date(Math.min(memberEnd.getTime(), filterEnd.getTime()))
+    : memberEnd;
+
+  // No overlap
+  if (overlapStart > overlapEnd) return 0;
+
+  const totalDays   = (memberEnd - memberStart)     / (1000 * 60 * 60 * 24);
+  const overlapDays = (overlapEnd - overlapStart)   / (1000 * 60 * 60 * 24);
+
+  if (totalDays <= 0) return 0;
+
+  return Math.round((finalAmount / totalDays) * overlapDays * 100) / 100;
+};
 exports.getSummary = async (req, res) => {
   try {
     const orgId = req.organizationId;
@@ -132,26 +179,34 @@ exports.getSummary = async (req, res) => {
     );
     const activeParticipants = await FitnessMember.countDocuments(activeMatch);
 
-    // ── 4. Total Revenue ───────────────────────────────────────────────────
-    // Sum of payment amounts on a daily basis within the selected range.
-    // paidAt (or createdAt if paidAt is absent) is used as the date field.
-    // If no date selected → sum of ALL payments till date.
-    const revenueMatch = buildDateMatch(
+// ── 4. Total Revenue (Prorated) ────────────────────────────────────────
+    // Source of truth: FitnessMember.activityFees
+    // Only count fees where paymentStatus === 'Paid'
+    // Prorate Weekly/Monthly/Annual by day overlap with filter range
+    // Daily/Hourly count full amount if startDate falls in filter range
+    const allMembers = await FitnessMember.find(
       { organizationId: orgId },
-      'paidAt',       // use the actual payment date, not record creation date
-      fromDate,
-      toDate
-    );
-    const revenueData = await FeePayment.aggregate([
-      { $match: revenueMatch },
-      {
-        $group: {
-          _id: null,
-          total: { $sum: '$amount' }
-        }
+      'activityFees'
+    ).lean();
+
+    let totalRevenue = 0;
+    for (const member of allMembers) {
+      for (const af of member.activityFees || []) {
+        // Only count paid activities
+        if (af.paymentStatus !== 'Paid') continue;
+        if (!af.startDate || !af.endDate)  continue;
+
+        totalRevenue += getProratedAmount(
+          af.finalAmount,
+          af.plan,
+          af.startDate,
+          af.endDate,
+          fromDate,
+          toDate
+        );
       }
-    ]);
-    const totalRevenue = revenueData[0]?.total || 0;
+    }
+    totalRevenue = Math.round(totalRevenue * 100) / 100;
 
     // ── 5. Pending Fees ────────────────────────────────────────────────────
     // Allotment amount minus sum of payments already made.

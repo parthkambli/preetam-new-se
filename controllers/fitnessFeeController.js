@@ -1975,6 +1975,11 @@ exports.addFitnessPayment = async (req, res) => {
         message: `Payment of ₹${numAmount.toLocaleString('en-IN')} exceeds the remaining balance of ₹${remaining.toLocaleString('en-IN')}.`,
       });
     }
+    if (newPaid >= totalFee) {
+  status: 'Paid'
+} else {
+  status: 'Partial'
+}
 
     const payment = new FeePayment({
       ...req.body,
@@ -2007,5 +2012,24 @@ exports.addFitnessPayment = async (req, res) => {
       return res.status(400).json({ message: 'Invalid participant or allotment ID.' });
     }
     res.status(500).json({ message: 'Failed to record payment. Please try again.' });
+  }
+};
+
+exports.getPendingAllotments = async (req, res) => {
+  try {
+    const { memberId } = req.params;
+
+    const allotments = await FeeAllotment.find({
+      memberId,
+      organizationId: req.organizationId,
+      status: { $ne: "Paid" } // 🔥 KEY FIX
+    })
+      .populate("feeTypeId")
+      .sort({ createdAt: -1 });
+
+    res.json(allotments);
+  } catch (err) {
+    logError("getPendingAllotments", err);
+    res.status(500).json({ message: "Failed to fetch pending fees" });
   }
 };
