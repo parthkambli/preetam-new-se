@@ -461,29 +461,31 @@ exports.getStudentAttendance = async (req, res) => {
       organizationId
     };
 
-    // exact date
-    if (date) {
-      const attendanceDate = new Date(date);
-      attendanceDate.setHours(0, 0, 0, 0);
-      query.attendanceDate = attendanceDate;
-    }
+  // ✅ exact date OR date range
+if (date) {
+  const start = new Date(date);
+  start.setHours(0, 0, 0, 0);
 
-    // date range
-    if (fromDate || toDate) {
-      query.attendanceDate = {};
+  const end = new Date(date);
+  end.setHours(23, 59, 59, 999);
 
-      if (fromDate) {
-        const start = new Date(fromDate);
-        start.setHours(0, 0, 0, 0);
-        query.attendanceDate.$gte = start;
-      }
+  query.attendanceDate = { $gte: start, $lte: end };
+}
+else if (fromDate || toDate) {
+  query.attendanceDate = {};
 
-      if (toDate) {
-        const end = new Date(toDate);
-        end.setHours(23, 59, 59, 999);
-        query.attendanceDate.$lte = end;
-      }
-    }
+  if (fromDate) {
+    const start = new Date(fromDate);
+    start.setHours(0, 0, 0, 0);
+    query.attendanceDate.$gte = start;
+  }
+
+  if (toDate) {
+    const end = new Date(toDate);
+    end.setHours(23, 59, 59, 999);
+    query.attendanceDate.$lte = end;
+  }
+}
 
     const [records, total] = await Promise.all([
       FitnessAttendance.find(query)
