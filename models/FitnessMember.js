@@ -296,11 +296,54 @@ const fitnessMemberSchema = new mongoose.Schema({
 });
 
 // ── Pre-save hooks ────────────────────────────────────────────────────────
+// fitnessMemberSchema.pre('save', async function (next) {
+//   this.updatedAt = Date.now();
+
+//   // Auto-generate memberId
+//   if (!this.memberId) {
+//     const count = await mongoose.model('FitnessMember').countDocuments({
+//       organizationId: this.organizationId,
+//     });
+//     const seq = (count + 1).toString().padStart(4, '0');
+//     this.memberId = `MEM-CLUB-${seq}`;
+//   }
+
+//   // Recompute finalAmount and membershipStatus for each activityFee entry
+//   const today = new Date();
+//   today.setHours(0, 0, 0, 0);
+
+//   let anyActive = false;
+
+//   for (const af of this.activityFees) {
+//     // Auto-calc final amount
+//     const fee  = Number(af.planFee)  || 0;
+//     const disc = Number(af.discount) || 0;
+//     af.finalAmount = Math.max(0, fee - disc);
+
+//     // Activity-level status: active only if today is between start/end AND payment is Paid
+//     if (af.startDate && af.endDate) {
+//       const start = new Date(af.startDate); start.setHours(0, 0, 0, 0);
+//       const end   = new Date(af.endDate);   end.setHours(23, 59, 59, 999);
+//       const withinDates = today >= start && today <= end;
+//       const paid        = af.paymentStatus === 'Paid';
+//       af.membershipStatus = (withinDates && paid) ? 'Active' : 'Inactive';
+//       if (af.membershipStatus === 'Active') anyActive = true;
+//     } else {
+//       af.membershipStatus = 'Inactive';
+//     }
+//   }
+
+//   // Overall membership status = Active if ANY activity is active
+//   this.membershipStatus = anyActive ? 'Active' : 'Inactive';
+
+//   next();
+// });
+
 fitnessMemberSchema.pre('save', async function (next) {
   this.updatedAt = Date.now();
 
-  // Auto-generate memberId
-  if (!this.memberId) {
+  // Only generate memberId if it's a NEW document
+  if (this.isNew && !this.memberId) {
     const count = await mongoose.model('FitnessMember').countDocuments({
       organizationId: this.organizationId,
     });
@@ -308,24 +351,22 @@ fitnessMemberSchema.pre('save', async function (next) {
     this.memberId = `MEM-CLUB-${seq}`;
   }
 
-  // Recompute finalAmount and membershipStatus for each activityFee entry
+  // Rest of your status computation logic...
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
   let anyActive = false;
 
   for (const af of this.activityFees) {
-    // Auto-calc final amount
     const fee  = Number(af.planFee)  || 0;
     const disc = Number(af.discount) || 0;
     af.finalAmount = Math.max(0, fee - disc);
 
-    // Activity-level status: active only if today is between start/end AND payment is Paid
     if (af.startDate && af.endDate) {
       const start = new Date(af.startDate); start.setHours(0, 0, 0, 0);
       const end   = new Date(af.endDate);   end.setHours(23, 59, 59, 999);
       const withinDates = today >= start && today <= end;
-      const paid        = af.paymentStatus === 'Paid';
+      const paid = af.paymentStatus === 'Paid';
       af.membershipStatus = (withinDates && paid) ? 'Active' : 'Inactive';
       if (af.membershipStatus === 'Active') anyActive = true;
     } else {
@@ -333,7 +374,6 @@ fitnessMemberSchema.pre('save', async function (next) {
     }
   }
 
-  // Overall membership status = Active if ANY activity is active
   this.membershipStatus = anyActive ? 'Active' : 'Inactive';
 
   next();

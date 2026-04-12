@@ -2265,6 +2265,7 @@ const applyComputedStatuses = (obj) => {
   let anyActive = false;
 
   obj.activityFees = (obj.activityFees || []).map((af) => {
+    // Always recompute fresh status (safety net even if cron is delayed)
     const status = computeActivityMembershipStatus(af);
     af.membershipStatus = status;
     if (status === 'Active') anyActive = true;
@@ -2310,25 +2311,53 @@ exports.getAllMembers = async (req, res) => {
 };
 
 // ─── GET ONE ──────────────────────────────────────────────────────────────────
+// exports.getMemberById = async (req, res) => {
+//   try {
+//     if (!isValidObjectId(req.params.id)) {
+//       return res.status(400).json({ message: 'Invalid member ID.' });
+//     }
+
+//     const member = await FitnessMember.findOne({
+//       _id: req.params.id,
+//       organizationId: req.organizationId,
+//     })
+//       .populate('activityFees.activity', 'name activityName')
+//       .populate('activityFees.feeType',  'description monthly quarterly halfYearly annual')
+//       .populate('activityFees.staff',    'fullName name')
+//       .select('-password');
+
+//     if (!member) return res.status(404).json({ message: 'Member not found.' });
+
+//     const obj = applyComputedStatuses(member.toObject());
+
+//     res.json(obj);
+//   } catch (err) {
+//     console.error('getMemberById error:', err);
+//     if (err.name === 'CastError') return res.status(400).json({ message: 'Invalid member ID.' });
+//     res.status(500).json({ message: 'Server error while fetching member.' });
+//   }
+// };
+
 exports.getMemberById = async (req, res) => {
   try {
     if (!isValidObjectId(req.params.id)) {
       return res.status(400).json({ message: 'Invalid member ID.' });
     }
-
+ 
     const member = await FitnessMember.findOne({
       _id: req.params.id,
       organizationId: req.organizationId,
     })
       .populate('activityFees.activity', 'name activityName')
-      .populate('activityFees.feeType',  'description monthly quarterly halfYearly annual')
-      .populate('activityFees.staff',    'fullName name')
+      // ↓ include all plan-price fields so the edit form can auto-fill fees
+      .populate('activityFees.feeType', 'description annual monthly weekly daily hourly')
+      .populate('activityFees.staff',   'fullName name')
       .select('-password');
-
+ 
     if (!member) return res.status(404).json({ message: 'Member not found.' });
-
+ 
     const obj = applyComputedStatuses(member.toObject());
-
+ 
     res.json(obj);
   } catch (err) {
     console.error('getMemberById error:', err);
@@ -2336,6 +2365,7 @@ exports.getMemberById = async (req, res) => {
     res.status(500).json({ message: 'Server error while fetching member.' });
   }
 };
+ 
 
 // ─── CREATE ───────────────────────────────────────────────────────────────────
 exports.createMember = async (req, res) => {
@@ -2494,6 +2524,138 @@ exports.createMember = async (req, res) => {
       res.status(500).json({ message: 'Server error while creating member.' });
     }
   });
+};
+
+// ─── RENEW MEMBERSHIP ─────────────────────────────────────────────────────────
+exports.renewMember = async (req, res) => {
+  try {
+    if (!isValidObjectId(req.params.id)) {
+      return res.status(400).json({ message: 'Invalid member ID.' });
+    }
+
+    const member = await FitnessMember.findOne({
+      _id: req.params.id,
+      organizationId: req.organizationId,
+    });
+
+    if (!member) return res.status(404).json({ message: 'Member not found.' });
+
+    const { renewals } = req.body;
+
+    if (!Array.isArray(renewals) || renewals.length === 0) {
+      return res.status(400).json({ message: 'At least one renewal entry is required.' });
+    }
+
+    // ── Validate each renewal entry ───────────────────────────────────────
+    const validatedRenewals = [];
+
+    for (let i = 0; i < renewals.length; i++) {
+      const r = renewals[i];
+      const prefix = `Renewal ${i + 1}`;
+
+      if (!r.activityId || !isValidObjectId(r.activityId)) {
+        return res.status(400).json({ message: `${prefix}: valid activity ID is required.` });
+      }
+
+      const start = new Date(r.startDate);
+      const end = new Date(r.endDate);
+
+      if (!r.startDate || isNaN(start.getTime())) {
+        return res.status(400).json({ message: `${prefix}: valid start date is required.` });
+      }
+      if (!r.endDate || isNaN(end.getTime())) {
+        return res.status(400).json({ message: `${prefix}: valid end date is required.` });
+      }
+      if (end < start) {
+        return res.status(400).json({ message: `${prefix}: end date cannot be before start date.` });
+      }
+
+      const planFee = Number(r.planFee) || 0;
+      const discount = Number(r.discount) || 0;
+
+      if (discount > planFee && planFee > 0) {
+        return res.status(400).json({ message: `${prefix}: discount cannot exceed plan fee.` });
+      }
+
+      const membershipStatus = computeActivityMembershipStatus({
+        paymentStatus: r.paymentStatus || 'Pending',
+        startDate: start,
+        endDate: end,
+      });
+
+      validatedRenewals.push({
+        activity: r.activityId,
+        feeType: r.feeTypeId || null,
+        plan: r.plan || 'Monthly',
+        planFee,
+        discount,
+        finalAmount: planFee > 0 ? Math.max(0, planFee - discount) : 0,
+        paymentStatus: r.paymentStatus || 'Pending',
+        paymentMode: r.paymentMode || '',
+        paymentDate: r.paymentDate ? new Date(r.paymentDate) : null,
+        planNotes: r.planNotes || '',
+        startDate: start,
+        endDate: end,
+        membershipStatus,
+        staff: r.staffId || null,
+        slot: null,
+        _renewedFromId: r.activityFeeId || null,
+      });
+    }
+
+    // ── Append new activityFee entries ────────────────────────────────────
+    const newStartIndex = member.activityFees.length;
+    member.activityFees.push(...validatedRenewals);
+
+    // Recompute overall status
+    member.membershipStatus = computeOverallMembershipStatus(member.activityFees);
+
+    await member.save();
+
+    // ── Sync only the newly added renewals to FeeAllotment & FeePayment ─────
+    try {
+      const newFeesOnly = {
+        _id: member._id,
+        activityFees: member.activityFees.slice(newStartIndex)
+      };
+      await syncFeesToTables(newFeesOnly, req.organizationId, []);
+    } catch (syncErr) {
+      console.error('Fee sync error during renewal:', syncErr.message);
+    }
+
+    // ── Create recurring bookings for renewed activities ───────────────────
+    try {
+      const renewedWithIndex = validatedRenewals.map((rv, i) => ({
+        ...rv,
+        activity: rv.activity,
+        activityFeeIndex: newStartIndex + i,
+      }));
+      await createRecurringSlotBookings(member, renewedWithIndex);
+    } catch (bookingErr) {
+      console.error('Slot booking error during renewal:', bookingErr.message);
+    }
+
+    // ── Return updated member ─────────────────────────────────────────────
+    const updated = await FitnessMember.findById(member._id)
+      .populate('activityFees.activity', 'name activityName')
+      .populate('activityFees.feeType', 'description annual monthly weekly daily hourly')
+      .populate('activityFees.staff', 'fullName name')
+      .select('-password');
+
+    res.json({
+      ...applyComputedStatuses(updated.toObject()),
+      message: `${validatedRenewals.length} activit${validatedRenewals.length === 1 ? 'y' : 'ies'} renewed successfully.`,
+    });
+
+  } catch (err) {
+    console.error('renewMember error:', err);
+    if (err.name === 'ValidationError') {
+      return res.status(400).json({
+        message: Object.values(err.errors).map(e => e.message).join(' '),
+      });
+    }
+    res.status(500).json({ message: 'Server error while renewing membership.' });
+  }
 };
 
 // ─── UPDATE ───────────────────────────────────────────────────────────────────
