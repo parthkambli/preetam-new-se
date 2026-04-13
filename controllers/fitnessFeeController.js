@@ -1896,8 +1896,9 @@ exports.updateFitnessAllotment = async (req, res) => {
 exports.getFitnessPayments = async (req, res) => {
   try {
     const payments = await FeePayment.find({ organizationId: req.organizationId })
-      .populate('memberId', 'name memberId')
-      .sort({ paymentDate: -1 });
+  .populate('memberId', 'name memberId')
+  .populate('allotmentId') // ✅ ADD THIS LINE
+  .sort({ paymentDate: -1 });
     res.json(payments);
   } catch (err) {
     logError('getFitnessPayments', err);
@@ -1975,11 +1976,7 @@ exports.addFitnessPayment = async (req, res) => {
         message: `Payment of ₹${numAmount.toLocaleString('en-IN')} exceeds the remaining balance of ₹${remaining.toLocaleString('en-IN')}.`,
       });
     }
-    if (newPaid >= totalFee) {
-  status: 'Paid'
-} else {
-  status: 'Partial'
-}
+    
 
     const payment = new FeePayment({
       ...req.body,
@@ -2031,5 +2028,36 @@ exports.getPendingAllotments = async (req, res) => {
   } catch (err) {
     logError("getPendingAllotments", err);
     res.status(500).json({ message: "Failed to fetch pending fees" });
+  }
+};
+
+exports.getFitnessFeeStats = async (req, res) => {
+  try {
+    const organizationId = req.organizationId;
+
+    const totalMembers = await FitnessMember.countDocuments({ organizationId });
+
+    const assignedAgg = await FeeAllotment.aggregate([
+      { $match: { organizationId } },
+      { $group: { _id: null, total: { $sum: "$amount" } } }
+    ]);
+
+    const collectedAgg = await FeePayment.aggregate([
+      { $match: { organizationId } },
+      { $group: { _id: null, total: { $sum: "$amount" } } }
+    ]);
+
+    res.json({
+      success: true,
+      data: {
+        totalMembers,
+        totalAssigned: assignedAgg[0]?.total || 0,
+        totalCollected: collectedAgg[0]?.total || 0
+      }
+    });
+
+  } catch (err) {
+    logError("getFitnessFeeStats", err);
+    res.status(500).json({ message: "Failed to fetch stats" });
   }
 };

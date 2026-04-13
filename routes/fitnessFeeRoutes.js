@@ -14,6 +14,8 @@ const {
 } = require('../controllers/fitnessFeeController');
 
 const auth = require('../middleware/auth');
+const { getFitnessFeeStats } = require('../controllers/fitnessFeeController');
+
 
 const router = express.Router();
 
@@ -31,5 +33,9 @@ router.put('/allotments/:id', auth, updateFitnessAllotment);
 // Fitness Fee Payments
 router.get('/payments', auth, getFitnessPayments);
 router.post('/payments', auth, addFitnessPayment);
+
+// fitness fees stats
+
+router.get('/stats', auth, getFitnessFeeStats);
 
 module.exports = router;
