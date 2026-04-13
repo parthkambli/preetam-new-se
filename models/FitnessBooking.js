@@ -72,9 +72,9 @@ customerName: {
   type: String,
   required: true
 },
-  activityFeeIndex: {     // Which activityFee in the member's array (0, 1, ...)
+  activityFeeIndex: {
     type: Number,
-    required: true
+    default: null   // optional - does NOT break membership form
   },
   isRecurring: {
     type: Boolean,

@@ -1,5 +1,7 @@
 const FitnessActivity = require('../models/FitnessActivity');
 const FitnessBooking = require('../models/FitnessBooking');
+const FeeAllotment   = require('../models/FitnessFeeAllotment');   
+const FeePayment     = require('../models/FitnessFeePayment');
 const mongoose = require('mongoose');
 
 /* =========================
@@ -413,48 +415,279 @@ exports.getAvailability = async (req, res) => {
   }
 };
 
+/* =========================
+   🎯 BOOK SLOT - FINAL CLEAN VERSION
+========================= */
+// exports.bookSlot = async (req, res) => {
+//   try {
+//     const {
+//       activityId,
+//       slotId,
+//       date,
+//       customerName,
+//       phone = "0000000000",
+//       memberId,           
+//       feeTypeId,
+//       plan = "Daily",
+//       amount,
+//       paymentStatus = "Paid",
+//       paymentMode = "Cash",
+//       paymentDate
+//     } = req.body;
+
+//     if (!activityId || !slotId || !date || !customerName?.trim()) {
+//       return res.status(400).json({
+//         success: false,
+//         message: 'activityId, slotId, date, and customerName are required'
+//       });
+//     }
+
+//     if (!amount || Number(amount) <= 0) {
+//       return res.status(400).json({
+//         success: false,
+//         message: 'Valid fee amount is required'
+//       });
+//     }
+
+//     if (!req.organizationId) {
+//       return res.status(400).json({
+//         success: false,
+//         message: 'Organization ID is missing from request'
+//       });
+//     }
+
+//     const activity = await FitnessActivity.findById(activityId);
+//     if (!activity) return res.status(404).json({ success: false, message: 'Activity not found' });
+
+//     const slot = activity.slots.id(slotId);
+//     if (!slot) return res.status(404).json({ success: false, message: 'Slot not found' });
+
+//     const existingCount = await FitnessBooking.countDocuments({
+//       slotId,
+//       date: new Date(date)
+//     });
+//     if (existingCount >= activity.capacity) {
+//       return res.status(400).json({ success: false, message: 'Slot is full' });
+//     }
+
+//     // Case 1: Member changing slot (no extra fee)
+//     if (memberId) {
+//       const existingBooking = await FitnessBooking.findOne({
+//         memberId,
+//         activityId,
+//         date: new Date(date)
+//       });
+
+//       if (existingBooking) {
+//         existingBooking.slotId = slotId;
+//         await existingBooking.save();
+//         return res.json({
+//           success: true,
+//           message: 'Member slot updated successfully (no extra charge)',
+//           booking: existingBooking
+//         });
+//       }
+//     }
+
+//     // Case 2: New booking (walk-in or extra session)
+//     const booking = await FitnessBooking.create({
+//       activityId,
+//       slotId,
+//       date: new Date(date),
+//       memberId: memberId || null,
+//       customerName: customerName.trim(),
+//       phone,
+//       isRecurring: false,
+//       isException: true,
+//       activityFeeIndex: null
+//     });
+
+//     // Create Fee Allotment
+//     const numAmount = Number(amount);
+//     const finalPaymentDate = paymentDate ? new Date(paymentDate) : new Date();
+
+//     const allotment = await FeeAllotment.create({
+//       memberId: memberId || null,
+//       feeTypeId: feeTypeId || null,
+//       description: `Ad-hoc Booking - ${activity.name} (${plan})`,
+//       feePlan: plan,
+//       amount: numAmount,
+//       dueDate: new Date(date),
+//       status: paymentStatus === 'Paid' ? 'Paid' : 'Pending',
+//       organizationId: req.organizationId,
+//     });
+
+//     if (paymentStatus === 'Paid') {
+//       await FeePayment.create({
+//         memberId: memberId || null,
+//         allotmentId: allotment._id,
+//         amount: numAmount,
+//         paymentMode,
+//         paymentDate: finalPaymentDate,
+//         description: `Booking: ${activity.name} - ${plan}`,
+//         organizationId: req.organizationId,
+//       });
+
+//       allotment.status = 'Paid';
+//       await allotment.save();
+//     }
+
+//     res.json({
+//       success: true,
+//       message: memberId ? 'Extra session booked' : 'Walk-in booking created',
+//       booking,
+//       allotmentId: allotment._id
+//     });
+
+//   } catch (err) {
+//     console.error("Book Slot Error:", err);
+//     res.status(500).json({ 
+//       success: false, 
+//       message: err.message || 'Failed to book slot' 
+//     });
+//   }
+// };
 
 /* =========================
-   🎯 BOOK SLOT (Enhanced)
+   🎯 BOOK SLOT - FINAL WORKING VERSION
 ========================= */
 exports.bookSlot = async (req, res) => {
   try {
-    const { activityId, slotId, date, customerName, phone, memberId, activityFeeIndex = 0, isException = false } = req.body;
+    const {
+      activityId,
+      slotId,
+      date,
+      customerName,
+      phone = "0000000000",
+      memberId,
+      feeTypeId,
+      plan = "Daily",
+      amount,
+      paymentStatus = "Paid",
+      paymentMode = "Cash",
+      paymentDate
+    } = req.body;
 
-    if (!activityId || !slotId || !date || !customerName || !phone) {
+    // Basic validation
+    if (!activityId || !slotId || !date || !customerName?.trim()) {
       return res.status(400).json({
         success: false,
-        message: 'activityId, slotId, date, customerName, phone are required'
+        message: 'activityId, slotId, date, and customerName are required'
+      });
+    }
+
+    if (!amount || Number(amount) <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Valid fee amount is required'
+      });
+    }
+
+    // Get organizationId safely from header (your apiClient sends X-Organization-ID)
+    const organizationId = req.organizationId || req.headers['x-organization-id'];
+    
+    if (!organizationId) {
+      console.error("Missing organizationId - Headers:", req.headers);
+      return res.status(400).json({
+        success: false,
+        message: 'Organization ID is missing from request'
       });
     }
 
     const activity = await FitnessActivity.findById(activityId);
-    if (!activity) return res.status(404).json({ success: false, message: 'Activity not found' });
-
-    const slot = activity.slots.id(slotId);
-    if (!slot) return res.status(404).json({ success: false, message: 'Slot not found' });
-
-    const count = await FitnessBooking.countDocuments({ slotId, date });
-    if (count >= activity.capacity) {
-      return res.status(400).json({ success: false, message: 'Slot Full' });
+    if (!activity) {
+      return res.status(404).json({ success: false, message: 'Activity not found' });
     }
 
-    await FitnessBooking.create({
+    const slot = activity.slots.id(slotId);
+    if (!slot) {
+      return res.status(404).json({ success: false, message: 'Slot not found' });
+    }
+
+    // Capacity check
+    const existingCount = await FitnessBooking.countDocuments({
+      slotId,
+      date: new Date(date)
+    });
+    if (existingCount >= activity.capacity) {
+      return res.status(400).json({ success: false, message: 'Slot is full' });
+    }
+
+    // Case 1: Member changing slot (no extra fee)
+    if (memberId) {
+      const existingBooking = await FitnessBooking.findOne({
+        memberId,
+        activityId,
+        date: new Date(date)
+      });
+
+      if (existingBooking) {
+        existingBooking.slotId = slotId;
+        await existingBooking.save();
+        return res.json({
+          success: true,
+          message: 'Member slot updated successfully (no extra charge)',
+          booking: existingBooking
+        });
+      }
+    }
+
+    // Case 2: New booking (walk-in or extra session)
+    const booking = await FitnessBooking.create({
       activityId,
       slotId,
-      date,
+      date: new Date(date),
       memberId: memberId || null,
-      activityFeeIndex,
-      isRecurring: !isException,
-      isException,
-      customerName,
-      phone
+      customerName: customerName.trim(),
+      phone,
+      isRecurring: false,
+      isException: true,
+      activityFeeIndex: null
     });
 
-    res.json({ success: true, message: isException ? 'Exception booking created' : 'Booking successful' });
+    // Create Fee Allotment + Payment
+    const numAmount = Number(amount);
+    const finalPaymentDate = paymentDate ? new Date(paymentDate) : new Date();
+
+    const allotment = await FeeAllotment.create({
+      memberId: memberId || null,
+      feeTypeId: feeTypeId || null,
+      description: `Ad-hoc Booking - ${activity.name} (${plan})`,
+      feePlan: plan,
+      amount: numAmount,
+      dueDate: new Date(date),
+      status: paymentStatus === 'Paid' ? 'Paid' : 'Pending',
+      organizationId: organizationId,        // ← Fixed
+    });
+
+    if (paymentStatus === 'Paid') {
+      await FeePayment.create({
+        memberId: memberId || null,
+        allotmentId: allotment._id,
+        amount: numAmount,
+        paymentMode,
+        paymentDate: finalPaymentDate,
+        description: `Booking: ${activity.name} - ${plan}`,
+        organizationId: organizationId,       // ← Fixed
+      });
+
+      allotment.status = 'Paid';
+      await allotment.save();
+    }
+
+    res.json({
+      success: true,
+      message: memberId ? 'Extra session booked' : 'Walk-in booking created',
+      booking,
+      allotmentId: allotment._id
+    });
 
   } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
+    console.error("Book Slot Error:", err);
+    res.status(500).json({ 
+      success: false, 
+      message: err.message || 'Failed to book slot' 
+    });
   }
 };
 
