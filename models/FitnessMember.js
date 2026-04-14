@@ -290,6 +290,16 @@ const fitnessMemberSchema = new mongoose.Schema({
     default: null,
   },
 
+  membershipPass: {
+  type: mongoose.Schema.Types.ObjectId,
+  ref: 'MembershipPass',
+  default: null,
+},
+numberOfPersons: {
+  type: Number,
+  default: 1
+},
+
   organizationId: { type: String, required: [true, 'Organization ID is required'], index: true },
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now },
