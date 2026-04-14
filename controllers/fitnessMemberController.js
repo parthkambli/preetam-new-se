@@ -2047,11 +2047,11 @@ const validateActivityFee = (af, index) => {
   if (isNaN(end.getTime()))   return { error: `${prefix}: end date is invalid.` };
 
   // Start date must not be in the past (allow today)
-  const todayMidnight = new Date();
-  todayMidnight.setHours(0, 0, 0, 0);
-  if (start < todayMidnight) {
-    return { error: `${prefix}: start date cannot be in the past.` };
-  }
+  // const todayMidnight = new Date();
+  // todayMidnight.setHours(0, 0, 0, 0);
+  // if (start < todayMidnight) {
+  //   return { error: `${prefix}: start date cannot be in the past.` };
+  // }
 
   if (end < start) {
     return { error: `${prefix}: end date cannot be before start date.` };
@@ -2068,7 +2068,7 @@ const validateActivityFee = (af, index) => {
   }
 
   const validPlans   = ['Annual', 'Monthly', 'Weekly', 'Daily', 'Hourly'];
-  const validModes   = ['Cash', 'Cheque', 'Online', 'UPI', ''];
+  const validModes   = ['Cash', 'Bank Transfer', ''];
   const validStatuses = ['Paid', 'Pending'];
 
   if (af.plan && !validPlans.includes(af.plan)) {

@@ -98,48 +98,121 @@ const { buildDateMatch } = require('../helpers/dateFilterHelper');
 // Weekly/Monthly/Annual → prorated by day overlap
 // Daily/Hourly          → full amount if startDate falls within range
 // No date filter        → full amount always
+
+
+// const getProratedAmount = (finalAmount, plan, startDate, endDate, from, to) => {
+//   if (!finalAmount || finalAmount <= 0) return 0;
+
+//   // No filter → count everything
+//   if (!from && !to) return finalAmount;
+
+//   const filterStart = from
+//     ? (() => { const d = new Date(from); d.setHours(0, 0, 0, 0); return d; })()
+//     : null;
+//   const filterEnd = to
+//     ? (() => { const d = new Date(to); d.setHours(23, 59, 59, 999); return d; })()
+//     : null;
+
+//   // Daily / Hourly → count full amount only if startDate is within range
+//   if (plan === 'Daily' || plan === 'Hourly') {
+//     const s = new Date(startDate);
+//     const inRange = (!filterStart || s >= filterStart) &&
+//                     (!filterEnd   || s <= filterEnd);
+//     return inRange ? finalAmount : 0;
+//   }
+
+//   // Weekly / Monthly / Annual → prorate by day overlap
+//   const memberStart = new Date(startDate);
+//   const memberEnd   = new Date(endDate);
+
+//   const overlapStart = filterStart
+//     ? new Date(Math.max(memberStart.getTime(), filterStart.getTime()))
+//     : memberStart;
+//   const overlapEnd = filterEnd
+//     ? new Date(Math.min(memberEnd.getTime(), filterEnd.getTime()))
+//     : memberEnd;
+
+//   // No overlap
+//   if (overlapStart > overlapEnd) return 0;
+
+//   const totalDays   = (memberEnd - memberStart)     / (1000 * 60 * 60 * 24);
+//   const overlapDays = (overlapEnd - overlapStart)   / (1000 * 60 * 60 * 24);
+
+//   if (totalDays <= 0) return 0;
+
+//   return Math.round((finalAmount / totalDays) * overlapDays * 100) / 100;
+// };
+
+
+
+const MS_PER_DAY = 1000 * 60 * 60 * 24;
+
+// Normalize date → remove time completely
+const normalizeDate = (d) => {
+  const x = new Date(d);
+  x.setHours(0, 0, 0, 0);
+  return x;
+};
+
+// Inclusive day difference (REAL FIX)
+const diffDaysInclusive = (start, end) => {
+  return Math.floor((end - start) / MS_PER_DAY) + 1;
+};
+
+const getPlanDurationDays = (plan) => {
+  switch (plan) {
+    case 'Weekly': return 7;
+    case 'Monthly': return 30;
+    case 'Annual': return 365;
+    default: return null;
+  }
+};
+
 const getProratedAmount = (finalAmount, plan, startDate, endDate, from, to) => {
   if (!finalAmount || finalAmount <= 0) return 0;
 
-  // No filter → count everything
+  // No filter → full revenue
   if (!from && !to) return finalAmount;
 
-  const filterStart = from
-    ? (() => { const d = new Date(from); d.setHours(0, 0, 0, 0); return d; })()
-    : null;
-  const filterEnd = to
-    ? (() => { const d = new Date(to); d.setHours(23, 59, 59, 999); return d; })()
-    : null;
+  const filterStart = from ? normalizeDate(from) : null;
+  const filterEnd   = to   ? normalizeDate(to)   : null;
 
-  // Daily / Hourly → count full amount only if startDate is within range
+  const memberStart = normalizeDate(startDate);
+  const memberEnd   = normalizeDate(endDate);
+
+  // Daily / Hourly → revenue only if startDate inside range
   if (plan === 'Daily' || plan === 'Hourly') {
-    const s = new Date(startDate);
-    const inRange = (!filterStart || s >= filterStart) &&
-                    (!filterEnd   || s <= filterEnd);
+    const inRange =
+      (!filterStart || memberStart >= filterStart) &&
+      (!filterEnd   || memberStart <= filterEnd);
+
     return inRange ? finalAmount : 0;
   }
 
-  // Weekly / Monthly / Annual → prorate by day overlap
-  const memberStart = new Date(startDate);
-  const memberEnd   = new Date(endDate);
-
+  // Calculate overlap
   const overlapStart = filterStart
-    ? new Date(Math.max(memberStart.getTime(), filterStart.getTime()))
+    ? new Date(Math.max(memberStart, filterStart))
     : memberStart;
+
   const overlapEnd = filterEnd
-    ? new Date(Math.min(memberEnd.getTime(), filterEnd.getTime()))
+    ? new Date(Math.min(memberEnd, filterEnd))
     : memberEnd;
 
-  // No overlap
   if (overlapStart > overlapEnd) return 0;
 
-  const totalDays   = (memberEnd - memberStart)     / (1000 * 60 * 60 * 24);
-  const overlapDays = (overlapEnd - overlapStart)   / (1000 * 60 * 60 * 24);
+  const overlapDays = diffDaysInclusive(overlapStart, overlapEnd);
 
-  if (totalDays <= 0) return 0;
+  // 🔥 FIX: Use FIXED PLAN DURATION (not date difference)
+  const planDays = getPlanDurationDays(plan);
 
-  return Math.round((finalAmount / totalDays) * overlapDays * 100) / 100;
+  if (!planDays) return 0;
+
+  const prorated = (finalAmount / planDays) * overlapDays;
+
+  return Math.round(prorated * 100) / 100;
 };
+
+
 exports.getSummary = async (req, res) => {
   try {
     const orgId = req.organizationId;
@@ -177,7 +250,13 @@ exports.getSummary = async (req, res) => {
       fromDate,
       toDate
     );
-    const activeParticipants = await FitnessMember.countDocuments(activeMatch);
+    
+    
+const activeParticipants = await FitnessMember.countDocuments({
+  organizationId: orgId,
+  membershipStatus: "Active"
+});
+
 
 // ── 4. Total Revenue (Prorated) ────────────────────────────────────────
     // Source of truth: FitnessMember.activityFees

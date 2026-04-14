@@ -211,11 +211,11 @@ const activityFeeSchema = new mongoose.Schema({
   paymentStatus: {
     type: String,
     enum: ['Paid', 'Pending'],
-    default: 'Pending',
+    default: 'Paid',
   },
   paymentMode: {
     type: String,
-    enum: ['Cash', 'Cheque', 'Online', 'UPI', ''],
+    enum: ['Cash', 'Bank Transfer'],
     default: '',
   },
   paymentDate: { type: Date, default: null },
