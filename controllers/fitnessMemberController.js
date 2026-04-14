@@ -2412,6 +2412,7 @@ exports.createMember = async (req, res) => {
         if (req.file) deleteOldPhoto(`/uploads/members/${req.file.filename}`);
         return res.status(400).json({ message: fieldErrors.join(' ') });
       }
+      
 
       // ── Duplicate mobile check ──────────────────────────────────────────
       const existingMobile = await FitnessMember.findOne({
@@ -2436,20 +2437,28 @@ exports.createMember = async (req, res) => {
         }
       }
 
-      if (!Array.isArray(parsedActivityFees) || parsedActivityFees.length === 0) {
-        if (req.file) deleteOldPhoto(`/uploads/members/${req.file.filename}`);
-        return res.status(400).json({ message: 'At least one activity with a start date and end date is required.' });
-      }
+     if (
+  (!Array.isArray(parsedActivityFees) || parsedActivityFees.length === 0)
+  && !req.body.membershipPass
+) {
+  if (req.file) deleteOldPhoto(`/uploads/members/${req.file.filename}`);
+  return res.status(400).json({
+    message: 'Either activity or membership pass is required.'
+  });
+}
 
       const validatedFees = [];
-      for (let i = 0; i < parsedActivityFees.length; i++) {
-        const result = validateActivityFee(parsedActivityFees[i], i);
-        if (result.error) {
-          if (req.file) deleteOldPhoto(`/uploads/members/${req.file.filename}`);
-          return res.status(400).json({ message: result.error });
-        }
-        validatedFees.push(result.data);
-      }
+
+if (!req.body.membershipPass) {
+  for (let i = 0; i < parsedActivityFees.length; i++) {
+    const result = validateActivityFee(parsedActivityFees[i], i);
+    if (result.error) {
+      if (req.file) deleteOldPhoto(`/uploads/members/${req.file.filename}`);
+      return res.status(400).json({ message: result.error });
+    }
+    validatedFees.push(result.data);
+  }
+}
 
       // Duplicate activity check within the same submission
       const activityIds = validatedFees.map((af) => af.activity.toString());
@@ -2470,8 +2479,12 @@ exports.createMember = async (req, res) => {
         userId:           userId?.trim()  || mobile.trim(),
         password:         password.trim(),
         enquiryId:        enquiryId       || null,
+        membershipPass: req.body.membershipPass || null,
         activityFees:     validatedFees,
-        membershipStatus: computeOverallMembershipStatus(validatedFees), // ← computed
+        membershipStatus: req.body.membershipPass
+  ? 'Active'
+  : computeOverallMembershipStatus(validatedFees),// ← computed
+  numberOfPersons: req.body.numberOfPersons || 1,
         organizationId:   req.organizationId,
       };
 
@@ -2487,14 +2500,18 @@ exports.createMember = async (req, res) => {
 
       // ── Sync fees to allotment / payment tables ─────────────────────────
       try {
-        await syncFeesToTables(member, req.organizationId, []);
+        if (!req.body.membershipPass) {
+  await syncFeesToTables(member, req.organizationId, []);
+}
       } catch (syncErr) {
         console.error('Fee sync error (non-fatal):', syncErr.message);
       }
 
       // ── Create recurring slot bookings for each activityFee ─────────────
       try {
-        await createRecurringSlotBookings(member, validatedFees);
+       if (!req.body.membershipPass) {
+  await createRecurringSlotBookings(member, validatedFees);
+}
       } catch (bookingErr) {
         console.error('Slot booking error (non-fatal):', bookingErr.message);
       }
@@ -2743,10 +2760,15 @@ exports.updateMember = async (req, res) => {
           return res.status(400).json({ message: 'Invalid activityFees format.' });
         }
 
-        if (!Array.isArray(parsedActivityFees) || parsedActivityFees.length === 0) {
-          if (req.file) deleteOldPhoto(`/uploads/members/${req.file.filename}`);
-          return res.status(400).json({ message: 'At least one activity is required.' });
-        }
+        if (
+  (!Array.isArray(parsedActivityFees) || parsedActivityFees.length === 0)
+  && !req.body.membershipPass
+) {
+  if (req.file) deleteOldPhoto(`/uploads/members/${req.file.filename}`);
+  return res.status(400).json({
+    message: 'Either activity or membership pass is required.'
+  });
+}
 
         const tempValidated = [];
         for (let i = 0; i < parsedActivityFees.length; i++) {
