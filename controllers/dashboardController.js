@@ -5,7 +5,8 @@ exports.getDashboardData = async (req, res) => {
     const totalMembers = await Member.countDocuments();
 
     const activeMembers = await Member.countDocuments({
-      status: { $regex: /^active$/i }
+  membershipStatus: "Active"
+
     });
 
     res.json({

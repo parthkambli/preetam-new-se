@@ -2,6 +2,7 @@
   const cors = require('cors');
   const dotenv = require('dotenv');
   const connectDB = require('./config/db');
+  const { startMembershipCron } = require('./utils/updateMembershipStatuses');
 
   const authRoutes = require('./routes/auth');
   const schoolDashboardRoutes = require('./routes/schoolDashboardRoutes');
@@ -40,6 +41,8 @@
 
   // Connect to MongoDB
   connectDB();
+
+  startMembershipCron();
 
   const app = express();
 
@@ -93,13 +96,7 @@ app.use('/api/fitness/schedules', fitnessSchedule);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/school/dashboard', schoolDashboardRoutes);
 app.use('/api/fees', feeRoutes);
-
-//fitness reports routes
-
 app.use('/api', fitnessReportsRoutes);
-
-
-
 
 
 

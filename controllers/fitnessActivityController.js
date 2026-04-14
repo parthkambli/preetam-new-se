@@ -1,6 +1,8 @@
 const FitnessActivity = require('../models/FitnessActivity');
-const FitnessBooking = require('../models/FitnessBooking');
-const mongoose = require('mongoose');
+const FitnessBooking  = require('../models/FitnessBooking');
+const FeeAllotment    = require('../models/FitnessFeeAllotment');
+const FeePayment      = require('../models/FitnessFeePayment');
+const mongoose        = require('mongoose');
 
 /* =========================
    HELPER: CHECK OVERLAP
@@ -13,105 +15,131 @@ function isOverlapping(slot1, slot2) {
 }
 
 /* =========================
+   HELPER: Generate dates between start and end (inclusive)
+========================= */
+function getDatesInRange(startDate, endDate) {
+  const dates = [];
+  let current = new Date(startDate);
+  const end = new Date(endDate);
+
+  while (current <= end) {
+    dates.push(current.toISOString().split('T')[0]);
+    current.setDate(current.getDate() + 1);
+  }
+  return dates;
+}
+
+/* =========================
+   HELPER: Generate recurring bookings for a member
+========================= */
+exports.generateRecurringBookings = async (memberId, activityFeeIndex, activityId, slotId, startDate, endDate, customerName, phone) => {
+  const dates = getDatesInRange(startDate, endDate);
+  const bookings = [];
+
+  for (const date of dates) {
+    bookings.push({
+      activityId,
+      slotId,
+      date,
+      memberId: memberId || null,
+      activityFeeIndex,
+      isRecurring: true,
+      isException: false,
+      customerName: customerName || "Walk-in",
+      phone
+    });
+  }
+
+  if (bookings.length > 0) {
+    await FitnessBooking.insertMany(bookings);
+  }
+
+  return bookings.length;
+};
+
+/* =========================
    ➕ CREATE ACTIVITY
 ========================= */
 exports.createActivity = async (req, res) => {
   try {
     const { name, capacity, slots } = req.body;
 
-    if (!name) {
+    if (!name?.trim())
       return res.status(400).json({ success: false, message: 'Name is required' });
-    }
 
-    if (!capacity || capacity <= 0) {
-      return res.status(400).json({ success: false, message: 'Valid capacity required' });
-    }
+    if (!capacity || Number(capacity) <= 0)
+      return res.status(400).json({ success: false, message: 'Valid capacity is required' });
 
-    if (!Array.isArray(slots) || slots.length === 0) {
-      return res.status(400).json({ success: false, message: 'At least one slot required' });
-    }
+    if (!Array.isArray(slots) || slots.length === 0)
+      return res.status(400).json({ success: false, message: 'At least one slot is required' });
 
-    // validate slots
+    // Slot validation
     for (let slot of slots) {
       if (!slot.startTime || !slot.endTime) {
-        return res.status(400).json({
-          success: false,
-          message: 'Invalid slot data'
-        });
+        return res.status(400).json({ success: false, message: 'Start time and end time are required for all slots' });
+      }
+      if (!slot.staffId) {
+        return res.status(400).json({ success: false, message: 'Instructor (staff) is required for all slots' });
       }
     }
 
-    // overlap check
+    // Overlap check — all slots checked equally, no membersOnly distinction
     for (let i = 0; i < slots.length; i++) {
       for (let j = i + 1; j < slots.length; j++) {
         if (isOverlapping(slots[i], slots[j])) {
-          return res.status(400).json({
-            success: false,
-            message: 'Slots cannot overlap'
-          });
+          return res.status(400).json({ success: false, message: 'Slots cannot overlap' });
         }
       }
     }
 
     const existing = await FitnessActivity.findOne({ name: name.trim() });
-    if (existing) {
-      return res.status(409).json({ success: false, message: 'Activity already exists' });
-    }
+    if (existing)
+      return res.status(409).json({ success: false, message: 'Activity with this name already exists' });
 
     const activity = await FitnessActivity.create({
       name: name.trim(),
-      capacity,
+      capacity: Number(capacity),
       slots
     });
 
     res.status(201).json({
       success: true,
-      message: 'Activity created',
+      message: 'Activity created successfully',
       data: activity
     });
 
   } catch (err) {
+    console.error("Create Activity Error:", err);
     res.status(500).json({ success: false, message: err.message });
   }
 };
 
 /* =========================
-   📄 GET ALL
+   📄 GET ALL ACTIVITIES
 ========================= */
 exports.getActivities = async (req, res) => {
   try {
     const activities = await FitnessActivity.find().sort({ name: 1 });
-
-    res.json({
-      success: true,
-      count: activities.length,
-      data: activities
-    });
-
+    res.json({ success: true, count: activities.length, data: activities });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
 };
 
 /* =========================
-   🔍 GET BY ID
+   🔍 GET ACTIVITY BY ID
 ========================= */
 exports.getActivityById = async (req, res) => {
   try {
     const { id } = req.params;
-
-    if (!mongoose.Types.ObjectId.isValid(id)) {
+    if (!mongoose.Types.ObjectId.isValid(id))
       return res.status(400).json({ success: false, message: 'Invalid ID' });
-    }
 
     const activity = await FitnessActivity.findById(id);
-
-    if (!activity) {
+    if (!activity)
       return res.status(404).json({ success: false, message: 'Not found' });
-    }
 
     res.json({ success: true, data: activity });
-
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
@@ -125,139 +153,155 @@ exports.updateActivity = async (req, res) => {
     const { id } = req.params;
     const { name, capacity, slots } = req.body;
 
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(400).json({ success: false, message: 'Invalid ID' });
-    }
+    if (!mongoose.Types.ObjectId.isValid(id))
+      return res.status(400).json({ success: false, message: 'Invalid Activity ID' });
 
-    if (!name) {
-      return res.status(400).json({ success: false, message: 'Name required' });
-    }
+    if (!name?.trim())
+      return res.status(400).json({ success: false, message: 'Name is required' });
 
-    if (!capacity || capacity <= 0) {
-      return res.status(400).json({ success: false, message: 'Valid capacity required' });
-    }
+    if (!capacity || Number(capacity) <= 0)
+      return res.status(400).json({ success: false, message: 'Valid capacity is required' });
 
-    if (!Array.isArray(slots) || slots.length === 0) {
-      return res.status(400).json({ success: false, message: 'Slots required' });
-    }
+    if (!Array.isArray(slots) || slots.length === 0)
+      return res.status(400).json({ success: false, message: 'At least one slot is required' });
 
-    // validate slots
+    // Slot validation
     for (let slot of slots) {
       if (!slot.startTime || !slot.endTime) {
-        return res.status(400).json({ success: false, message: 'Invalid slot data' });
+        return res.status(400).json({ success: false, message: 'Start time and end time are required for all slots' });
+      }
+      if (!slot.staffId) {
+        return res.status(400).json({ success: false, message: 'Instructor (staff) is required for all slots' });
       }
     }
 
-    // overlap check
+    // Overlap check — all slots checked equally, no membersOnly distinction
     for (let i = 0; i < slots.length; i++) {
       for (let j = i + 1; j < slots.length; j++) {
         if (isOverlapping(slots[i], slots[j])) {
-          return res.status(400).json({
-            success: false,
-            message: 'Slots cannot overlap'
-          });
+          return res.status(400).json({ success: false, message: 'Slots cannot overlap' });
         }
       }
     }
 
+    // Check for duplicate name (excluding current activity)
     const existing = await FitnessActivity.findOne({
       _id: { $ne: id },
       name: name.trim()
     });
-
-    if (existing) {
-      return res.status(409).json({
-        success: false,
-        message: 'Duplicate activity name'
-      });
-    }
+    if (existing)
+      return res.status(409).json({ success: false, message: 'Duplicate activity name' });
 
     const updated = await FitnessActivity.findByIdAndUpdate(
       id,
       {
         name: name.trim(),
-        capacity,
+        capacity: Number(capacity),
         slots,
         updatedAt: Date.now()
       },
-      { new: true }
+      { new: true, runValidators: true }
     );
 
-    if (!updated) {
-      return res.status(404).json({ success: false, message: 'Not found' });
-    }
+    if (!updated)
+      return res.status(404).json({ success: false, message: 'Activity not found' });
 
     res.json({
       success: true,
-      message: 'Updated',
+      message: 'Activity updated successfully',
       data: updated
     });
 
   } catch (err) {
+    console.error("Update Activity Error:", err);
     res.status(500).json({ success: false, message: err.message });
   }
 };
 
 /* =========================
-   ❌ DELETE
+   ❌ DELETE ACTIVITY
 ========================= */
 exports.deleteActivity = async (req, res) => {
   try {
     const { id } = req.params;
-
     const deleted = await FitnessActivity.findByIdAndDelete(id);
-
-    if (!deleted) {
+    if (!deleted)
       return res.status(404).json({ success: false, message: 'Not found' });
-    }
-
     res.json({ success: true, message: 'Deleted' });
-
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
 };
 
 /* =========================
-   📊 GET AVAILABILITY
+   📊 GET AVAILABILITY — Supports BOTH single date and date range
 ========================= */
 exports.getAvailability = async (req, res) => {
   try {
-    const { activityId, date } = req.query;
+    const { activityId, startDate, endDate, date } = req.query;
 
-    if (!activityId || !date) {
-      return res.status(400).json({
-        success: false,
-        message: 'activityId and date required'
-      });
+    if (!activityId) {
+      return res.status(400).json({ success: false, message: 'activityId is required' });
     }
 
     const activity = await FitnessActivity.findById(activityId);
-
     if (!activity) {
       return res.status(404).json({ success: false, message: 'Activity not found' });
+    }
+
+    let dates = [];
+
+    if (date) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+        return res.status(400).json({ success: false, message: 'Invalid date format' });
+      }
+      dates = [date];
+    } else if (startDate && endDate) {
+      dates = getDatesInRange(startDate, endDate);
+    } else {
+      return res.status(400).json({
+        success: false,
+        message: 'Either "date" or both "startDate" and "endDate" are required'
+      });
+    }
+
+    if (dates.length === 0) {
+      return res.status(400).json({ success: false, message: 'Invalid date range' });
     }
 
     const result = [];
 
     for (let slot of activity.slots) {
-      const count = await FitnessBooking.countDocuments({
-        slotId: slot._id,
-        date
-      });
+      let fullyAvailableDays = 0;
 
+      for (let d of dates) {
+        const count = await FitnessBooking.countDocuments({ slotId: slot._id, date: d });
+        const isAvailable = count < activity.capacity;
+        if (isAvailable) fullyAvailableDays++;
+      }
+
+      const percentage = Math.round((fullyAvailableDays / dates.length) * 100);
+
+      // membersOnly removed from response
       result.push({
-        slotId: slot._id,
-        startTime: slot.startTime,
-        endTime: slot.endTime,
-        capacity: activity.capacity, // 🔥 FIXED
-        booked: count
+        slotId:                 slot._id,
+        startTime:              slot.startTime,
+        endTime:                slot.endTime,
+        capacity:               activity.capacity,
+        totalDays:              dates.length,
+        fullyAvailableDays,
+        availabilityPercentage: percentage,
       });
     }
 
-    res.json({ success: true, data: result });
+    res.json({
+      success: true,
+      data: result,
+      range: { startDate: dates[0], endDate: dates[dates.length - 1], totalDays: dates.length }
+    });
 
   } catch (err) {
+    console.error("getAvailability error:", err);
     res.status(500).json({ success: false, message: err.message });
   }
 };
@@ -267,12 +311,42 @@ exports.getAvailability = async (req, res) => {
 ========================= */
 exports.bookSlot = async (req, res) => {
   try {
-    const { activityId, slotId, date, customerName, phone } = req.body;
+    const {
+      activityId,
+      slotId,
+      date,
+      customerName,
+      phone = "0000000000",
+      memberId,
+      feeTypeId,
+      plan = "Daily",
+      amount,
+      paymentStatus = "Paid",
+      paymentMode = "Cash",
+      paymentDate
+    } = req.body;
 
-    if (!activityId || !slotId || !date || !customerName || !phone) {
+    if (!activityId || !slotId || !date || !customerName?.trim()) {
       return res.status(400).json({
         success: false,
-        message: 'All fields required'
+        message: 'activityId, slotId, date, and customerName are required'
+      });
+    }
+
+    if (!amount || Number(amount) <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Valid fee amount is required'
+      });
+    }
+
+    const organizationId = req.organizationId || req.headers['x-organization-id'];
+
+    if (!organizationId) {
+      console.error("Missing organizationId - Headers:", req.headers);
+      return res.status(400).json({
+        success: false,
+        message: 'Organization ID is missing from request'
       });
     }
 
@@ -286,51 +360,95 @@ exports.bookSlot = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Slot not found' });
     }
 
-    // ✅ COUNT BOOKINGS
-    const count = await FitnessBooking.countDocuments({ slotId, date });
-
-    if (count >= activity.capacity) {
-      return res.status(400).json({
-        success: false,
-        message: 'Slot Full'
-      });
-    }
-
-    // ✅ OPTIONAL: prevent SAME user duplicate booking
-    const alreadyBooked = await FitnessBooking.findOne({
+    // Capacity check
+    const existingCount = await FitnessBooking.countDocuments({
       slotId,
-      date,
-      customerName
+      date: new Date(date)
     });
-
-    if (alreadyBooked) {
-      return res.status(400).json({
-        success: false,
-        message: 'Member already booked this slot'
-      });
+    if (existingCount >= activity.capacity) {
+      return res.status(400).json({ success: false, message: 'Slot is full' });
     }
 
-    await FitnessBooking.create({
+    // Case 1: Member changing slot (no extra fee)
+    if (memberId) {
+      const existingBooking = await FitnessBooking.findOne({
+        memberId,
+        activityId,
+        date: new Date(date)
+      });
+
+      if (existingBooking) {
+        existingBooking.slotId = slotId;
+        await existingBooking.save();
+        return res.json({
+          success: true,
+          message: 'Member slot updated successfully (no extra charge)',
+          booking: existingBooking
+        });
+      }
+    }
+
+    // Case 2: New booking (walk-in or extra session)
+    const booking = await FitnessBooking.create({
       activityId,
       slotId,
-      date,
-      customerName,
-      phone
+      date: new Date(date),
+      memberId: memberId || null,
+      customerName: customerName.trim(),
+      phone,
+      isRecurring: false,
+      isException: true,
+      activityFeeIndex: null
     });
+
+    const numAmount = Number(amount);
+    const finalPaymentDate = paymentDate ? new Date(paymentDate) : new Date();
+
+    const allotment = await FeeAllotment.create({
+      memberId: memberId || null,
+      feeTypeId: feeTypeId || null,
+      description: `Ad-hoc Booking - ${activity.name} (${plan})`,
+      feePlan: plan,
+      amount: numAmount,
+      dueDate: new Date(date),
+      status: paymentStatus === 'Paid' ? 'Paid' : 'Pending',
+      organizationId,
+    });
+
+    if (paymentStatus === 'Paid') {
+      await FeePayment.create({
+        memberId: memberId || null,
+        allotmentId: allotment._id,
+        amount: numAmount,
+        paymentMode,
+        paymentDate: finalPaymentDate,
+        description: `Booking: ${activity.name} - ${plan}`,
+        organizationId,
+      });
+
+      allotment.status = 'Paid';
+      await allotment.save();
+    }
 
     res.json({
       success: true,
-      message: 'Booking successful'
+      message: memberId ? 'Extra session booked' : 'Walk-in booking created',
+      booking,
+      allotmentId: allotment._id
     });
 
   } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
+    console.error("Book Slot Error:", err);
+    res.status(500).json({
+      success: false,
+      message: err.message || 'Failed to book slot'
+    });
   }
 };
 
-// =========================
-// 📋 GET ALL BOOKINGS
-// =========================
+/* =========================
+   📋 GET ALL BOOKINGS
+========================= */
 exports.getBookings = async (req, res) => {
   try {
     const bookings = await FitnessBooking.find()
@@ -338,481 +456,600 @@ exports.getBookings = async (req, res) => {
       .sort({ createdAt: -1 });
 
     const formatted = bookings.map(b => {
-
       let activityName = 'N/A';
       let slotTime = 'N/A';
 
-      if (b.activityId) {
+      if (b.activityId && b.activityId.slots) {
         activityName = b.activityId.name;
-
-        if (b.activityId.slots) {
-          const slot = b.activityId.slots.id(b.slotId);
-          if (slot) {
-            slotTime = `${slot.startTime} - ${slot.endTime}`;
-          }
-        }
+        const slot = b.activityId.slots.id(b.slotId);
+        if (slot) slotTime = `${slot.startTime} - ${slot.endTime}`;
       }
 
       return {
-        _id: b._id,
+        _id:         b._id,
+        memberId:    b.memberId?.name || b.customerName,
         customerName: b.customerName,
         activityName,
         slotTime,
-        date: b.date
+        date:        b.date,
+        isRecurring: b.isRecurring,
+        isException: b.isException
       };
     });
 
-    res.json({
-      success: true,
-      data: formatted
-    });
-
+    res.json({ success: true, data: formatted });
   } catch (err) {
-    console.error("🔥 getBookings error:", err); // VERY IMPORTANT
-    res.status(500).json({
-      success: false,
-      message: err.message
-    });
+    console.error("getBookings error:", err);
+    res.status(500).json({ success: false, message: err.message });
   }
 };
 
-
-
-// =========================
-// 📋 CANCEL BOOKINGS
-// =========================
+/* =========================
+   📋 CANCEL BOOKING
+========================= */
 exports.cancelBooking = async (req, res) => {
   try {
     const { id } = req.params;
-
     const booking = await FitnessBooking.findById(id);
-
-    if (!booking) {
-      return res.status(404).json({
-        success: false,
-        message: 'Booking not found'
-      });
-    }
+    if (!booking)
+      return res.status(404).json({ success: false, message: 'Booking not found' });
 
     await FitnessBooking.findByIdAndDelete(id);
-
-    res.json({
-      success: true,
-      message: 'Booking cancelled successfully'
-    });
-
+    res.json({ success: true, message: 'Booking cancelled successfully' });
   } catch (err) {
-    res.status(500).json({
-      success: false,
-      message: err.message
-    });
+    res.status(500).json({ success: false, message: err.message });
   }
 };
 
-// //working code
+
+
+
+
+
+
+// _________________ DO NOT Delete ___________
+// ____________Members Only Check box ______________
+
+
 
 // const FitnessActivity = require('../models/FitnessActivity');
+// const FitnessBooking = require('../models/FitnessBooking');
+// const FeeAllotment   = require('../models/FitnessFeeAllotment');   
+// const FeePayment     = require('../models/FitnessFeePayment');
 // const mongoose = require('mongoose');
 
-// // ➕ Create activity
+// /* =========================
+//    HELPER: CHECK OVERLAP
+// ========================= */
+// function isOverlapping(slot1, slot2) {
+//   return (
+//     slot1.startTime < slot2.endTime &&
+//     slot2.startTime < slot1.endTime
+//   );
+// }
+
+// /* =========================
+//    HELPER: Generate dates between start and end (inclusive)
+// ========================= */
+// function getDatesInRange(startDate, endDate) {
+//   const dates = [];
+//   let current = new Date(startDate);
+//   const end = new Date(endDate);
+
+//   while (current <= end) {
+//     dates.push(current.toISOString().split('T')[0]);
+//     current.setDate(current.getDate() + 1);
+//   }
+//   return dates;
+// }
+
+// /* =========================
+//    HELPER: Generate recurring bookings for a member
+// ========================= */
+// exports.generateRecurringBookings = async (memberId, activityFeeIndex, activityId, slotId, startDate, endDate, customerName, phone) => {
+//   const dates = getDatesInRange(startDate, endDate);
+//   const bookings = [];
+
+//   for (const date of dates) {
+//     bookings.push({
+//       activityId,
+//       slotId,
+//       date,
+//       memberId: memberId || null,      activityFeeIndex,
+//       isRecurring: true,
+//       isException: false,
+//       customerName: customerName || "Walk-in",      phone
+//     });
+//   }
+
+//   if (bookings.length > 0) {
+//     await FitnessBooking.insertMany(bookings);
+//   }
+
+//   return bookings.length;
+// };
+
+// /* =========================
+//    ➕ CREATE ACTIVITY
+// ========================= */
 // exports.createActivity = async (req, res) => {
 //   try {
-//     const { name } = req.body;
+//     const { name, capacity, slots } = req.body;
 
-//     if (!name) {
+//     if (!name?.trim()) 
+//       return res.status(400).json({ success: false, message: 'Name is required' });
+
+//     if (!capacity || Number(capacity) <= 0) 
+//       return res.status(400).json({ success: false, message: 'Valid capacity is required' });
+
+//     if (!Array.isArray(slots) || slots.length === 0) 
+//       return res.status(400).json({ success: false, message: 'At least one slot is required' });
+
+//     // Enhanced slot validation
+//     for (let slot of slots) {
+//       if (!slot.startTime || !slot.endTime) {
+//         return res.status(400).json({ success: false, message: 'Start time and end time are required for all slots' });
+//       }
+//       if (!slot.staffId) {
+//         return res.status(400).json({ success: false, message: 'Instructor (staff) is required for all slots' });
+//       }
+//       // membersOnly should be boolean
+//       if (typeof slot.membersOnly !== 'boolean') {
+//         slot.membersOnly = true; // Default to true if not provided
+//       }
+//     }
+
+//        // Check for overlapping slots
+// for (let i = 0; i < slots.length; i++) {
+//   for (let j = i + 1; j < slots.length; j++) {
+
+//     const slotA = slots[i];
+//     const slotB = slots[j];
+
+//     // 🚨 Block ONLY if both are membersOnly
+//     if (
+//       slotA.membersOnly &&
+//       slotB.membersOnly &&
+//       isOverlapping(slotA, slotB)
+//     ) {
 //       return res.status(400).json({
 //         success: false,
-//         message: 'Name is required'
+//         message: 'Member slots cannot overlap'
 //       });
 //     }
 
-//     const existingActivity = await FitnessActivity.findOne({
-//       name: name.trim()
+//   }
+// }
+
+//     const existing = await FitnessActivity.findOne({ name: name.trim() });
+//     if (existing) 
+//       return res.status(409).json({ success: false, message: 'Activity with this name already exists' });
+
+//     const activity = await FitnessActivity.create({ 
+//       name: name.trim(), 
+//       capacity: Number(capacity), 
+//       slots 
 //     });
 
-//     if (existingActivity) {
-//       return res.status(409).json({
-//         success: false,
-//         message: 'Activity already exists'
-//       });
-//     }
-
-//     const activity = await FitnessActivity.create({
-//       name: name.trim()
+//     res.status(201).json({ 
+//       success: true, 
+//       message: 'Activity created successfully', 
+//       data: activity 
 //     });
 
-//     return res.status(201).json({
-//       success: true,
-//       message: 'Activity created successfully',
-//       data: activity
-//     });
-
-//   } catch (error) {
-//     console.error('createActivity error:', error);
-//     return res.status(500).json({
-//       success: false,
-//       message: 'Failed to create activity',
-//       error: error.message
-//     });
+//   } catch (err) {
+//     console.error("Create Activity Error:", err);
+//     res.status(500).json({ success: false, message: err.message });
 //   }
 // };
 
-// // 📄 Get all activities
+// /* =========================
+//    📄 GET ALL ACTIVITIES
+// ========================= */
 // exports.getActivities = async (req, res) => {
 //   try {
 //     const activities = await FitnessActivity.find().sort({ name: 1 });
-
-//     return res.status(200).json({
-//       success: true,
-//       count: activities.length,
-//       data: activities
-//     });
-
-//   } catch (error) {
-//     console.error('getActivities error:', error);
-//     return res.status(500).json({
-//       success: false,
-//       message: 'Failed to fetch activities',
-//       error: error.message
-//     });
+//     res.json({ success: true, count: activities.length, data: activities });
+//   } catch (err) {
+//     res.status(500).json({ success: false, message: err.message });
 //   }
 // };
 
-// // 🔍 Get activity by id
+// /* =========================
+//    🔍 GET ACTIVITY BY ID
+// ========================= */
 // exports.getActivityById = async (req, res) => {
 //   try {
 //     const { id } = req.params;
-
-//     if (!mongoose.Types.ObjectId.isValid(id)) {
-//       return res.status(400).json({
-//         success: false,
-//         message: 'Invalid activity ID'
-//       });
-//     }
+//     if (!mongoose.Types.ObjectId.isValid(id)) return res.status(400).json({ success: false, message: 'Invalid ID' });
 
 //     const activity = await FitnessActivity.findById(id);
+//     if (!activity) return res.status(404).json({ success: false, message: 'Not found' });
 
-//     if (!activity) {
-//       return res.status(404).json({
-//         success: false,
-//         message: 'Activity not found'
-//       });
-//     }
-
-//     return res.status(200).json({
-//       success: true,
-//       data: activity
-//     });
-
-//   } catch (error) {
-//     console.error('getActivityById error:', error);
-//     return res.status(500).json({
-//       success: false,
-//       message: 'Failed to fetch activity',
-//       error: error.message
-//     });
+//     res.json({ success: true, data: activity });
+//   } catch (err) {
+//     res.status(500).json({ success: false, message: err.message });
 //   }
 // };
 
-// // ✏️ Update activity
+// /* =========================
+//    ✏️ UPDATE ACTIVITY
+// ========================= */
 // exports.updateActivity = async (req, res) => {
 //   try {
 //     const { id } = req.params;
-//     const { name } = req.body;
+//     const { name, capacity, slots } = req.body;
 
-//     if (!mongoose.Types.ObjectId.isValid(id)) {
+//     if (!mongoose.Types.ObjectId.isValid(id)) 
+//       return res.status(400).json({ success: false, message: 'Invalid Activity ID' });
+
+//     if (!name?.trim()) 
+//       return res.status(400).json({ success: false, message: 'Name is required' });
+
+//     if (!capacity || Number(capacity) <= 0) 
+//       return res.status(400).json({ success: false, message: 'Valid capacity is required' });
+
+//     if (!Array.isArray(slots) || slots.length === 0) 
+//       return res.status(400).json({ success: false, message: 'At least one slot is required' });
+
+//     // Enhanced slot validation
+//     for (let slot of slots) {
+//       if (!slot.startTime || !slot.endTime) {
+//         return res.status(400).json({ success: false, message: 'Start time and end time are required for all slots' });
+//       }
+//       if (!slot.staffId) {
+//         return res.status(400).json({ success: false, message: 'Instructor (staff) is required for all slots' });
+//       }
+//       if (typeof slot.membersOnly !== 'boolean') {
+//         slot.membersOnly = true; // Default to true
+//       }
+//     }
+
+//         // Check for overlapping slots
+// for (let i = 0; i < slots.length; i++) {
+//   for (let j = i + 1; j < slots.length; j++) {
+
+//     const slotA = slots[i];
+//     const slotB = slots[j];
+
+//     // 🚨 Block ONLY if both are membersOnly
+//     if (
+//       slotA.membersOnly &&
+//       slotB.membersOnly &&
+//       isOverlapping(slotA, slotB)
+//     ) {
 //       return res.status(400).json({
 //         success: false,
-//         message: 'Invalid activity ID'
+//         message: 'Member slots cannot overlap'
 //       });
 //     }
 
-//     if (!name) {
-//       return res.status(400).json({
-//         success: false,
-//         message: 'Name is required'
-//       });
-//     }
+//   }
+// }
 
-//     const existingActivity = await FitnessActivity.findOne({
-//       _id: { $ne: id },
-//       name: name.trim()
+//     // Check for duplicate name (excluding current activity)
+//     const existing = await FitnessActivity.findOne({ 
+//       _id: { $ne: id }, 
+//       name: name.trim() 
 //     });
+//     if (existing) 
+//       return res.status(409).json({ success: false, message: 'Duplicate activity name' });
 
-//     if (existingActivity) {
-//       return res.status(409).json({
-//         success: false,
-//         message: 'Another activity with this name already exists'
-//       });
-//     }
-
-//     const updatedActivity = await FitnessActivity.findByIdAndUpdate(
+//     const updated = await FitnessActivity.findByIdAndUpdate(
 //       id,
-//       {
-//         name: name.trim(),
-//         updatedAt: Date.now()
+//       { 
+//         name: name.trim(), 
+//         capacity: Number(capacity), 
+//         slots,
+//         updatedAt: Date.now() 
 //       },
 //       { new: true, runValidators: true }
 //     );
 
-//     if (!updatedActivity) {
-//       return res.status(404).json({
-//         success: false,
-//         message: 'Activity not found'
-//       });
-//     }
+//     if (!updated) 
+//       return res.status(404).json({ success: false, message: 'Activity not found' });
 
-//     return res.status(200).json({
-//       success: true,
-//       message: 'Activity updated successfully',
-//       data: updatedActivity
+//     res.json({ 
+//       success: true, 
+//       message: 'Activity updated successfully', 
+//       data: updated 
 //     });
 
-//   } catch (error) {
-//     console.error('updateActivity error:', error);
-//     return res.status(500).json({
-//       success: false,
-//       message: 'Failed to update activity',
-//       error: error.message
-//     });
+//   } catch (err) {
+//     console.error("Update Activity Error:", err);
+//     res.status(500).json({ success: false, message: err.message });
 //   }
 // };
 
-// // ❌ Delete activity
+// /* =========================
+//    ❌ DELETE ACTIVITY
+// ========================= */
 // exports.deleteActivity = async (req, res) => {
 //   try {
 //     const { id } = req.params;
-
-//     if (!mongoose.Types.ObjectId.isValid(id)) {
-//       return res.status(400).json({
-//         success: false,
-//         message: 'Invalid activity ID'
-//       });
-//     }
-
-//     const deletedActivity = await FitnessActivity.findByIdAndDelete(id);
-
-//     if (!deletedActivity) {
-//       return res.status(404).json({
-//         success: false,
-//         message: 'Activity not found'
-//       });
-//     }
-
-//     return res.status(200).json({
-//       success: true,
-//       message: 'Activity deleted successfully'
-//     });
-
-//   } catch (error) {
-//     console.error('deleteActivity error:', error);
-//     return res.status(500).json({
-//       success: false,
-//       message: 'Failed to delete activity',
-//       error: error.message
-//     });
+//     const deleted = await FitnessActivity.findByIdAndDelete(id);
+//     if (!deleted) return res.status(404).json({ success: false, message: 'Not found' });
+//     res.json({ success: true, message: 'Deleted' });
+//   } catch (err) {
+//     res.status(500).json({ success: false, message: err.message });
 //   }
 // };
 
-// // working code
-
-
-// const FitnessActivity = require('../models/fitnessActivity');
-// const mongoose = require('mongoose');
-
-// // Create activity
-// exports.createActivity = async (req, res) => {
+// /* =========================
+//    📊 GET AVAILABILITY — Supports BOTH single date and date range
+// ========================= */
+// exports.getAvailability = async (req, res) => {
 //   try {
-//     const { name } = req.body;
+//     const { activityId, startDate, endDate, date } = req.query;
 
-//     if (!name || !name.trim()) {
-//       return res.status(400).json({
-//         success: false,
-//         message: 'Name is required'
-//       });
+//     if (!activityId) {
+//       return res.status(400).json({ success: false, message: 'activityId is required' });
 //     }
 
-//     const existingActivity = await FitnessActivity.findOne({
-//       name: name.trim()
-//     });
-
-//     if (existingActivity) {
-//       return res.status(409).json({
-//         success: false,
-//         message: 'Activity already exists'
-//       });
-//     }
-
-//     const activity = await FitnessActivity.create({
-//       name: name.trim()
-//     });
-
-//     return res.status(201).json({
-//       success: true,
-//       message: 'Activity created successfully',
-//       data: activity
-//     });
-
-//   } catch (error) {
-//     console.error('createActivity error:', error);
-//     return res.status(500).json({
-//       success: false,
-//       message: 'Failed to create activity',
-//       error: error.message
-//     });
-//   }
-// };
-
-// // Get all activities
-// exports.getActivities = async (req, res) => {
-//   try {
-//     const activities = await FitnessActivity.find().sort({ name: 1 });
-
-//     return res.status(200).json({
-//       success: true,
-//       count: activities.length,
-//       data: activities
-//     });
-
-//   } catch (error) {
-//     console.error('getActivities error:', error);
-//     return res.status(500).json({
-//       success: false,
-//       message: 'Failed to fetch activities',
-//       error: error.message
-//     });
-//   }
-// };
-
-// // Get activity by id
-// exports.getActivityById = async (req, res) => {
-//   try {
-//     const { id } = req.params;
-
-//     if (!mongoose.Types.ObjectId.isValid(id)) {
-//       return res.status(400).json({
-//         success: false,
-//         message: 'Invalid activity ID'
-//       });
-//     }
-
-//     const activity = await FitnessActivity.findById(id);
-
+//     const activity = await FitnessActivity.findById(activityId);
 //     if (!activity) {
-//       return res.status(404).json({
+//       return res.status(404).json({ success: false, message: 'Activity not found' });
+//     }
+
+//     let dates = [];
+
+//     if (date) {
+//       if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+//         return res.status(400).json({ success: false, message: 'Invalid date format' });
+//       }
+//       dates = [date];
+//     } else if (startDate && endDate) {
+//       dates = getDatesInRange(startDate, endDate);
+//     } else {
+//       return res.status(400).json({
 //         success: false,
-//         message: 'Activity not found'
+//         message: 'Either "date" or both "startDate" and "endDate" are required'
 //       });
 //     }
 
-//     return res.status(200).json({
+//     if (dates.length === 0) {
+//       return res.status(400).json({ success: false, message: 'Invalid date range' });
+//     }
+
+//     const result = [];
+
+//     for (let slot of activity.slots) {
+//       let fullyAvailableDays = 0;
+
+//       for (let d of dates) {
+//         const count = await FitnessBooking.countDocuments({ slotId: slot._id, date: d });
+//         const isAvailable = count < activity.capacity;
+
+//         if (isAvailable) fullyAvailableDays++;
+//       }
+
+//       const percentage = Math.round((fullyAvailableDays / dates.length) * 100);
+
+//       result.push({
+//         slotId: slot._id,
+//         startTime: slot.startTime,
+//         endTime: slot.endTime,
+//         capacity: activity.capacity,
+//         membersOnly: slot.membersOnly,           // ✅ NEW - Important
+//         totalDays: dates.length,
+//         fullyAvailableDays,
+//         availabilityPercentage: percentage,
+//       });
+//     }
+
+//     res.json({
 //       success: true,
-//       data: activity
+//       data: result,
+//       range: { startDate: dates[0], endDate: dates[dates.length - 1], totalDays: dates.length }
 //     });
 
-//   } catch (error) {
-//     console.error('getActivityById error:', error);
-//     return res.status(500).json({
-//       success: false,
-//       message: 'Failed to fetch activity',
-//       error: error.message
+//   } catch (err) {
+//     console.error("getAvailability error:", err);
+//     res.status(500).json({ success: false, message: err.message });
+//   }
+// };
+
+
+// /* =========================
+//    🎯 BOOK SLOT - FINAL WORKING VERSION
+// ========================= */
+// exports.bookSlot = async (req, res) => {
+//   try {
+//     const {
+//       activityId,
+//       slotId,
+//       date,
+//       customerName,
+//       phone = "0000000000",
+//       memberId,
+//       feeTypeId,
+//       plan = "Daily",
+//       amount,
+//       paymentStatus = "Paid",
+//       paymentMode = "Cash",
+//       paymentDate
+//     } = req.body;
+
+//     // Basic validation
+//     if (!activityId || !slotId || !date || !customerName?.trim()) {
+//       return res.status(400).json({
+//         success: false,
+//         message: 'activityId, slotId, date, and customerName are required'
+//       });
+//     }
+
+//     if (!amount || Number(amount) <= 0) {
+//       return res.status(400).json({
+//         success: false,
+//         message: 'Valid fee amount is required'
+//       });
+//     }
+
+//     // Get organizationId safely from header (your apiClient sends X-Organization-ID)
+//     const organizationId = req.organizationId || req.headers['x-organization-id'];
+    
+//     if (!organizationId) {
+//       console.error("Missing organizationId - Headers:", req.headers);
+//       return res.status(400).json({
+//         success: false,
+//         message: 'Organization ID is missing from request'
+//       });
+//     }
+
+//     const activity = await FitnessActivity.findById(activityId);
+//     if (!activity) {
+//       return res.status(404).json({ success: false, message: 'Activity not found' });
+//     }
+
+//     const slot = activity.slots.id(slotId);
+//     if (!slot) {
+//       return res.status(404).json({ success: false, message: 'Slot not found' });
+//     }
+
+//     // Capacity check
+//     const existingCount = await FitnessBooking.countDocuments({
+//       slotId,
+//       date: new Date(date)
+//     });
+//     if (existingCount >= activity.capacity) {
+//       return res.status(400).json({ success: false, message: 'Slot is full' });
+//     }
+
+//     // Case 1: Member changing slot (no extra fee)
+//     if (memberId) {
+//       const existingBooking = await FitnessBooking.findOne({
+//         memberId,
+//         activityId,
+//         date: new Date(date)
+//       });
+
+//       if (existingBooking) {
+//         existingBooking.slotId = slotId;
+//         await existingBooking.save();
+//         return res.json({
+//           success: true,
+//           message: 'Member slot updated successfully (no extra charge)',
+//           booking: existingBooking
+//         });
+//       }
+//     }
+
+//     // Case 2: New booking (walk-in or extra session)
+//     const booking = await FitnessBooking.create({
+//       activityId,
+//       slotId,
+//       date: new Date(date),
+//       memberId: memberId || null,
+//       customerName: customerName.trim(),
+//       phone,
+//       isRecurring: false,
+//       isException: true,
+//       activityFeeIndex: null
+//     });
+
+//     // Create Fee Allotment + Payment
+//     const numAmount = Number(amount);
+//     const finalPaymentDate = paymentDate ? new Date(paymentDate) : new Date();
+
+//     const allotment = await FeeAllotment.create({
+//       memberId: memberId || null,
+//       feeTypeId: feeTypeId || null,
+//       description: `Ad-hoc Booking - ${activity.name} (${plan})`,
+//       feePlan: plan,
+//       amount: numAmount,
+//       dueDate: new Date(date),
+//       status: paymentStatus === 'Paid' ? 'Paid' : 'Pending',
+//       organizationId: organizationId,        // ← Fixed
+//     });
+
+//     if (paymentStatus === 'Paid') {
+//       await FeePayment.create({
+//         memberId: memberId || null,
+//         allotmentId: allotment._id,
+//         amount: numAmount,
+//         paymentMode,
+//         paymentDate: finalPaymentDate,
+//         description: `Booking: ${activity.name} - ${plan}`,
+//         organizationId: organizationId,       // ← Fixed
+//       });
+
+//       allotment.status = 'Paid';
+//       await allotment.save();
+//     }
+
+//     res.json({
+//       success: true,
+//       message: memberId ? 'Extra session booked' : 'Walk-in booking created',
+//       booking,
+//       allotmentId: allotment._id
+//     });
+
+//   } catch (err) {
+//     console.error("Book Slot Error:", err);
+//     res.status(500).json({ 
+//       success: false, 
+//       message: err.message || 'Failed to book slot' 
 //     });
 //   }
 // };
 
-// // Update activity
-// exports.updateActivity = async (req, res) => {
+// /* =========================
+//    📋 GET ALL BOOKINGS
+// ========================= */
+// exports.getBookings = async (req, res) => {
+//   try {
+//     const bookings = await FitnessBooking.find()
+//       .populate('activityId')
+//       .sort({ createdAt: -1 });
+
+//     const formatted = bookings.map(b => {
+//       let activityName = 'N/A';
+//       let slotTime = 'N/A';
+
+//       if (b.activityId && b.activityId.slots) {
+//         activityName = b.activityId.name;
+//         const slot = b.activityId.slots.id(b.slotId);
+//         if (slot) slotTime = `${slot.startTime} - ${slot.endTime}`;
+//       }
+
+//       return {
+//         _id: b._id,
+//         memberId: b.memberId?.name || b.customerName,
+//         customerName: b.customerName,
+//         activityName,
+//         slotTime,
+//         date: b.date,
+//         isRecurring: b.isRecurring,
+//         isException: b.isException
+//       };
+//     });
+
+//     res.json({ success: true, data: formatted });
+//   } catch (err) {
+//     console.error("getBookings error:", err);
+//     res.status(500).json({ success: false, message: err.message });
+//   }
+// };
+
+// /* =========================
+//    📋 CANCEL BOOKING
+// ========================= */
+// exports.cancelBooking = async (req, res) => {
 //   try {
 //     const { id } = req.params;
-//     const { name } = req.body;
+//     const booking = await FitnessBooking.findById(id);
+//     if (!booking) return res.status(404).json({ success: false, message: 'Booking not found' });
 
-//     if (!mongoose.Types.ObjectId.isValid(id)) {
-//       return res.status(400).json({
-//         success: false,
-//         message: 'Invalid activity ID'
-//       });
-//     }
-
-//     if (!name || !name.trim()) {
-//       return res.status(400).json({
-//         success: false,
-//         message: 'Name is required'
-//       });
-//     }
-
-//     const existingActivity = await FitnessActivity.findOne({
-//       _id: { $ne: id },
-//       name: name.trim()
-//     });
-
-//     if (existingActivity) {
-//       return res.status(409).json({
-//         success: false,
-//         message: 'Another activity with this name already exists'
-//       });
-//     }
-
-//     const updatedActivity = await FitnessActivity.findByIdAndUpdate(
-//       id,
-//       { name: name.trim() },
-//       { new: true, runValidators: true }
-//     );
-
-//     if (!updatedActivity) {
-//       return res.status(404).json({
-//         success: false,
-//         message: 'Activity not found'
-//       });
-//     }
-
-//     return res.status(200).json({
-//       success: true,
-//       message: 'Activity updated successfully',
-//       data: updatedActivity
-//     });
-
-//   } catch (error) {
-//     console.error('updateActivity error:', error);
-//     return res.status(500).json({
-//       success: false,
-//       message: 'Failed to update activity',
-//       error: error.message
-//     });
+//     await FitnessBooking.findByIdAndDelete(id);
+//     res.json({ success: true, message: 'Booking cancelled successfully' });
+//   } catch (err) {
+//     res.status(500).json({ success: false, message: err.message });
 //   }
 // };
 
-// // Delete activity
-// exports.deleteActivity = async (req, res) => {
-//   try {
-//     const { id } = req.params;
 
-//     if (!mongoose.Types.ObjectId.isValid(id)) {
-//       return res.status(400).json({
-//         success: false,
-//         message: 'Invalid activity ID'
-//       });
-//     }
 
-//     const deletedActivity = await FitnessActivity.findByIdAndDelete(id);
 
-//     if (!deletedActivity) {
-//       return res.status(404).json({
-//         success: false,
-//         message: 'Activity not found'
-//       });
-//     }
 
-//     return res.status(200).json({
-//       success: true,
-//       message: 'Activity deleted successfully'
-//     });
 
-//   } catch (error) {
-//     console.error('deleteActivity error:', error);
-//     return res.status(500).json({
-//       success: false,
-//       message: 'Failed to delete activity',
-//       error: error.message
-//     });
-//   }
-// };
+
