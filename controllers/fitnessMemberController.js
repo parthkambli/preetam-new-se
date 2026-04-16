@@ -2033,9 +2033,14 @@ const computeOverallMembershipStatus = (activityFees) => {
 const validateActivityFee = (af, index) => {
   const prefix = `Activity ${index + 1}`;
 
-  if (!af.activity || !isValidObjectId(af.activity)) {
-    return { error: `${prefix}: a valid activity ID is required.` };
-  }
+  // Allow either activity OR membership pass (feeType)
+if (!af.activity && !af.feeType) {
+  return { error: `${prefix}: activity or membership pass is required.` };
+}
+
+if (af.activity && !isValidObjectId(af.activity)) {
+  return { error: `${prefix}: invalid activity ID.` };
+}
 
   if (!af.startDate) return { error: `${prefix}: start date is required.` };
   if (!af.endDate)   return { error: `${prefix}: end date is required.` };
@@ -2202,7 +2207,9 @@ const syncFeesToTables = async (member, orgId, previousAllotmentIds = []) => {
         paymentMode: af.paymentMode || 'Cash',
         paymentDate: af.paymentDate || new Date(),
         organizationId: orgId,
-        description: `Activity fee - ${af.plan} plan`,
+        description: af.activity 
+  ? `Activity fee - ${af.plan} plan`
+  : `Membership pass - ${af.plan} plan`,
         feePlan,
       },
       { upsert: true, new: true }
@@ -2213,18 +2220,19 @@ const syncFeesToTables = async (member, orgId, previousAllotmentIds = []) => {
 }
 
 // Save updated allotmentIds back to member
-await member.save();
+// await member.save();
 
   // Persist the allotmentId updates back to DB
-  await FitnessMember.findByIdAndUpdate(
-    member._id,
-    {
-      $set: {
-        activityFees: member.activityFees.map((af) => af.toObject ? af.toObject() : af),
-      },
+await FitnessMember.findByIdAndUpdate(
+  member._id,
+  {
+    $set: {
+      activityFees: member.activityFees.map((af) =>
+        af.toObject ? af.toObject() : af
+      ),
     },
-    { new: false }
-  );
+  }
+);
 };
 
 // ─── Helper: Create recurring slot bookings for all activityFees ─────────────
@@ -2447,23 +2455,38 @@ exports.createMember = async (req, res) => {
   });
 }
 
-      const validatedFees = [];
+//       const validatedFees = [];
 
-if (!req.body.membershipPass) {
-  for (let i = 0; i < parsedActivityFees.length; i++) {
-    const result = validateActivityFee(parsedActivityFees[i], i);
-    if (result.error) {
-      if (req.file) deleteOldPhoto(`/uploads/members/${req.file.filename}`);
-      return res.status(400).json({ message: result.error });
-    }
-    validatedFees.push(result.data);
+// if (!req.body.membershipPass) {
+//   for (let i = 0; i < parsedActivityFees.length; i++) {
+//     const result = validateActivityFee(parsedActivityFees[i], i);
+//     if (result.error) {
+//       if (req.file) deleteOldPhoto(`/uploads/members/${req.file.filename}`);
+//       return res.status(400).json({ message: result.error });
+//     }
+//     validatedFees.push(result.data);
+//   }
+// }
+
+    const validatedFees = [];
+
+for (let i = 0; i < parsedActivityFees.length; i++) {
+  const result = validateActivityFee(parsedActivityFees[i], i);
+  if (result.error) {
+    if (req.file) deleteOldPhoto(`/uploads/members/${req.file.filename}`);
+    return res.status(400).json({ message: result.error });
   }
+  validatedFees.push(result.data);
 }
 
+
+
       // Duplicate activity check within the same submission
-      const activityIds = validatedFees.map((af) => af.activity.toString());
-      const uniqueActivityIds = new Set(activityIds);
-      if (uniqueActivityIds.size !== activityIds.length) {
+      const activityIds = validatedFees
+  .map((af) => af.activity?.toString())
+  .filter(Boolean);
+const uniqueActivityIds = new Set(activityIds);
+if (uniqueActivityIds.size !== activityIds.length) {
         if (req.file) deleteOldPhoto(`/uploads/members/${req.file.filename}`);
         return res.status(400).json({ message: 'Duplicate activities are not allowed for the same member.' });
       }
@@ -2500,9 +2523,7 @@ if (!req.body.membershipPass) {
 
       // ── Sync fees to allotment / payment tables ─────────────────────────
       try {
-        if (!req.body.membershipPass) {
-  await syncFeesToTables(member, req.organizationId, []);
-}
+        await syncFeesToTables(member, req.organizationId, []);
       } catch (syncErr) {
         console.error('Fee sync error (non-fatal):', syncErr.message);
       }
@@ -2570,9 +2591,26 @@ exports.renewMember = async (req, res) => {
       const r = renewals[i];
       const prefix = `Renewal ${i + 1}`;
 
-      if (!r.activityId || !isValidObjectId(r.activityId)) {
-        return res.status(400).json({ message: `${prefix}: valid activity ID is required.` });
-      }
+      // Allow activity OR membership pass
+if (!r.activityId && !r.feeTypeId) {
+  return res.status(400).json({
+    message: `${prefix}: activity or membership pass is required.`,
+  });
+}
+
+// Validate activity only if present
+if (r.activityId && !isValidObjectId(r.activityId)) {
+  return res.status(400).json({
+    message: `${prefix}: invalid activity ID.`,
+  });
+}
+
+// Validate feeType (pass) only if present
+if (r.feeTypeId && !isValidObjectId(r.feeTypeId)) {
+  return res.status(400).json({
+    message: `${prefix}: invalid membership pass ID.`,
+  });
+}
 
       const start = new Date(r.startDate);
       const end = new Date(r.endDate);
@@ -2601,7 +2639,7 @@ exports.renewMember = async (req, res) => {
       });
 
       validatedRenewals.push({
-        activity: r.activityId,
+        activity: r.activityId || null,
         feeType: r.feeTypeId || null,
         plan: r.plan || 'Monthly',
         planFee,
@@ -2627,6 +2665,14 @@ exports.renewMember = async (req, res) => {
     // Recompute overall status
     member.membershipStatus = computeOverallMembershipStatus(member.activityFees);
 
+
+// Just for debug
+//     console.log('TYPE:', typeof member);
+// console.log('IS DOC:', member instanceof FitnessMember);
+// console.log('HAS SAVE:', typeof member.save);
+
+
+
     await member.save();
 
     // ── Sync only the newly added renewals to FeeAllotment & FeePayment ─────
@@ -2642,12 +2688,17 @@ exports.renewMember = async (req, res) => {
 
     // ── Create recurring bookings for renewed activities ───────────────────
     try {
-      const renewedWithIndex = validatedRenewals.map((rv, i) => ({
-        ...rv,
-        activity: rv.activity,
-        activityFeeIndex: newStartIndex + i,
-      }));
-      await createRecurringSlotBookings(member, renewedWithIndex);
+      const activityRenewals = validatedRenewals
+  .map((rv, i) => ({
+    ...rv,
+    activity: rv.activity,
+    activityFeeIndex: newStartIndex + i,
+  }))
+  .filter(r => r.activity); // 🔥 only activities
+
+if (activityRenewals.length > 0) {
+  await createRecurringSlotBookings(member, activityRenewals);
+}
     } catch (bookingErr) {
       console.error('Slot booking error during renewal:', bookingErr.message);
     }
@@ -2661,7 +2712,7 @@ exports.renewMember = async (req, res) => {
 
     res.json({
       ...applyComputedStatuses(updated.toObject()),
-      message: `${validatedRenewals.length} activit${validatedRenewals.length === 1 ? 'y' : 'ies'} renewed successfully.`,
+      message: `${validatedRenewals.length} membership${validatedRenewals.length > 1 ? 's' : ''} renewed successfully.`,
     });
 
   } catch (err) {
@@ -2834,9 +2885,11 @@ exports.updateMember = async (req, res) => {
         }
 
         // Duplicate activity check
-        const activityIds = tempValidated.map((af) => af.activity.toString());
-        const uniqueActivityIds = new Set(activityIds);
-        if (uniqueActivityIds.size !== activityIds.length) {
+        const activityIds = validatedFees
+  .map((af) => af.activity?.toString())
+  .filter(Boolean);
+const uniqueActivityIds = new Set(activityIds);
+if (uniqueActivityIds.size !== activityIds.length) {
           if (req.file) deleteOldPhoto(`/uploads/members/${req.file.filename}`);
           return res.status(400).json({ message: 'Duplicate activities are not allowed for the same member.' });
         }

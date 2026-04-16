@@ -193,7 +193,16 @@ const activityFeeSchema = new mongoose.Schema({
   activity: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'FitnessActivity',
-    required: [true, 'Activity is required for each entry'],
+    default: null,
+    validate: {
+    validator: function(v) {
+      // Required only when feeType (membership pass) is not set
+      if (!this.feeType && !v) return false;
+      return true;
+    },
+    message: 'Activity is required when no membership pass is selected.',
+  }
+    // required: [true, 'Activity is required for each entry'],
   },
   feeType: {
     type: mongoose.Schema.Types.ObjectId,
@@ -213,11 +222,11 @@ const activityFeeSchema = new mongoose.Schema({
     enum: ['Paid', 'Pending'],
     default: 'Paid',
   },
-  paymentMode: {
-    type: String,
-    enum: ['Cash', 'Bank Transfer'],
-    default: '',
-  },
+ paymentMode: {
+  type: String,
+  enum: ['Cash', 'Bank Transfer', ''],
+  default: '',
+},
   paymentDate: { type: Date, default: null },
   planNotes: { type: String, trim: true, default: '' },
   startDate: {
