@@ -12,7 +12,9 @@
   const studentRoutes = require('./routes/students');
   const staffRoutes = require('./routes/Staffroutes');
   const activityRoutes = require('./routes/activityRoutes');
+  const staffPanelRoutes = require('./routes/fitnessStaffPanelRoutes');//// staff
   
+
   
   
   
@@ -59,7 +61,7 @@
   }));
   app.use(express.json());
   app.use(express.urlencoded({ extended: true }));
-  app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
 
   // School routes...
 app.use('/api/auth', authRoutes);
@@ -73,7 +75,10 @@ app.use('/api/activities', activityRoutes);
 app.use('/api/fees', feeRoutes);                    // School fees
 app.use('/api/health-records', healthRecordRoutes);
 app.use('/api/events', eventRoutes);
-app.use('/api/dashboard', dashboardRoutes);
+
+
+app.use('/api/fitness/staff-panel', staffPanelRoutes);/// staff
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Fitness routes - ONE CLEAR SECTION
 app.use('/api/fitness/enquiry', fitnessEnquiryRoutes);

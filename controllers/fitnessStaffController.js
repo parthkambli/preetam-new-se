@@ -316,21 +316,23 @@
  * no separate middleware files required.
  */
 
-const fs   = require("fs");
+
+
+const fs = require("fs");
 const path = require("path");
 
 const multer = require("multer");
-const Joi    = require("joi");
+const Joi = require("joi");
 
-const bcrypt = require('bcryptjs');
-const User = require('../models/User');
+const bcrypt = require("bcryptjs");
+const User = require("../models/User");
 
 const FitnessStaff = require("../models/FitnessStaff");
 
 // ─── Constants ────────────────────────────────────────────────────────────────
-const UPLOAD_DIR        = path.join(__dirname, "..", "uploads", "staff-profiles");
-const ALLOWED_MIME      = ["image/jpeg", "image/jpg", "image/png"];
-const ALLOWED_EXT       = /\.(jpg|jpeg|png)$/i;
+const UPLOAD_DIR = path.join(__dirname, "..", "uploads", "staff-profiles");
+const ALLOWED_MIME = ["image/jpeg", "image/jpg", "image/png"];
+const ALLOWED_EXT = /\.(jpg|jpeg|png)$/i;
 
 // ─── Ensure upload directory exists ──────────────────────────────────────────
 if (!fs.existsSync(UPLOAD_DIR)) {
@@ -343,9 +345,8 @@ const storage = multer.diskStorage({
     cb(null, UPLOAD_DIR);
   },
   filename(_req, file, cb) {
-    // e.g. photo-1718000000000-my-image.jpg
     const timestamp = Date.now();
-    const safeName  = file.originalname.replace(/\s+/g, "-");
+    const safeName = file.originalname.replace(/\s+/g, "-");
     cb(null, `photo-${timestamp}-${safeName}`);
   },
 });
@@ -358,146 +359,103 @@ const fileFilter = (_req, file, cb) => {
   }
 };
 
-/** Multer middleware — exported so routes can reference it */
 const upload = multer({
   storage,
   fileFilter,
-  limits: { fileSize: 5 * 1024 * 1024 }, // 5 MB max
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5 MB
 });
 
 module.exports.upload = upload;
 
 // ─── Joi Validation Schemas ───────────────────────────────────────────────────
 const baseStaffSchema = {
-  fullName:              Joi.string().trim().min(2).max(100),
-  role:                  Joi.string().trim().min(2).max(100),
-  gender:                Joi.string().valid("Male", "Female", "Other"),
-  dateOfBirth:           Joi.date().iso().max("now").allow(null, ""),
-  joiningDate:           Joi.date().iso(),
-  employmentType:        Joi.string().trim().allow(null, ""),        // remove .valid(...)
-  status:                Joi.string().valid("Active", "Inactive", "Terminated"),
-  salary:                Joi.number().min(0).allow(null, ""),
-  mobileNumber:          Joi.string().pattern(/^\d{10}$/),
-  emailId:               Joi.string().email().allow(null, ""),
-  fullAddress:           Joi.string().trim().max(500).allow(null, ""),
-  emergencyContactName:  Joi.string().trim().max(100).allow(null, ""),
-  emergencyRelation:     Joi.string().trim().max(100).allow(null, ""),
-  emergencyContactMobile:Joi.string().pattern(/^\d{10}$/).allow(null, ""),
+  fullName: Joi.string().trim().min(2).max(100),
+  role: Joi.string().trim().min(2).max(100),
+  gender: Joi.string().valid("Male", "Female", "Other"),
+  dateOfBirth: Joi.date().iso().max("now").allow(null, ""),
+  joiningDate: Joi.date().iso(),
+  employmentType: Joi.string().trim().allow(null, ""),
+  status: Joi.string().valid("Active", "Inactive", "Terminated"),
+  salary: Joi.number().min(0).allow(null, ""),
+  mobileNumber: Joi.string()
+    .pattern(/^\d{10}$/)
+    .messages({ "string.pattern.base": "Mobile number must be 10 digits" }),
+  emailId: Joi.string().email().allow(null, ""),
+  fullAddress: Joi.string().trim().max(500).allow(null, ""),
+  emergencyContactName: Joi.string().trim().max(100).allow(null, ""),
+  emergencyRelation: Joi.string().trim().max(100).allow(null, ""),
+  emergencyContactMobile: Joi.string()
+    .pattern(/^\d{10}$/)
+    .allow(null, "")
+    .messages({ "string.pattern.base": "Emergency mobile number must be 10 digits" }),
 };
 
 const createSchema = Joi.object({
   ...baseStaffSchema,
-  fullName:     Joi.string().trim().min(2).max(100).required(),
-  role:         Joi.string().trim().min(2).max(100).required(),
-  gender:       Joi.string().valid("Male", "Female", "Other").required(),
-  joiningDate:  Joi.date().iso().required(),
-  mobileNumber: Joi.string().pattern(/^\d{10,15}$/).required()
-    .messages({ "string.pattern.base": "Mobile number must be 10–15 digits" }),
-  password:     Joi.string().min(6).max(128).required()
+  fullName: Joi.string().trim().min(2).max(100).required(),
+  role: Joi.string().trim().min(2).max(100).required(),
+  gender: Joi.string().valid("Male", "Female", "Other").required(),
+  joiningDate: Joi.date().iso().required(),
+  mobileNumber: Joi.string()
+    .pattern(/^\d{10}$/)
+    .required()
+    .messages({ "string.pattern.base": "Mobile number must be 10 digits" }),
+  password: Joi.string()
+    .min(6)
+    .max(128)
+    .required()
     .messages({ "string.min": "Password must be at least 6 characters" }),
 });
 
 const updateSchema = Joi.object({
   ...baseStaffSchema,
   password: Joi.string().min(6).max(128).allow(null, ""),
-}).min(1); // at least one field required for an update
+}).min(1);
 
-// ─── Helper: build consistent API response ────────────────────────────────────
+// ─── Helper: consistent API response ──────────────────────────────────────────
 const respond = (res, statusCode, success, message, data = undefined) => {
   const body = { success, message };
   if (data !== undefined) body.data = data;
   return res.status(statusCode).json(body);
 };
 
+// ─── Helper: photo URL path ───────────────────────────────────────────────────
+const buildPhotoPath = (filename) => `/uploads/staff-profiles/${filename}`;
+
 // ─── Helper: safely delete a file ─────────────────────────────────────────────
 const deleteFile = (filePath) => {
   if (!filePath) return;
-  const abs = path.resolve(filePath);
-  if (fs.existsSync(abs)) {
-    try { fs.unlinkSync(abs); } catch (_) { /* best-effort */ }
+
+  let absolutePath = filePath;
+
+  if (filePath.startsWith("/uploads/")) {
+    absolutePath = path.join(__dirname, "..", filePath);
+  }
+
+  absolutePath = path.resolve(absolutePath);
+
+  if (fs.existsSync(absolutePath)) {
+    try {
+      fs.unlinkSync(absolutePath);
+    } catch (_) {
+      // best effort
+    }
   }
 };
-
-// // ═════════════════════════════════════════════════════════════════════════════
-// // CREATE  POST /api/fitness/staff/create
-// // ═════════════════════════════════════════════════════════════════════════════
-// const createFitnessStaff = async (req, res) => {
-//   try {
-//     // 1. Validate request body
-//     const { error, value } = createSchema.validate(req.body, { abortEarly: false });
-//     if (error) {
-//       // Clean up any uploaded file on validation failure
-//       if (req.file) deleteFile(req.file.path);
-//       const messages = error.details.map((d) => d.message);
-//       return respond(res, 422, false, "Validation failed", { errors: messages });
-//     }
-
-//     // 2. Check uniqueness manually for friendlier error messages
-//     const [existingMobile, existingEmail] = await Promise.all([
-//       FitnessStaff.findOne({ mobileNumber: value.mobileNumber }),
-//       value.emailId ? FitnessStaff.findOne({ emailId: value.emailId }) : null,
-//     ]);
-
-//     if (existingMobile) {
-//       if (req.file) deleteFile(req.file.path);
-//       return respond(res, 409, false, "A staff member with this mobile number already exists");
-//     }
-//     if (existingEmail) {
-//       if (req.file) deleteFile(req.file.path);
-//       return respond(res, 409, false, "A staff member with this email address already exists");
-//     }
-
-// // prevent override
-// delete value.employeeId;
-
-// // generate employee ID
-// const lastStaff = await FitnessStaff.findOne()
-//   .sort({ createdAt: -1 })
-//   .select('employeeId');
-
-// let nextNumber = 1;
-
-// if (lastStaff && lastStaff.employeeId) {
-//   const num = parseInt(lastStaff.employeeId.replace('EMP', ''));
-//   nextNumber = num + 1;
-// }
-
-// const employeeId = 'EMP' + String(nextNumber).padStart(4, '0');
-
-// // build data
-// const staffData = {
-//   ...value,
-//   employeeId,
-//   profilePhoto: req.file ? req.file.path : null,
-// };
-
-// const staff = await FitnessStaff.create(staffData);
-
-//     // toJSON transformer strips password automatically
-//     return respond(res, 201, true, "Staff member created successfully", staff);
-//   } catch (err) {
-//     if (req.file) deleteFile(req.file.path);
-//     console.error("[createFitnessStaff]", err);
-//     return respond(res, 500, false, "Internal server error while creating staff member");
-//   }
-// };
-
-
 
 // ═════════════════════════════════════════════════════════════════════════════
 // CREATE  POST /api/fitness/staff/create
 // ═════════════════════════════════════════════════════════════════════════════
 const createFitnessStaff = async (req, res) => {
   try {
-    // Multer puts file in req.file and text fields in req.body
     const { error, value } = createSchema.validate(req.body, { abortEarly: false });
+
     if (error) {
       if (req.file) deleteFile(req.file.path);
       const messages = error.details.map((d) => d.message);
       return respond(res, 422, false, "Validation failed", { errors: messages });
     }
 
-    // Uniqueness checks
     const [existingMobile, existingEmail] = await Promise.all([
       FitnessStaff.findOne({ mobileNumber: value.mobileNumber }),
       value.emailId ? FitnessStaff.findOne({ emailId: value.emailId }) : null,
@@ -507,39 +465,36 @@ const createFitnessStaff = async (req, res) => {
       if (req.file) deleteFile(req.file.path);
       return respond(res, 409, false, "A staff member with this mobile number already exists");
     }
+
     if (existingEmail) {
       if (req.file) deleteFile(req.file.path);
       return respond(res, 409, false, "A staff member with this email address already exists");
     }
 
-    // Generate employeeId
     delete value.employeeId;
 
     const lastStaff = await FitnessStaff.findOne()
       .sort({ createdAt: -1 })
-      .select('employeeId');
+      .select("employeeId");
 
     let nextNumber = 1;
     if (lastStaff && lastStaff.employeeId) {
-      const num = parseInt(lastStaff.employeeId.replace('EMP', ''));
-      nextNumber = num + 1;
+      const num = parseInt(lastStaff.employeeId.replace("EMP", ""), 10);
+      if (!Number.isNaN(num)) nextNumber = num + 1;
     }
 
-    const employeeId = 'EMP' + String(nextNumber).padStart(4, '0');
+    const employeeId = "EMP" + String(nextNumber).padStart(4, "0");
 
-    // Create FitnessStaff document
     const staffData = {
       ...value,
       employeeId,
-      profilePhoto: req.file ? req.file.path : null,
+      profilePhoto: req.file ? buildPhotoPath(req.file.filename) : null,
     };
 
     const savedStaff = await FitnessStaff.create(staffData);
 
-    // === Create User with correct role 'FitnessStaff' ===
     const staffUserId = `FITSTF${Math.floor(1000 + Math.random() * 9000)}`;
-    
-    // Hash the password before saving to User
+
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(value.password, salt);
 
@@ -548,26 +503,30 @@ const createFitnessStaff = async (req, res) => {
       password: hashedPassword,
       fullName: value.fullName,
       mobile: value.mobileNumber,
-      email: value.emailId || '',
-      role: 'FitnessStaff',           // ← This is what you needed
-      userType: 'fitness',
-      organizationId: 'fitness',      // Change if you have dynamic organizationId
+      email: value.emailId || "",
+      role: "FitnessStaff",
+      userType: "fitness",
+      organizationId: "fitness",
       staffId: savedStaff._id,
       linkedId: savedStaff._id,
-      isActive: 'Yes'
+      isActive: "Yes",
     });
 
     await newUser.save();
 
-    // Success response - show plain password only to admin
-    return respond(res, 201, true, "Staff member created successfully with login credentials", {
-      staff: savedStaff,
-      userCredentials: {
-        userId: staffUserId,
-        password: value.password   // plain password for display only
+    return respond(
+      res,
+      201,
+      true,
+      "Staff member created successfully with login credentials",
+      {
+        staff: savedStaff,
+        userCredentials: {
+          userId: staffUserId,
+          password: value.password,
+        },
       }
-    });
-
+    );
   } catch (err) {
     if (req.file) deleteFile(req.file.path);
     console.error("[createFitnessStaff]", err);
@@ -575,30 +534,22 @@ const createFitnessStaff = async (req, res) => {
   }
 };
 
-
-
-
 // ═════════════════════════════════════════════════════════════════════════════
 // READ ALL  GET /api/fitness/staff
-// Supports: ?page, ?limit, ?status, ?role, ?search (fullName text search)
 // ═════════════════════════════════════════════════════════════════════════════
 const getFitnessStaff = async (req, res) => {
   try {
-    const page   = Math.max(1, parseInt(req.query.page,  10) || 1);
-    const limit  = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 20));
-    const skip   = (page - 1) * limit;
+    const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 20));
+    const skip = (page - 1) * limit;
 
     const filter = {};
     if (req.query.status) filter.status = req.query.status;
-    if (req.query.role)   filter.role   = new RegExp(req.query.role, "i");
-    if (req.query.search) filter.$text  = { $search: req.query.search };
+    if (req.query.role) filter.role = new RegExp(req.query.role, "i");
+    if (req.query.search) filter.$text = { $search: req.query.search };
 
     const [staff, total] = await Promise.all([
-      FitnessStaff.find(filter)
-        .sort({ createdAt: -1 })
-        .skip(skip)
-        .limit(limit)
-        .lean(),
+      FitnessStaff.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
       FitnessStaff.countDocuments(filter),
     ]);
 
@@ -624,7 +575,6 @@ const getFitnessStaffById = async (req, res) => {
   try {
     const { id } = req.params;
 
-    // Validate ObjectId format before hitting the DB
     if (!id.match(/^[0-9a-fA-F]{24}$/)) {
       return respond(res, 400, false, "Invalid staff ID format");
     }
@@ -654,50 +604,54 @@ const updateFitnessStaff = async (req, res) => {
       return respond(res, 400, false, "Invalid staff ID format");
     }
 
-    // 1. Validate body
     const { error, value } = updateSchema.validate(req.body, { abortEarly: false });
+
     if (error) {
       if (req.file) deleteFile(req.file.path);
       const messages = error.details.map((d) => d.message);
       return respond(res, 422, false, "Validation failed", { errors: messages });
     }
 
-    // 2. Fetch existing record
     const existing = await FitnessStaff.findById(id);
+
     if (!existing) {
       if (req.file) deleteFile(req.file.path);
       return respond(res, 404, false, "Staff member not found");
     }
 
-    // 3. Check uniqueness conflicts (exclude current record)
     if (value.mobileNumber && value.mobileNumber !== existing.mobileNumber) {
-      const dup = await FitnessStaff.findOne({ mobileNumber: value.mobileNumber, _id: { $ne: id } });
+      const dup = await FitnessStaff.findOne({
+        mobileNumber: value.mobileNumber,
+        _id: { $ne: id },
+      });
+
       if (dup) {
         if (req.file) deleteFile(req.file.path);
         return respond(res, 409, false, "Mobile number is already used by another staff member");
       }
     }
+
     if (value.emailId && value.emailId !== existing.emailId) {
-      const dup = await FitnessStaff.findOne({ emailId: value.emailId, _id: { $ne: id } });
+      const dup = await FitnessStaff.findOne({
+        emailId: value.emailId,
+        _id: { $ne: id },
+      });
+
       if (dup) {
         if (req.file) deleteFile(req.file.path);
         return respond(res, 409, false, "Email address is already used by another staff member");
       }
     }
 
-    // 4. Clear password if empty string sent (don't overwrite with blank)
     if (!value.password) {
       delete value.password;
     }
 
-    // 5. Handle profile photo update
     if (req.file) {
-      // Delete old photo if it exists
       deleteFile(existing.profilePhoto);
-      value.profilePhoto = req.file.path;
+      value.profilePhoto = buildPhotoPath(req.file.filename);
     }
 
-    // 6. Apply update
     const updated = await FitnessStaff.findByIdAndUpdate(
       id,
       { $set: value },
@@ -724,11 +678,11 @@ const deleteFitnessStaff = async (req, res) => {
     }
 
     const staff = await FitnessStaff.findById(id);
+
     if (!staff) {
       return respond(res, 404, false, "Staff member not found");
     }
 
-    // Delete profile photo from disk before removing the document
     deleteFile(staff.profilePhoto);
 
     await staff.deleteOne();
@@ -740,12 +694,11 @@ const deleteFitnessStaff = async (req, res) => {
   }
 };
 
-// ─── Exports ──────────────────────────────────────────────────────────────────
 module.exports = {
   createFitnessStaff,
   getFitnessStaff,
   getFitnessStaffById,
   updateFitnessStaff,
   deleteFitnessStaff,
-  upload,   // also exported so routes can apply as middleware
+  upload,
 };

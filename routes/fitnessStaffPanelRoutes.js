@@ -1,0 +1,14 @@
+const express = require('express');
+const router = express.Router();
+
+const {
+  getMySchedule,
+  getAvailableActivities
+} = require('../controllers/fitnessStaffPanelController');
+
+const auth = require('../middleware/auth');
+
+router.get('/my-schedule', auth, getMySchedule);
+router.get('/available-activities', auth, getAvailableActivities);
+
+module.exports = router;
