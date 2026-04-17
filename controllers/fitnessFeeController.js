@@ -1897,7 +1897,13 @@ exports.getFitnessPayments = async (req, res) => {
   try {
     const payments = await FeePayment.find({ organizationId: req.organizationId })
   .populate('memberId', 'name memberId')
-  .populate('allotmentId') // ✅ ADD THIS LINE
+  .populate({
+    path: 'allotmentId',
+    populate: {
+      path: 'responsibleStaff',
+      select: 'fullName name'
+    }
+  })
   .sort({ paymentDate: -1 });
     res.json(payments);
   } catch (err) {
