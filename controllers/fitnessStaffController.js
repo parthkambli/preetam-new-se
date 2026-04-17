@@ -853,7 +853,7 @@ const createFitnessStaff = async (req, res) => {
     const savedStaff = await FitnessStaff.create(staffData);
 
     // Create User Login
-    const staffUserId = `FITSTF${Math.floor(1000 + Math.random() * 9000)}`;
+    const staffUserId = `FITSTF${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(value.password, salt);
 

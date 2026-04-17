@@ -10,7 +10,7 @@ router.get('/', controller.getActivities);
 router.get('/availability', controller.getAvailability);
 router.post('/book', controller.bookSlot);
 router.get('/bookings', controller.getBookings);
-router.delete('/bookings/:id', controller.cancelBooking); // ✅ MOVE HERE
+router.delete('/bookings/:id', controller.cancelBooking); 
 
 // ================= ID ROUTES (ALWAYS LAST) =================
 router.get('/:id', controller.getActivityById);

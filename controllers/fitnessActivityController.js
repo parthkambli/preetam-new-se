@@ -394,6 +394,7 @@ exports.bookSlot = async (req, res) => {
       slotId,
       date: new Date(date),
       memberId: memberId || null,
+      staffId: req.body.staffId || null,
       customerName: customerName.trim(),
       phone,
       isRecurring: false,
@@ -407,6 +408,7 @@ exports.bookSlot = async (req, res) => {
     const allotment = await FeeAllotment.create({
       memberId: memberId || null,
       feeTypeId: feeTypeId || null,
+      responsibleStaff: req.body.staffId || null,
       description: `Ad-hoc Booking - ${activity.name} (${plan})`,
       feePlan: plan,
       amount: numAmount,
@@ -423,6 +425,7 @@ exports.bookSlot = async (req, res) => {
         paymentMode,
         paymentDate: finalPaymentDate,
         description: `Booking: ${activity.name} - ${plan}`,
+        customerName: customerName,
         organizationId,
       });
 
@@ -453,6 +456,7 @@ exports.getBookings = async (req, res) => {
   try {
     const bookings = await FitnessBooking.find()
       .populate('activityId')
+      .populate('staffId', 'fullName')
       .sort({ createdAt: -1 });
 
     const formatted = bookings.map(b => {
@@ -471,6 +475,7 @@ exports.getBookings = async (req, res) => {
         customerName: b.customerName,
         activityName,
         slotTime,
+        staffName: b.staffId?.fullName || '—',
         date:        b.date,
         isRecurring: b.isRecurring,
         isException: b.isException

@@ -68,6 +68,11 @@ const bookingSchema = new mongoose.Schema({
   ref: "FitnessMember",
   required: false
 },
+staffId: {
+  type: mongoose.Schema.Types.ObjectId,
+  ref: 'FitnessStaff',
+  default: null
+},
 customerName: {
   type: String,
   required: true
