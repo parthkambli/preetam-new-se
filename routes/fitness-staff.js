@@ -106,10 +106,42 @@
 
 
 
+// // routes/fitness-staff.js
+// const express = require('express');
+// const router = express.Router();
+// const upload = require('../middleware/upload');           // ← single upload
+// const {
+//   createFitnessStaff,
+//   getFitnessStaff,
+//   getFitnessStaffById,
+//   updateFitnessStaff,
+//   deleteFitnessStaff
+// } = require('../controllers/fitnessStaffController');
+
+// router.post('/create', upload.fitnessStaff, createFitnessStaff);
+// router.get('/', getFitnessStaff);
+// router.get('/:id', getFitnessStaffById);
+// router.put('/:id', upload.fitnessStaff, updateFitnessStaff);
+// router.delete('/:id', deleteFitnessStaff);
+
+// module.exports = router;
+
+
+
+
+
+
+
+
+
+
+
+
 // routes/fitness-staff.js
 const express = require('express');
 const router = express.Router();
-const upload = require('../middleware/upload');           // ← single upload
+
+const { upload, handleUpload } = require('../middleware/upload');   // ← Destructure properly
 const {
   createFitnessStaff,
   getFitnessStaff,
@@ -118,10 +150,15 @@ const {
   deleteFitnessStaff
 } = require('../controllers/fitnessStaffController');
 
-router.post('/create', upload.fitnessStaff, createFitnessStaff);
+// Use handleUpload wrapper (strongly recommended - it gives nice JSON errors)
+router.post('/create', handleUpload(upload.fitnessStaff), createFitnessStaff);
+
 router.get('/', getFitnessStaff);
 router.get('/:id', getFitnessStaffById);
-router.put('/:id', upload.fitnessStaff, updateFitnessStaff);
+
+// For update - also wrap with handleUpload
+router.put('/:id', handleUpload(upload.fitnessStaff), updateFitnessStaff);
+
 router.delete('/:id', deleteFitnessStaff);
 
 module.exports = router;
