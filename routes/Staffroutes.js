@@ -79,6 +79,7 @@
 
 const express = require('express');
 const auth = require('../middleware/auth');
+const { upload, handleUpload } = require('../middleware/upload');
 
 // Controllers
 const {
@@ -149,9 +150,21 @@ router.delete('/attendance/:id',   auth, deleteAttendance);
 // exactly like fitnessMemberController does it.
 // ─────────────────────────────────────────────────────────────────────────────
 router.get('/',       auth, getAllStaff);
-router.post('/',      auth, createStaff);
+// router.post('/',      auth, createStaff);
+router.post(
+  '/',
+  auth,
+  handleUpload(upload.schoolStaff),
+  createStaff
+);
 router.get('/:id',    auth, getStaffById);
-router.put('/:id',    auth, updateStaff);
+// router.put('/:id',    auth, updateStaff);
+router.put(
+  '/:id',
+  auth,
+  handleUpload(upload.schoolStaff),
+  updateStaff
+);
 router.delete('/:id', auth, deleteStaff);
 
 module.exports = router;

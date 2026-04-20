@@ -9,12 +9,12 @@ const staffSchema = new mongoose.Schema({
   },
   loginId: {
     type: String,
-    unique: true,
-    trim: true            // mobile or email used to log in
+    trim: true ,
+    default:null           // mobile or email used to log in
   },
   password: {
     type: String,
-    default: 'EMP@1234'  // auto-generated default; should be hashed in production
+    default: null  // auto-generated default; should be hashed in production
   },
 
   // ── Basic Information ────────────────────────────────────────────────────────
