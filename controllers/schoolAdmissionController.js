@@ -992,6 +992,33 @@ exports.createAdmission = async (req, res) => {
   try {
     const admissionData = req.body;
 
+    if (admissionData.hobbies) {
+  try {
+    admissionData.hobbies = JSON.parse(admissionData.hobbies);
+  } catch {}
+}
+
+if (admissionData.games) {
+  try {
+    admissionData.games = JSON.parse(admissionData.games);
+  } catch {}
+}
+
+    // ── Handle uploaded files (multer → controller mapping) ──
+if (req.files) {
+  // Single photo
+  if (req.files.photo && req.files.photo.length > 0) {
+    admissionData.photo = `/uploads/school/${req.files.photo[0].filename}`;
+  }
+
+  // Multiple health records
+  if (req.files.healthRecord && req.files.healthRecord.length > 0) {
+    admissionData.medicalReports = req.files.healthRecord.map(
+      file => `/uploads/school/${file.filename}`
+    );
+  }
+}
+
     // ── Required fields ────────────────────────────────────────────────────
     if (!admissionData.fullName || !admissionData.fullName.trim()) {
       return res.status(400).json({ message: 'Full name is required.' });
@@ -1318,9 +1345,45 @@ exports.updateAdmission = async (req, res) => {
     if (!admission) {
       return res.status(404).json({ message: 'Admission not found.' });
     }
+    const fs = require('fs');
+const path = require('path');
 
-    const updateData = req.body;
+// Delete old photo if new one uploaded
+if (req.files?.photo && admission.photo) {
+  const oldPath = path.join(__dirname, '..', admission.photo);
+  if (fs.existsSync(oldPath)) {
+    fs.unlinkSync(oldPath);
+  }
+}
 
+const updateData = req.body;
+
+if (admissionData.hobbies) {
+  try {
+    admissionData.hobbies = JSON.parse(admissionData.hobbies);
+  } catch {}
+}
+
+if (admissionData.games) {
+  try {
+    admissionData.games = JSON.parse(admissionData.games);
+  } catch {}
+}
+
+// ── Handle uploaded files ──
+if (req.files) {
+  // Replace photo
+  if (req.files.photo && req.files.photo.length > 0) {
+    updateData.photo = `/uploads/school/${req.files.photo[0].filename}`;
+  }
+
+  // Replace health records (simple version)
+  if (req.files.healthRecord && req.files.healthRecord.length > 0) {
+    updateData.medicalReports = req.files.healthRecord.map(
+      file => `/uploads/school/${file.filename}`
+    );
+  }
+}
     // ── Validate only fields that are being updated ────────────────────────
     if (updateData.mobile !== undefined && updateData.mobile !== '') {
       if (!isValidPhone(updateData.mobile)) {

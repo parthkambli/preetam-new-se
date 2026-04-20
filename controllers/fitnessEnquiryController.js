@@ -170,29 +170,308 @@
 // };
 
 
+
+
+
+
+
+// const mongoose = require('mongoose');
+// const FitnessEnquiry = require('../models/FitnessEnquiry');
+// const FitnessActivity = require('../models/FitnessActivity');
+// const FitnessStaff = require('../models/FitnessStaff');
+
+// /**
+//  * @desc    Get all fitness enquiries with filtering
+//  * @route   GET /api/fitness/enquiry
+//  * @access  Private
+//  */
+// exports.getAllEnquiries = async (req, res) => {
+//   try {
+//     const { status, source, search, date, interestedActivity } = req.query;
+
+//     const query = { organizationId: req.organizationId };
+
+//     if (status) query.status = status;
+//     if (source) query.source = source;
+
+//     if (search) {
+//       query.$or = [
+//         { fullName: { $regex: search, $options: 'i' } },
+//         { mobile: { $regex: search, $options: 'i' } }
+//       ];
+//     }
+
+//     if (date) {
+//       const start = new Date(date);
+//       const end = new Date(date);
+//       end.setDate(end.getDate() + 1);
+//       query.enquiryDate = { $gte: start, $lt: end };
+//     }
+
+//     if (interestedActivity) {
+//       if (mongoose.Types.ObjectId.isValid(interestedActivity)) {
+//         query.interestedActivity = interestedActivity;
+//       } else {
+//         query.interestedActivity = interestedActivity;
+//       }
+//     }
+
+//     const enquiries = await FitnessEnquiry.find(query)
+//       .populate('interestedActivity', 'name activityName')
+//       .populate('responsibleStaff', 'fullName name')
+//       .sort({ createdAt: -1 });
+
+//     const formattedEnquiries = enquiries.map((enq) => ({
+//       ...enq.toObject(),
+//       interestedActivity:
+//         typeof enq.interestedActivity === 'object' && enq.interestedActivity !== null
+//           ? enq.interestedActivity.name || enq.interestedActivity.activityName || '-'
+//           : enq.interestedActivity || '-',
+//       responsibleStaff:
+//         typeof enq.responsibleStaff === 'object' && enq.responsibleStaff !== null
+//           ? enq.responsibleStaff.fullName || enq.responsibleStaff.name || '-'
+//           : enq.responsibleStaff || '-',
+//     }));
+
+//     res.json(formattedEnquiries);
+//   } catch (err) {
+//     console.error('Error fetching fitness enquiries:', err);
+//     res.status(500).json({
+//       message: 'Server error while fetching enquiries',
+//       error: err.message
+//     });
+//   }
+// };
+
+// /**
+//  * @desc    Get single fitness enquiry by ID
+//  * @route   GET /api/fitness/enquiry/:id
+//  * @access  Private
+//  */
+// exports.getEnquiryById = async (req, res) => {
+//   try {
+//     const enquiry = await FitnessEnquiry.findOne({
+//       _id: req.params.id,
+//       organizationId: req.organizationId
+//     })
+//       .populate('interestedActivity', 'name activityName')
+//       .populate('responsibleStaff', 'fullName name');
+
+//     if (!enquiry) {
+//       return res.status(404).json({ message: 'Enquiry not found' });
+//     }
+
+//     const formattedEnquiry = {
+//       ...enquiry.toObject(),
+//       interestedActivity:
+//         typeof enquiry.interestedActivity === 'object' && enquiry.interestedActivity !== null
+//           ? enquiry.interestedActivity.name || enquiry.interestedActivity.activityName || '-'
+//           : enquiry.interestedActivity || '-',
+//       responsibleStaff:
+//         typeof enquiry.responsibleStaff === 'object' && enquiry.responsibleStaff !== null
+//           ? enquiry.responsibleStaff.fullName || enquiry.responsibleStaff.name || '-'
+//           : enquiry.responsibleStaff || '-',
+//     };
+
+//     res.json(formattedEnquiry);
+//   } catch (err) {
+//     console.error('Error fetching fitness enquiry:', err);
+//     res.status(500).json({
+//       message: 'Server error while fetching enquiry',
+//       error: err.message
+//     });
+//   }
+// };
+
+// /**
+//  * @desc    Create new fitness enquiry
+//  * @route   POST /api/fitness/enquiry
+//  * @access  Private
+//  */
+// exports.createEnquiry = async (req, res) => {
+//   try {
+//     const {
+//       fullName,
+//       age,
+//       gender,
+//       mobile,
+//       interestedActivity,
+//       responsibleStaff,
+//       source,
+//       enquiryDate,
+//       notes
+//     } = req.body;
+
+//     if (!fullName || !mobile || !gender) {
+//       return res.status(400).json({
+//         message: 'Full name, mobile, and gender are required'
+//       });
+//     }
+
+//     const count = await FitnessEnquiry.countDocuments({
+//       organizationId: req.organizationId
+//     });
+
+//     const enquiryIdNum = (count + 1).toString().padStart(4, '0');
+//     const enquiryId = `ENQ-CLUB-${enquiryIdNum}`;
+
+//     let activityValue = null;
+//     let staffValue = null;
+
+//     if (
+//       interestedActivity &&
+//       mongoose.Types.ObjectId.isValid(interestedActivity)
+//     ) {
+//       activityValue = interestedActivity;
+//     }
+
+//     if (
+//       responsibleStaff &&
+//       mongoose.Types.ObjectId.isValid(responsibleStaff)
+//     ) {
+//       staffValue = responsibleStaff;
+//     }
+
+//     const enquiry = new FitnessEnquiry({
+//       enquiryId,
+//       fullName: fullName.trim(),
+//       age: age !== undefined && age !== '' ? Number(age) : undefined,
+//       gender,
+//       mobile: mobile.toString().trim(),
+//       interestedActivity: activityValue,
+//       responsibleStaff: staffValue,
+//       source: source || 'Walk-in',
+//       enquiryDate: enquiryDate || Date.now(),
+//       notes: notes || '',
+//       organizationId: req.organizationId
+//     });
+
+//     await enquiry.save();
+
+//     res.status(201).json({
+//       ...enquiry.toObject(),
+//       interestedActivity: '-',
+//       responsibleStaff: '-'
+//     });
+//   } catch (err) {
+//     console.error('Error creating fitness enquiry:', err);
+//     if (err.code === 11000) {
+//       return res.status(400).json({
+//         message: 'Enquiry ID already exists. Please try again.'
+//       });
+//     }
+//     res.status(500).json({
+//       message: 'Server error while creating enquiry',
+//       error: err.message
+//     });
+//   }
+// };
+
+// /**
+//  * @desc    Update fitness enquiry
+//  * @route   PUT /api/fitness/enquiry/:id
+//  * @access  Private
+//  */
+// exports.updateEnquiry = async (req, res) => {
+//   try {
+//     const { remark, status, nextVisit } = req.body;
+
+//     const enquiry = await FitnessEnquiry.findOne({
+//       _id: req.params.id,
+//       organizationId: req.organizationId
+//     });
+
+//     if (!enquiry) {
+//       return res.status(404).json({ message: 'Enquiry not found' });
+//     }
+
+//     if (remark !== undefined) enquiry.remark = remark;
+//     if (status !== undefined) enquiry.status = status;
+//     if (nextVisit !== undefined) enquiry.nextVisit = nextVisit;
+
+//     await enquiry.save();
+//     res.json(enquiry);
+//   } catch (err) {
+//     console.error('Error updating fitness enquiry:', err);
+//     res.status(500).json({
+//       message: 'Server error while updating enquiry',
+//       error: err.message
+//     });
+//   }
+// };
+
+// /**
+//  * @desc    Delete fitness enquiry
+//  * @route   DELETE /api/fitness/enquiry/:id
+//  * @access  Private
+//  */
+// exports.deleteEnquiry = async (req, res) => {
+//   try {
+//     const enquiry = await FitnessEnquiry.findOneAndDelete({
+//       _id: req.params.id,
+//       organizationId: req.organizationId
+//     });
+
+//     if (!enquiry) {
+//       return res.status(404).json({ message: 'Enquiry not found' });
+//     }
+
+//     res.json({ message: 'Enquiry deleted successfully' });
+//   } catch (err) {
+//     console.error('Error deleting fitness enquiry:', err);
+//     res.status(500).json({
+//       message: 'Server error while deleting enquiry',
+//       error: err.message
+//     });
+//   }
+// };
+
+///old
+
+
+
+
+
+
+
+
+///////new 
+
+
 const mongoose = require('mongoose');
 const FitnessEnquiry = require('../models/FitnessEnquiry');
 const FitnessActivity = require('../models/FitnessActivity');
 const FitnessStaff = require('../models/FitnessStaff');
 
 /**
- * @desc    Get all fitness enquiries with filtering
+ * @desc    Get all fitness enquiries with filtering + pagination
  * @route   GET /api/fitness/enquiry
  * @access  Private
  */
 exports.getAllEnquiries = async (req, res) => {
   try {
-    const { status, source, search, date, interestedActivity } = req.query;
+    const {
+      status,
+      source,
+      search,
+      date,
+      interestedActivity,
+      responsibleStaff,
+      page = 1,
+      limit = 10
+    } = req.query;
 
     const query = { organizationId: req.organizationId };
 
+    // Filters
     if (status) query.status = status;
     if (source) query.source = source;
 
     if (search) {
       query.$or = [
         { fullName: { $regex: search, $options: 'i' } },
-        { mobile: { $regex: search, $options: 'i' } }
+        { mobile: { $regex: search, $options: 'i' } },
+        { enquiryId: { $regex: search, $options: 'i' } }
       ];
     }
 
@@ -206,15 +485,32 @@ exports.getAllEnquiries = async (req, res) => {
     if (interestedActivity) {
       if (mongoose.Types.ObjectId.isValid(interestedActivity)) {
         query.interestedActivity = interestedActivity;
-      } else {
-        query.interestedActivity = interestedActivity;
       }
     }
+
+    if (responsibleStaff) {
+      if (mongoose.Types.ObjectId.isValid(responsibleStaff)) {
+        query.responsibleStaff = responsibleStaff;
+      }
+    }
+
+    // Pagination
+    const parsedPage = Math.max(parseInt(page, 10) || 1, 1);
+
+    let parsedLimit = parseInt(limit, 10) || 10;
+    if (parsedLimit < 5) parsedLimit = 5;
+    if (parsedLimit > 100) parsedLimit = 100;
+
+    const skip = (parsedPage - 1) * parsedLimit;
+
+    const total = await FitnessEnquiry.countDocuments(query);
 
     const enquiries = await FitnessEnquiry.find(query)
       .populate('interestedActivity', 'name activityName')
       .populate('responsibleStaff', 'fullName name')
-      .sort({ createdAt: -1 });
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(parsedLimit);
 
     const formattedEnquiries = enquiries.map((enq) => ({
       ...enq.toObject(),
@@ -228,10 +524,22 @@ exports.getAllEnquiries = async (req, res) => {
           : enq.responsibleStaff || '-',
     }));
 
-    res.json(formattedEnquiries);
+    res.json({
+      success: true,
+      data: formattedEnquiries,
+      pagination: {
+        total,
+        page: parsedPage,
+        limit: parsedLimit,
+        totalPages: Math.ceil(total / parsedLimit),
+        hasNextPage: parsedPage < Math.ceil(total / parsedLimit),
+        hasPrevPage: parsedPage > 1
+      }
+    });
   } catch (err) {
     console.error('Error fetching fitness enquiries:', err);
     res.status(500).json({
+      success: false,
       message: 'Server error while fetching enquiries',
       error: err.message
     });

@@ -3287,34 +3287,66 @@ const applyComputedStatuses = (obj) => {
 // ─── GET ALL ──────────────────────────────────────────────────────────────────
 exports.getAllMembers = async (req, res) => {
   try {
-    const { search, status, activity, plan } = req.query;
+    const {
+      search,
+      status,
+      activity,
+      plan,
+      page = 1,
+      limit = 10
+    } = req.query;
+
     const query = { organizationId: req.organizationId };
 
-    if (status)   query.membershipStatus = status;
-    if (plan)     query['activityFees.plan'] = plan;
-    if (activity) query['activityFees.activity'] = activity;
+    if (status) query.membershipStatus = status;
+    if (plan) query['activityFees.plan'] = plan;
+
+    if (activity && mongoose.Types.ObjectId.isValid(activity)) {
+      query['activityFees.activity'] = new mongoose.Types.ObjectId(activity);
+    }
 
     if (search) {
       query.$or = [
-        { name:     { $regex: search, $options: 'i' } },
-        { mobile:   { $regex: search, $options: 'i' } },
+        { name: { $regex: search, $options: 'i' } },
+        { mobile: { $regex: search, $options: 'i' } },
         { memberId: { $regex: search, $options: 'i' } },
       ];
     }
 
+    const parsedPage = Math.max(parseInt(page, 10) || 1, 1);
+
+    let parsedLimit = parseInt(limit, 10) || 10;
+    if (parsedLimit < 5) parsedLimit = 5;
+    if (parsedLimit > 100) parsedLimit = 100;
+
+    const skip = (parsedPage - 1) * parsedLimit;
+
+    const total = await FitnessMember.countDocuments(query);
+
     const members = await FitnessMember.find(query)
       .populate('activityFees.activity', 'name activityName')
-      .populate('activityFees.feeType',  'description')
-      .populate('activityFees.staff',    'fullName name')
+      .populate('activityFees.feeType', 'description')
+      .populate('activityFees.staff', 'fullName name')
       .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(parsedLimit)
       .select('-password');
 
     const result = members.map((m) => applyComputedStatuses(m.toObject()));
 
+    res.set('X-Total-Count', String(total));
+    res.set('X-Page', String(parsedPage));
+    res.set('X-Limit', String(parsedLimit));
+    res.set('X-Total-Pages', String(Math.ceil(total / parsedLimit)));
+    res.set('X-Has-Next-Page', String(parsedPage < Math.ceil(total / parsedLimit)));
+    res.set('X-Has-Prev-Page', String(parsedPage > 1));
+
     res.json(result);
   } catch (err) {
     console.error('getAllMembers error:', err);
-    res.status(500).json({ message: 'Server error while fetching members.' });
+    res.status(500).json({
+      message: 'Server error while fetching members.'
+    });
   }
 };
 

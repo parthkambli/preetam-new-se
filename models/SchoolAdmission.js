@@ -73,7 +73,7 @@ const schoolAdmissionSchema = new mongoose.Schema({
     default: ''
   },
   medicalReports: {
-    type: String // URL to uploaded reports
+    type: [String] // URL to uploaded reports
   },
   
   // Education & Service
