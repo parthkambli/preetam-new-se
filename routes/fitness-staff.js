@@ -72,32 +72,93 @@
 
 
 
-const express = require("express");
-const router = express.Router();
-const auth = require("../middleware/auth");
+// const express = require("express");
+// const router = express.Router();
+// const auth = require("../middleware/auth");
 
+// const {
+//   createFitnessStaff,
+//   getFitnessStaff,
+//   getFitnessStaffById,
+//   updateFitnessStaff,
+//   deleteFitnessStaff,
+//   upload,
+// } = require("../controllers/fitnessStaffController");
+
+// // Create a new staff member
+// router.post("/create", auth, upload.single("photo"), createFitnessStaff);
+
+// // List all staff members
+// router.get("/", auth, getFitnessStaff);
+
+// // Get a single staff member by MongoDB ObjectId
+// router.get("/:id", auth, getFitnessStaffById);
+
+// // Update a staff member
+// router.put("/:id", auth, upload.single("photo"), updateFitnessStaff);
+
+// // Delete a staff member
+// router.delete("/:id", auth, deleteFitnessStaff);
+
+// module.exports = router;
+
+
+
+
+
+// // routes/fitness-staff.js
+// const express = require('express');
+// const router = express.Router();
+// const upload = require('../middleware/upload');           // ← single upload
+// const {
+//   createFitnessStaff,
+//   getFitnessStaff,
+//   getFitnessStaffById,
+//   updateFitnessStaff,
+//   deleteFitnessStaff
+// } = require('../controllers/fitnessStaffController');
+
+// router.post('/create', upload.fitnessStaff, createFitnessStaff);
+// router.get('/', getFitnessStaff);
+// router.get('/:id', getFitnessStaffById);
+// router.put('/:id', upload.fitnessStaff, updateFitnessStaff);
+// router.delete('/:id', deleteFitnessStaff);
+
+// module.exports = router;
+
+
+
+
+
+
+
+
+
+
+
+
+// routes/fitness-staff.js
+const express = require('express');
+const router = express.Router();
+
+const { upload, handleUpload } = require('../middleware/upload');   // ← Destructure properly
 const {
   createFitnessStaff,
   getFitnessStaff,
   getFitnessStaffById,
   updateFitnessStaff,
-  deleteFitnessStaff,
-  upload,
-} = require("../controllers/fitnessStaffController");
+  deleteFitnessStaff
+} = require('../controllers/fitnessStaffController');
 
-// Create a new staff member
-router.post("/create", auth, upload.single("photo"), createFitnessStaff);
+// Use handleUpload wrapper (strongly recommended - it gives nice JSON errors)
+router.post('/create', handleUpload(upload.fitnessStaff), createFitnessStaff);
 
-// List all staff members
-router.get("/", auth, getFitnessStaff);
+router.get('/', getFitnessStaff);
+router.get('/:id', getFitnessStaffById);
 
-// Get a single staff member by MongoDB ObjectId
-router.get("/:id", auth, getFitnessStaffById);
+// For update - also wrap with handleUpload
+router.put('/:id', handleUpload(upload.fitnessStaff), updateFitnessStaff);
 
-// Update a staff member
-router.put("/:id", auth, upload.single("photo"), updateFitnessStaff);
-
-// Delete a staff member
-router.delete("/:id", auth, deleteFitnessStaff);
+router.delete('/:id', deleteFitnessStaff);
 
 module.exports = router;

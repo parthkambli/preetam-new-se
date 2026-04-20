@@ -287,6 +287,37 @@ const activeParticipants = await FitnessMember.countDocuments({
     }
     totalRevenue = Math.round(totalRevenue * 100) / 100;
 
+    // ── 4B. Add Booking Revenue (ONLY bookings) ─────────────────────────
+
+// Apply same date filter
+const paymentMatch = buildDateMatch(
+  { organizationId: orgId },
+  'paymentDate',
+  fromDate,
+  toDate
+);
+
+// Only pick booking payments (based on description)
+const bookingPayments = await FeePayment.aggregate([
+  {
+    $match: {
+      ...paymentMatch,
+      description: { $regex: /^Booking:/ } // VERY IMPORTANT FILTER
+    }
+  },
+  {
+    $group: {
+      _id: null,
+      total: { $sum: "$amount" }
+    }
+  }
+]);
+
+const bookingRevenue = bookingPayments[0]?.total || 0;
+
+// Add to total revenue
+totalRevenue += bookingRevenue;
+
     // ── 5. Pending Fees ────────────────────────────────────────────────────
     // Allotment amount minus sum of payments already made.
     // When a date range is selected, only allotments created in that range

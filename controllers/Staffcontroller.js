@@ -534,13 +534,7 @@ exports.getStaffById = async (req, res) => {
  * @access  Private
  */
 exports.createStaff = async (req, res) => {
-  upload(req, res, async (err) => {
-    if (err) {
-      if (err.code === 'LIMIT_FILE_SIZE') {
-        return res.status(400).json({ success: false, message: 'Photo size cannot exceed 2MB' });
-      }
-      return res.status(400).json({ success: false, message: err.message || 'Photo upload failed' });
-    }
+  
 
     try {
       const data = req.body;
@@ -558,7 +552,7 @@ exports.createStaff = async (req, res) => {
 
       let photoUrl = '';
       if (req.file) {
-        photoUrl = `/uploads/staff/${req.file.filename}`;
+        photoUrl = `/uploads/school/profile/${req.file.filename}`;
       }
 
       // Map frontend fields to model fields (School form uses slightly different names)
@@ -619,7 +613,7 @@ exports.createStaff = async (req, res) => {
       if (req.file) deleteOldPhoto(`/uploads/staff/${req.file.filename}`);
       handleError(res, err, 'Failed to create staff member. Please try again.');
     }
-  });
+
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -629,14 +623,7 @@ exports.createStaff = async (req, res) => {
  * @access  Private
  */
 exports.updateStaff = async (req, res) => {
-  upload(req, res, async (err) => {
-    // Handle multer-specific errors first
-    if (err) {
-      if (err.code === 'LIMIT_FILE_SIZE') {
-        return res.status(400).json({ success: false, message: 'Photo size cannot exceed 2MB' });
-      }
-      return res.status(400).json({ success: false, message: err.message || 'Photo upload failed' });
-    }
+
 
     try {
       const staff = await Staff.findOne({
@@ -690,7 +677,6 @@ exports.updateStaff = async (req, res) => {
       if (req.file) deleteOldPhoto(`/uploads/staff/${req.file.filename}`);
       handleError(res, err, 'Failed to update staff member. Please try again.');
     }
-  });
 };
 
 // ─────────────────────────────────────────────────────────────────────────────

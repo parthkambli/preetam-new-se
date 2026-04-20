@@ -50,6 +50,10 @@ const fitnessFeePaymentSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'FitnessFeeAllotment'
   },
+  customerName: {
+  type: String,
+  default: null
+},
 
   description: String,
   feePlan: String,

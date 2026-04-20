@@ -1323,16 +1323,7 @@ exports.getHealthRecordById = async (req, res) => {
 // ─────────────────────────────────────────────────────────────────────────────
 /** POST /api/health-records */
 exports.createHealthRecord = async (req, res) => {
-  upload(req, res, async (err) => {
-    if (err) {
-      return res.status(400).json({
-        message: err.code === 'LIMIT_FILE_SIZE'
-          ? 'Report file size cannot exceed 5 MB'
-          : err.message || 'File upload failed'
-      });
-    }
-
-    try {
+  try {
       const data = {
         ...pickFields(req.body),
         organizationId: req.organizationId,
@@ -1347,7 +1338,7 @@ exports.createHealthRecord = async (req, res) => {
       if (!data.recordType) data.recordType = 'General Checkup';
 
       if (req.file) {
-        data.reportFile = `/uploads/student/health-report/${req.file.filename}`;
+        data.reportFile = `/uploads/student/health-records/${req.file.filename}`;
         data.reportFileName = req.file.originalname;
       }
 
@@ -1378,24 +1369,16 @@ exports.createHealthRecord = async (req, res) => {
         message: 'Health record created successfully'
       });
     } catch (err) {
-      if (req.file) deleteFile(`/uploads/student/health-report/${req.file.filename}`);
+      if (req.file) deleteFile(`/uploads/student/health-records/${req.file.filename}`);
       console.error('createHealthRecord:', err.message);
       res.status(500).json({ message: 'Server error while creating health record' });
     }
-  });
+
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
 /** PUT /api/health-records/:id - FIXED VERSION */
 exports.updateHealthRecord = async (req, res) => {
-  upload(req, res, async (err) => {
-    if (err) {
-      return res.status(400).json({
-        message: err.code === 'LIMIT_FILE_SIZE'
-          ? 'Report file size cannot exceed 5 MB'
-          : err.message || 'File upload failed'
-      });
-    }
 
     try {
       // 1. Fetch existing record
@@ -1405,7 +1388,7 @@ exports.updateHealthRecord = async (req, res) => {
       });
 
       if (!record) {
-        if (req.file) deleteFile(`/uploads/student/health-report/${req.file.filename}`);
+        if (req.file) deleteFile(`/uploads/student/health-records/${req.file.filename}`);
         return res.status(404).json({ message: 'Health record not found' });
       }
 
@@ -1421,7 +1404,7 @@ exports.updateHealthRecord = async (req, res) => {
       // Handle file upload
       if (req.file) {
         if (record.reportFile) deleteFile(record.reportFile);
-        updates.reportFile = `/uploads/student/health-report/${req.file.filename}`;
+        updates.reportFile = `/uploads/student/health-records/${req.file.filename}`;
         updates.reportFileName = req.file.originalname;
       }
 
@@ -1462,11 +1445,10 @@ exports.updateHealthRecord = async (req, res) => {
         message: 'Health record updated successfully'
       });
     } catch (err) {
-      if (req.file) deleteFile(`/uploads/student/health-report/${req.file.filename}`);
+      if (req.file) deleteFile(`/uploads/student/health-records/${req.file.filename}`);
       console.error('updateHealthRecord:', err.message);
       res.status(500).json({ message: 'Server error while updating health record' });
     }
-  });
 };
 
 // ─────────────────────────────────────────────────────────────────────────────

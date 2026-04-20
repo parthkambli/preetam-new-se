@@ -7,6 +7,8 @@ const {
   deleteAdmission
 } = require('../controllers/schoolAdmissionController');
 const auth = require('../middleware/auth');
+const { upload, handleUpload } = require('../middleware/upload');
+
 
 const router = express.Router();
 
@@ -23,12 +25,24 @@ router.get('/:id', auth, getAdmissionById);
 // POST /api/school/admission
 // @desc    Create new admission (also creates Student and User records)
 // @access  Private
-router.post('/', auth, createAdmission);
+// router.post('/', auth, createAdmission);
+router.post(
+  '/',
+  auth,
+  handleUpload(upload.schoolAdmission),
+  createAdmission
+);
 
 // PUT /api/school/admission/:id
 // @desc    Update admission by ID
 // @access  Private
-router.put('/:id', auth, updateAdmission);
+// router.put('/:id', auth, updateAdmission);
+router.put(
+  '/:id',
+  auth,
+  handleUpload(upload.schoolAdmission),
+  updateAdmission
+);
 
 // DELETE /api/school/admission/:id
 // @desc    Delete admission by ID
