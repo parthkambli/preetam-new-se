@@ -303,18 +303,413 @@
 
 
 
-/**
- * Fitness Staff Controller
- * Handles all CRUD operations for fitness staff members.
- * Multer (file upload), bcrypt (password hashing), and Joi (validation) are all
- * configured here — no separate middleware files required.
- */
-/**
- * Fitness Staff Controller
- * Handles all CRUD operations for fitness staff members.
- * Multer (file upload) and Joi (validation) are configured here —
- * no separate middleware files required.
- */
+// /**
+//  * Fitness Staff Controller
+//  * Handles all CRUD operations for fitness staff members.
+//  * Multer (file upload), bcrypt (password hashing), and Joi (validation) are all
+//  * configured here — no separate middleware files required.
+//  */
+// /**
+//  * Fitness Staff Controller
+//  * Handles all CRUD operations for fitness staff members.
+//  * Multer (file upload) and Joi (validation) are configured here —
+//  * no separate middleware files required.
+//  */
+
+
+
+// const fs = require("fs");
+// const path = require("path");
+
+// const multer = require("multer");
+// const Joi = require("joi");
+
+// const bcrypt = require("bcryptjs");
+// const User = require("../models/User");
+
+// const FitnessStaff = require("../models/FitnessStaff");
+
+// // ─── Constants ────────────────────────────────────────────────────────────────
+// const UPLOAD_DIR = path.join(__dirname, "..", "uploads", "staff-profiles");
+// const ALLOWED_MIME = ["image/jpeg", "image/jpg", "image/png"];
+// const ALLOWED_EXT = /\.(jpg|jpeg|png)$/i;
+
+// // ─── Ensure upload directory exists ──────────────────────────────────────────
+// if (!fs.existsSync(UPLOAD_DIR)) {
+//   fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+// }
+
+// // ─── Multer configuration ─────────────────────────────────────────────────────
+// const storage = multer.diskStorage({
+//   destination(_req, _file, cb) {
+//     cb(null, UPLOAD_DIR);
+//   },
+//   filename(_req, file, cb) {
+//     const timestamp = Date.now();
+//     const safeName = file.originalname.replace(/\s+/g, "-");
+//     cb(null, `photo-${timestamp}-${safeName}`);
+//   },
+// });
+
+// const fileFilter = (_req, file, cb) => {
+//   if (ALLOWED_MIME.includes(file.mimetype) && ALLOWED_EXT.test(file.originalname)) {
+//     cb(null, true);
+//   } else {
+//     cb(new Error("Only JPG, JPEG, and PNG images are allowed"), false);
+//   }
+// };
+
+// const upload = multer({
+//   storage,
+//   fileFilter,
+//   limits: { fileSize: 5 * 1024 * 1024 }, // 5 MB
+// });
+
+// module.exports.upload = upload;
+
+// // ─── Joi Validation Schemas ───────────────────────────────────────────────────
+// const baseStaffSchema = {
+//   fullName: Joi.string().trim().min(2).max(100),
+//   role: Joi.string().trim().min(2).max(100),
+//   gender: Joi.string().valid("Male", "Female", "Other"),
+//   dateOfBirth: Joi.date().iso().max("now").allow(null, ""),
+//   joiningDate: Joi.date().iso(),
+//   employmentType: Joi.string().trim().allow(null, ""),
+//   status: Joi.string().valid("Active", "Inactive", "Terminated"),
+//   salary: Joi.number().min(0).allow(null, ""),
+//   mobileNumber: Joi.string()
+//     .pattern(/^\d{10}$/)
+//     .messages({ "string.pattern.base": "Mobile number must be 10 digits" }),
+//   emailId: Joi.string().email().allow(null, ""),
+//   fullAddress: Joi.string().trim().max(500).allow(null, ""),
+//   emergencyContactName: Joi.string().trim().max(100).allow(null, ""),
+//   emergencyRelation: Joi.string().trim().max(100).allow(null, ""),
+//   emergencyContactMobile: Joi.string()
+//     .pattern(/^\d{10}$/)
+//     .allow(null, "")
+//     .messages({ "string.pattern.base": "Emergency mobile number must be 10 digits" }),
+// };
+
+// const createSchema = Joi.object({
+//   ...baseStaffSchema,
+//   fullName: Joi.string().trim().min(2).max(100).required(),
+//   role: Joi.string().trim().min(2).max(100).required(),
+//   gender: Joi.string().valid("Male", "Female", "Other").required(),
+//   joiningDate: Joi.date().iso().required(),
+//   mobileNumber: Joi.string()
+//     .pattern(/^\d{10}$/)
+//     .required()
+//     .messages({ "string.pattern.base": "Mobile number must be 10 digits" }),
+//   password: Joi.string()
+//     .min(6)
+//     .max(128)
+//     .required()
+//     .messages({ "string.min": "Password must be at least 6 characters" }),
+// });
+
+// const updateSchema = Joi.object({
+//   ...baseStaffSchema,
+//   password: Joi.string().min(6).max(128).allow(null, ""),
+// }).min(1);
+
+// // ─── Helper: consistent API response ──────────────────────────────────────────
+// const respond = (res, statusCode, success, message, data = undefined) => {
+//   const body = { success, message };
+//   if (data !== undefined) body.data = data;
+//   return res.status(statusCode).json(body);
+// };
+
+// // ─── Helper: photo URL path ───────────────────────────────────────────────────
+// const buildPhotoPath = (filename) => `/uploads/staff-profiles/${filename}`;
+
+// // ─── Helper: safely delete a file ─────────────────────────────────────────────
+// const deleteFile = (filePath) => {
+//   if (!filePath) return;
+
+//   let absolutePath = filePath;
+
+//   if (filePath.startsWith("/uploads/")) {
+//     absolutePath = path.join(__dirname, "..", filePath);
+//   }
+
+//   absolutePath = path.resolve(absolutePath);
+
+//   if (fs.existsSync(absolutePath)) {
+//     try {
+//       fs.unlinkSync(absolutePath);
+//     } catch (_) {
+//       // best effort
+//     }
+//   }
+// };
+
+// // ═════════════════════════════════════════════════════════════════════════════
+// // CREATE  POST /api/fitness/staff/create
+// // ═════════════════════════════════════════════════════════════════════════════
+// const createFitnessStaff = async (req, res) => {
+//   try {
+//     const { error, value } = createSchema.validate(req.body, { abortEarly: false });
+
+//     if (error) {
+//       if (req.file) deleteFile(req.file.path);
+//       const messages = error.details.map((d) => d.message);
+//       return respond(res, 422, false, "Validation failed", { errors: messages });
+//     }
+
+//     const [existingMobile, existingEmail] = await Promise.all([
+//       FitnessStaff.findOne({ mobileNumber: value.mobileNumber }),
+//       value.emailId ? FitnessStaff.findOne({ emailId: value.emailId }) : null,
+//     ]);
+
+//     if (existingMobile) {
+//       if (req.file) deleteFile(req.file.path);
+//       return respond(res, 409, false, "A staff member with this mobile number already exists");
+//     }
+
+//     if (existingEmail) {
+//       if (req.file) deleteFile(req.file.path);
+//       return respond(res, 409, false, "A staff member with this email address already exists");
+//     }
+
+//     delete value.employeeId;
+
+//     const lastStaff = await FitnessStaff.findOne()
+//       .sort({ createdAt: -1 })
+//       .select("employeeId");
+
+//     let nextNumber = 1;
+//     if (lastStaff && lastStaff.employeeId) {
+//       const num = parseInt(lastStaff.employeeId.replace("EMP", ""), 10);
+//       if (!Number.isNaN(num)) nextNumber = num + 1;
+//     }
+
+//     const employeeId = "EMP" + String(nextNumber).padStart(4, "0");
+
+//     const staffData = {
+//       ...value,
+//       employeeId,
+//       profilePhoto: req.file ? buildPhotoPath(req.file.filename) : null,
+//     };
+
+//     const savedStaff = await FitnessStaff.create(staffData);
+
+//     const staffUserId = `FITSTF${Math.floor(1000 + Math.random() * 9000)}`;
+
+//     const salt = await bcrypt.genSalt(10);
+//     const hashedPassword = await bcrypt.hash(value.password, salt);
+
+//     const newUser = new User({
+//       userId: staffUserId,
+//       password: hashedPassword,
+//       fullName: value.fullName,
+//       mobile: value.mobileNumber,
+//       email: value.emailId || "",
+//       role: "FitnessStaff",
+//       userType: "fitness",
+//       organizationId: "fitness",
+//       staffId: savedStaff._id,
+//       linkedId: savedStaff._id,
+//       isActive: "Yes",
+//     });
+
+//     await newUser.save();
+
+//     return respond(
+//       res,
+//       201,
+//       true,
+//       "Staff member created successfully with login credentials",
+//       {
+//         staff: savedStaff,
+//         userCredentials: {
+//           userId: staffUserId,
+//           password: value.password,
+//         },
+//       }
+//     );
+//   } catch (err) {
+//     if (req.file) deleteFile(req.file.path);
+//     console.error("[createFitnessStaff]", err);
+//     return respond(res, 500, false, "Internal server error while creating staff member");
+//   }
+// };
+
+// // ═════════════════════════════════════════════════════════════════════════════
+// // READ ALL  GET /api/fitness/staff
+// // ═════════════════════════════════════════════════════════════════════════════
+// const getFitnessStaff = async (req, res) => {
+//   try {
+//     const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+//     const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 20));
+//     const skip = (page - 1) * limit;
+
+//     const filter = {};
+//     if (req.query.status) filter.status = req.query.status;
+//     if (req.query.role) filter.role = new RegExp(req.query.role, "i");
+//     if (req.query.search) filter.$text = { $search: req.query.search };
+
+//     const [staff, total] = await Promise.all([
+//       FitnessStaff.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
+//       FitnessStaff.countDocuments(filter),
+//     ]);
+
+//     return respond(res, 200, true, "Staff members retrieved successfully", {
+//       staff,
+//       pagination: {
+//         total,
+//         page,
+//         limit,
+//         totalPages: Math.ceil(total / limit),
+//       },
+//     });
+//   } catch (err) {
+//     console.error("[getFitnessStaff]", err);
+//     return respond(res, 500, false, "Internal server error while fetching staff members");
+//   }
+// };
+
+// // ═════════════════════════════════════════════════════════════════════════════
+// // READ ONE  GET /api/fitness/staff/:id
+// // ═════════════════════════════════════════════════════════════════════════════
+// const getFitnessStaffById = async (req, res) => {
+//   try {
+//     const { id } = req.params;
+
+//     if (!id.match(/^[0-9a-fA-F]{24}$/)) {
+//       return respond(res, 400, false, "Invalid staff ID format");
+//     }
+
+//     const staff = await FitnessStaff.findById(id).lean();
+
+//     if (!staff) {
+//       return respond(res, 404, false, "Staff member not found");
+//     }
+
+//     return respond(res, 200, true, "Staff member retrieved successfully", staff);
+//   } catch (err) {
+//     console.error("[getFitnessStaffById]", err);
+//     return respond(res, 500, false, "Internal server error while fetching staff member");
+//   }
+// };
+
+// // ═════════════════════════════════════════════════════════════════════════════
+// // UPDATE  PUT /api/fitness/staff/:id
+// // ═════════════════════════════════════════════════════════════════════════════
+// const updateFitnessStaff = async (req, res) => {
+//   try {
+//     const { id } = req.params;
+
+//     if (!id.match(/^[0-9a-fA-F]{24}$/)) {
+//       if (req.file) deleteFile(req.file.path);
+//       return respond(res, 400, false, "Invalid staff ID format");
+//     }
+
+//     const { error, value } = updateSchema.validate(req.body, { abortEarly: false });
+
+//     if (error) {
+//       if (req.file) deleteFile(req.file.path);
+//       const messages = error.details.map((d) => d.message);
+//       return respond(res, 422, false, "Validation failed", { errors: messages });
+//     }
+
+//     const existing = await FitnessStaff.findById(id);
+
+//     if (!existing) {
+//       if (req.file) deleteFile(req.file.path);
+//       return respond(res, 404, false, "Staff member not found");
+//     }
+
+//     if (value.mobileNumber && value.mobileNumber !== existing.mobileNumber) {
+//       const dup = await FitnessStaff.findOne({
+//         mobileNumber: value.mobileNumber,
+//         _id: { $ne: id },
+//       });
+
+//       if (dup) {
+//         if (req.file) deleteFile(req.file.path);
+//         return respond(res, 409, false, "Mobile number is already used by another staff member");
+//       }
+//     }
+
+//     if (value.emailId && value.emailId !== existing.emailId) {
+//       const dup = await FitnessStaff.findOne({
+//         emailId: value.emailId,
+//         _id: { $ne: id },
+//       });
+
+//       if (dup) {
+//         if (req.file) deleteFile(req.file.path);
+//         return respond(res, 409, false, "Email address is already used by another staff member");
+//       }
+//     }
+
+//     if (!value.password) {
+//       delete value.password;
+//     }
+
+//     if (req.file) {
+//       deleteFile(existing.profilePhoto);
+//       value.profilePhoto = buildPhotoPath(req.file.filename);
+//     }
+
+//     const updated = await FitnessStaff.findByIdAndUpdate(
+//       id,
+//       { $set: value },
+//       { new: true, runValidators: true }
+//     );
+
+//     return respond(res, 200, true, "Staff member updated successfully", updated);
+//   } catch (err) {
+//     if (req.file) deleteFile(req.file.path);
+//     console.error("[updateFitnessStaff]", err);
+//     return respond(res, 500, false, "Internal server error while updating staff member");
+//   }
+// };
+
+// // ═════════════════════════════════════════════════════════════════════════════
+// // DELETE  DELETE /api/fitness/staff/:id
+// // ═════════════════════════════════════════════════════════════════════════════
+// const deleteFitnessStaff = async (req, res) => {
+//   try {
+//     const { id } = req.params;
+
+//     if (!id.match(/^[0-9a-fA-F]{24}$/)) {
+//       return respond(res, 400, false, "Invalid staff ID format");
+//     }
+
+//     const staff = await FitnessStaff.findById(id);
+
+//     if (!staff) {
+//       return respond(res, 404, false, "Staff member not found");
+//     }
+
+//     deleteFile(staff.profilePhoto);
+
+//     await staff.deleteOne();
+
+//     return respond(res, 200, true, "Staff member deleted successfully");
+//   } catch (err) {
+//     console.error("[deleteFitnessStaff]", err);
+//     return respond(res, 500, false, "Internal server error while deleting staff member");
+//   }
+// };
+
+// module.exports = {
+//   createFitnessStaff,
+//   getFitnessStaff,
+//   getFitnessStaffById,
+//   updateFitnessStaff,
+//   deleteFitnessStaff,
+//   upload,
+// };
+
+/////////////////////
+
+
+
+
+
+
 
 
 
@@ -892,16 +1287,52 @@ const createFitnessStaff = async (req, res) => {
 const getFitnessStaff = async (req, res) => {
   try {
     const page = Math.max(1, parseInt(req.query.page, 10) || 1);
-    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 20));
+
+    let limit = parseInt(req.query.limit, 10) || 5;
+    if (limit < 5) limit = 5;
+    if (limit > 100) limit = 100;
+
     const skip = (page - 1) * limit;
 
     const filter = {};
-    if (req.query.status) filter.status = req.query.status;
-    if (req.query.role) filter.role = new RegExp(req.query.role, "i");
-    if (req.query.search) filter.$text = { $search: req.query.search };
+
+    if (req.query.status && req.query.status.trim()) {
+      filter.status = req.query.status.trim();
+    }
+
+    if (req.query.role && req.query.role.trim()) {
+      filter.role = { $regex: req.query.role.trim(), $options: "i" };
+    }
+
+    if (req.query.gender && req.query.gender.trim()) {
+      filter.gender = req.query.gender.trim();
+    }
+
+    if (req.query.employmentType && req.query.employmentType.trim()) {
+      filter.employmentType = {
+        $regex: req.query.employmentType.trim(),
+        $options: "i",
+      };
+    }
+
+    if (req.query.search && req.query.search.trim()) {
+      const search = req.query.search.trim();
+
+      filter.$or = [
+        { fullName: { $regex: search, $options: "i" } },
+        { role: { $regex: search, $options: "i" } },
+        { employeeId: { $regex: search, $options: "i" } },
+        { mobileNumber: { $regex: search, $options: "i" } },
+        { emailId: { $regex: search, $options: "i" } },
+      ];
+    }
 
     const [staff, total] = await Promise.all([
-      FitnessStaff.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
+      FitnessStaff.find(filter)
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
       FitnessStaff.countDocuments(filter),
     ]);
 
@@ -912,6 +1343,15 @@ const getFitnessStaff = async (req, res) => {
         page,
         limit,
         totalPages: Math.ceil(total / limit),
+        hasNextPage: page < Math.ceil(total / limit),
+        hasPrevPage: page > 1,
+      },
+      filters: {
+        status: req.query.status || "",
+        role: req.query.role || "",
+        gender: req.query.gender || "",
+        employmentType: req.query.employmentType || "",
+        search: req.query.search || "",
       },
     });
   } catch (err) {

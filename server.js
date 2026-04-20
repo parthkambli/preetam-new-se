@@ -3,6 +3,7 @@
   const dotenv = require('dotenv');
   const connectDB = require('./config/db');
   const { startMembershipCron } = require('./utils/updateMembershipStatuses');
+  const { startBackupCron } = require('./scripts/dbBackup');
 
   const authRoutes = require('./routes/auth');
   const schoolDashboardRoutes = require('./routes/schoolDashboardRoutes');
@@ -45,6 +46,7 @@
   connectDB();
 
   startMembershipCron();
+  startBackupCron();
 
   const app = express();
 
