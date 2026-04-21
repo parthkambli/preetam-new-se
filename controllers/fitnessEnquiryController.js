@@ -424,9 +424,14 @@
 //       error: err.message
 //     });
 //   }
-// };
+// };////////
 
 ///old
+
+
+
+
+
 
 
 
@@ -444,34 +449,23 @@ const FitnessActivity = require('../models/FitnessActivity');
 const FitnessStaff = require('../models/FitnessStaff');
 
 /**
- * @desc    Get all fitness enquiries with filtering + pagination
+ * @desc    Get all fitness enquiries with filtering
  * @route   GET /api/fitness/enquiry
  * @access  Private
  */
 exports.getAllEnquiries = async (req, res) => {
   try {
-    const {
-      status,
-      source,
-      search,
-      date,
-      interestedActivity,
-      responsibleStaff,
-      page = 1,
-      limit = 10
-    } = req.query;
+    const { status, source, search, date, interestedActivity } = req.query;
 
     const query = { organizationId: req.organizationId };
 
-    // Filters
     if (status) query.status = status;
     if (source) query.source = source;
 
     if (search) {
       query.$or = [
         { fullName: { $regex: search, $options: 'i' } },
-        { mobile: { $regex: search, $options: 'i' } },
-        { enquiryId: { $regex: search, $options: 'i' } }
+        { mobile: { $regex: search, $options: 'i' } }
       ];
     }
 
@@ -482,51 +476,18 @@ exports.getAllEnquiries = async (req, res) => {
       query.enquiryDate = { $gte: start, $lt: end };
     }
 
-    if (req.query.fromDate || req.query.toDate) {
-  query.enquiryDate = {};
-
-  if (req.query.fromDate) {
-    const start = new Date(req.query.fromDate);
-    start.setHours(0, 0, 0, 0);
-    query.enquiryDate.$gte = start;
-  }
-
-  if (req.query.toDate) {
-    const end = new Date(req.query.toDate);
-    end.setHours(23, 59, 59, 999);
-    query.enquiryDate.$lte = end;
-  }
-}
-
     if (interestedActivity) {
       if (mongoose.Types.ObjectId.isValid(interestedActivity)) {
+        query.interestedActivity = interestedActivity;
+      } else {
         query.interestedActivity = interestedActivity;
       }
     }
 
-    if (responsibleStaff) {
-      if (mongoose.Types.ObjectId.isValid(responsibleStaff)) {
-        query.responsibleStaff = responsibleStaff;
-      }
-    }
-
-    // Pagination
-    const parsedPage = Math.max(parseInt(page, 10) || 1, 1);
-
-    let parsedLimit = parseInt(limit, 10) || 10;
-    if (parsedLimit < 5) parsedLimit = 5;
-    if (parsedLimit > 100) parsedLimit = 100;
-
-    const skip = (parsedPage - 1) * parsedLimit;
-
-    const total = await FitnessEnquiry.countDocuments(query);
-
     const enquiries = await FitnessEnquiry.find(query)
       .populate('interestedActivity', 'name activityName')
       .populate('responsibleStaff', 'fullName name')
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(parsedLimit);
+      .sort({ createdAt: -1 });
 
     const formattedEnquiries = enquiries.map((enq) => ({
       ...enq.toObject(),
@@ -540,22 +501,10 @@ exports.getAllEnquiries = async (req, res) => {
           : enq.responsibleStaff || '-',
     }));
 
-    res.json({
-      success: true,
-      data: formattedEnquiries,
-      pagination: {
-        total,
-        page: parsedPage,
-        limit: parsedLimit,
-        totalPages: Math.ceil(total / parsedLimit),
-        hasNextPage: parsedPage < Math.ceil(total / parsedLimit),
-        hasPrevPage: parsedPage > 1
-      }
-    });
+    res.json(formattedEnquiries);
   } catch (err) {
     console.error('Error fetching fitness enquiries:', err);
     res.status(500).json({
-      success: false,
       message: 'Server error while fetching enquiries',
       error: err.message
     });

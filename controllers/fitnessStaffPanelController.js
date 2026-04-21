@@ -82,127 +82,594 @@
 ///////////////
 
 
-const mongoose = require('mongoose');
-const FitnessActivity = require('../models/FitnessActivity');
 
-function getLoggedInStaffId(req) {
-  return (
-    req.admin?.staffId ||
-    req.admin?._id ||
-    req.admin?.id ||
-    req.admin?.userId ||
-    null
-  );
+
+
+
+
+
+/////////////////////////
+
+// // 
+// const mongoose = require('mongoose');
+// const FitnessActivity = require('../models/FitnessActivity');
+
+// function getLoggedInStaffId(req) {
+//   return (
+//     req.admin?.staffId ||
+//     req.admin?._id ||
+//     req.admin?.id ||
+//     req.admin?.userId ||
+//     null
+//   );
+// }
+
+// exports.getMySchedule = async (req, res) => {
+//   try {
+//     const rawStaffId = getLoggedInStaffId(req);
+
+//     if (!rawStaffId) {
+//       return res.status(401).json({
+//         success: false,
+//         message: 'Staff ID not found in token'
+//       });
+//     }
+
+//     if (!mongoose.Types.ObjectId.isValid(rawStaffId)) {
+//       return res.status(400).json({
+//         success: false,
+//         message: 'Invalid staff ID in token'
+//       });
+//     }
+
+//     const staffId = new mongoose.Types.ObjectId(rawStaffId);
+
+//     const activities = await FitnessActivity.find({
+//       'slots.staffId': staffId
+//     });
+
+//     const data = [];
+
+//     activities.forEach((activity) => {
+//       activity.slots.forEach((slot) => {
+//         if (slot.staffId && String(slot.staffId) === String(staffId)) {
+//           data.push({
+//             activityId: activity._id,
+//             activityName: activity.name,
+//             capacity: activity.capacity,
+//             startTime: slot.startTime,
+//             endTime: slot.endTime,
+//             slotId: slot._id
+//           });
+//         }
+//       });
+//     });
+
+//     return res.json({
+//       success: true,
+//       data
+//     });
+//   } catch (error) {
+//     console.error('getMySchedule error:', error);
+//     console.log('LOGGED IN STAFF TOKEN DATA 👉', req.admin);
+
+//     return res.status(500).json({
+//       success: false,
+//       message: 'Failed to fetch schedule'
+//     });
+//   }
+// };
+
+// exports.getAvailableActivities = async (req, res) => {
+//   try {
+//     const rawStaffId = getLoggedInStaffId(req);
+
+//     if (!rawStaffId) {
+//       return res.status(401).json({
+//         success: false,
+//         message: 'Staff ID not found in token'
+//       });
+//     }
+
+//     if (!mongoose.Types.ObjectId.isValid(rawStaffId)) {
+//       return res.status(400).json({
+//         success: false,
+//         message: 'Invalid staff ID in token'
+//       });
+//     }
+
+//     const staffId = new mongoose.Types.ObjectId(rawStaffId);
+
+//     const activities = await FitnessActivity.find({
+//       'slots.staffId': staffId
+//     });
+
+//     const data = [];
+
+//     activities.forEach((activity) => {
+//       activity.slots.forEach((slot) => {
+//         if (slot.staffId && String(slot.staffId) === String(staffId)) {
+//           data.push({
+//             activityId: activity._id,
+//             activityName: activity.name,
+//             capacity: activity.capacity,
+//             startTime: slot.startTime,
+//             endTime: slot.endTime,
+//             slotId: slot._id
+//           });
+//         }
+//       });
+//     });
+
+//     return res.json({
+//       success: true,
+//       data
+//     });
+//   } catch (error) {
+//     console.error('getAvailableActivities error:', error);
+//     console.log('LOGGED IN STAFF TOKEN DATA 👉', req.admin);
+
+//     return res.status(500).json({
+//       success: false,
+//       message: 'Failed to fetch activities'
+//     });
+//   }
+// };
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// const mongoose = require("mongoose");
+// const FitnessActivity = require("../models/FitnessActivity");
+// const FitnessBooking = require("../models/FitnessBooking");
+// const FitnessStaff = require("../models/FitnessStaff"); // <-- add this
+
+// function getTodayDateString() {
+//   const today = new Date();
+//   const year = today.getFullYear();
+//   const month = String(today.getMonth() + 1).padStart(2, "0");
+//   const day = String(today.getDate()).padStart(2, "0");
+//   return `${year}-${month}-${day}`;
+// }
+
+// async function resolveLoggedInStaffObjectId(req) {
+//   const tokenStaffId = req.admin?.userId;
+
+//   const tokenUserId = req.admin?.userId || null;
+
+//   console.log("REQ.ADMIN 👉", req.admin);
+//   console.log("TOKEN STAFF ID 👉", tokenStaffId);
+//   console.log("TOKEN USER ID 👉", tokenUserId);
+
+//   // 1) Try direct Mongo ObjectId from token
+//   if (tokenStaffId && mongoose.Types.ObjectId.isValid(tokenStaffId)) {
+//     const staffById = await FitnessStaff.findById(tokenStaffId).select("_id userId");
+//     if (staffById) {
+//       console.log("STAFF FOUND BY TOKEN ID 👉", staffById._id.toString());
+//       return staffById._id;
+//     }
+//   }
+
+//   // 2) Fallback: find by userId from token
+//   if (tokenUserId) {
+//     const staffByUserId = await FitnessStaff.findOne({ userId: tokenUserId }).select("_id userId");
+//     if (staffByUserId) {
+//       console.log("STAFF FOUND BY USER ID 👉", staffByUserId._id.toString());
+//       return staffByUserId._id;
+//     }
+//   }
+
+//   return null;
+// }
+
+// exports.getMySchedule = async (req, res) => {
+//   try {
+//     const staffObjectId = await resolveLoggedInStaffObjectId(req);
+
+//     if (!staffObjectId) {
+//       return res.status(404).json({
+//         success: false,
+//         message: "Logged in staff not found",
+//       });
+//     }
+
+//     const selectedDate = req.query.date || getTodayDateString();
+
+//     console.log("ORG ID 👉", req.organizationId);
+//     console.log("DB NAME 👉", mongoose.connection.name);
+//     console.log("FINAL STAFF OBJECT ID 👉", staffObjectId.toString());
+//     console.log("SELECTED DATE 👉", selectedDate);
+
+//     const activities = await FitnessActivity.find({
+//       "slots.staffId": staffObjectId,
+//     }).lean();
+
+//     console.log("FOUND ACTIVITIES 👉", activities.length);
+
+//     const data = [];
+
+//     for (const activity of activities) {
+//       for (const slot of activity.slots || []) {
+//         if (slot.staffId && String(slot.staffId) === String(staffObjectId)) {
+//           const bookings = await FitnessBooking.find({
+//             activityId: activity._id,
+//             slotId: slot._id,
+//             date: selectedDate,
+//           })
+//             .populate("memberId", "name")
+//             .lean();
+
+//           data.push({
+//             activityId: activity._id,
+//             activityName: activity.name,
+//             capacity: activity.capacity,
+//             startTime: slot.startTime,
+//             endTime: slot.endTime,
+//             slotId: slot._id,
+//             participants: bookings.map((booking) => ({
+//               bookingId: booking._id,
+//               name: booking.memberId?.name || booking.customerName || "Participant",
+//               customerName: booking.customerName || "",
+//               phone: booking.phone || "",
+//             })),
+//           });
+//         }
+//       }
+//     }
+
+//     return res.json({
+//       success: true,
+//       date: selectedDate,
+//       count: data.length,
+//       data,
+//     });
+//   } catch (error) {
+//     console.error("getMySchedule error:", error);
+//     return res.status(500).json({
+//       success: false,
+//       message: "Failed to fetch schedule",
+//     });
+//   }
+// };
+
+// exports.getAvailableActivities = async (req, res) => {
+//   try {
+//     const staffId = await getLoggedInStaffObjectId(req);
+
+//     if (!staffId) {
+//       return res.status(401).json({
+//         success: false,
+//         message: "Staff not found"
+//       });
+//     }
+//     const selectedDate = req.query.date || getTodayDateString();
+
+//     const activities = await FitnessActivity.find({
+//       "slots.staffId": staffObjectId,
+//     }).lean();
+
+//     const data = [];
+
+//     for (const activity of activities) {
+//       for (const slot of activity.slots || []) {
+//         if (slot.staffId && String(slot.staffId) === String(staffObjectId)) {
+//           const bookedCount = await FitnessBooking.countDocuments({
+//             activityId: activity._id,
+//             slotId: slot._id,
+//             date: selectedDate,
+//           });
+
+//           data.push({
+//             activityId: activity._id,
+//             activityName: activity.name,
+//             capacity: activity.capacity,
+//             startTime: slot.startTime,
+//             endTime: slot.endTime,
+//             slotId: slot._id,
+//             bookedCount,
+//             remainingSeats: Math.max(activity.capacity - bookedCount, 0),
+//           });
+//         }
+//       }
+//     }
+
+//     return res.json({
+//       success: true,
+//       date: selectedDate,
+//       count: data.length,
+//       data,
+//     });
+//   } catch (error) {
+//     console.error("getAvailableActivities error:", error);
+//     return res.status(500).json({
+//       success: false,
+//       message: "Failed to fetch activities",
+//     });
+//   }
+// };
+
+
+
+
+
+
+
+const mongoose = require("mongoose");
+const User = require("../models/User");
+const FitnessActivity = require("../models/FitnessActivity");
+const FitnessBooking = require("../models/FitnessBooking");
+const FitnessStaff = require("../models/FitnessStaff");
+
+function getTodayDateString() {
+  return new Date().toISOString().split("T")[0];
 }
+
+// async function resolveLoggedInStaffObjectId(req) {
+//   const tokenUserId = req.admin?.userId || null;
+//   const tokenId = req.admin?.id || null;
+
+//   console.log("REQ.ADMIN 👉", req.admin);
+//   console.log("TOKEN USER ID 👉", tokenUserId);
+//   console.log("TOKEN ID 👉", tokenId);
+//   console.log("FITNESS STAFF COLLECTION 👉", FitnessStaff.collection.name);
+
+//   // 1) Try direct mongo _id from token
+//   if (tokenId && mongoose.Types.ObjectId.isValid(tokenId)) {
+//     const byId = await FitnessStaff.findById(tokenId).lean();
+//     if (byId) {
+//       console.log("STAFF FOUND BY _id 👉", byId._id.toString());
+//       return byId._id;
+//     }
+//   }
+
+//   // 2) Try common login fields
+//   if (tokenUserId) {
+//     const byLoginField = await FitnessStaff.findOne({
+//       $or: [
+//         { userId: tokenUserId },
+//         { staffId: tokenUserId },
+//         { username: tokenUserId },
+//         { userName: tokenUserId },
+//         { employeeId: tokenUserId },
+//         { loginId: tokenUserId },
+//         { code: tokenUserId },
+//       ],
+//     }).lean();
+
+//     if (byLoginField) {
+//       console.log("STAFF FOUND BY LOGIN FIELD 👉", byLoginField._id.toString());
+//       return byLoginField._id;
+//     }
+//   }
+
+//   // 3) Debug: show sample docs so we can see actual fields
+//   const sampleDocs = await FitnessStaff.find({})
+//     .select("_id userId staffId username userName employeeId loginId code fullName name")
+//     .limit(5)
+//     .lean();
+
+//   console.log("FITNESS STAFF SAMPLE DOCS 👉", sampleDocs);
+
+//   return null;
+// }
+
+
+const resolveLoggedInStaffObjectId = async (req) => {
+  const userId = req.admin.userId;
+  const organizationId = req.organizationId;
+
+  const user = await User.findOne({
+    userId,
+    organizationId,
+    role: "FitnessStaff",
+  }).lean();
+
+  if (!user || !user.linkedId) {
+    return null;
+  }
+
+  return mongoose.Types.ObjectId.isValid(user.linkedId)
+    ? new mongoose.Types.ObjectId(user.linkedId)
+    : null;
+};
+
+
+// exports.getMySchedule = async (req, res) => {
+//   try {
+//     const staffObjectId = await resolveLoggedInStaffObjectId(req);
+
+//     if (!staffObjectId) {
+//       return res.status(404).json({
+//         success: false,
+//         message: "Staff not found",
+//       });
+//     }
+
+//     const selectedDate = req.query.date || getTodayDateString();
+
+//     const activities = await FitnessActivity.find({
+//       "slots.staffId": staffObjectId,
+//     }).lean();
+
+//     const data = [];
+
+//     for (const activity of activities) {
+//       for (const slot of activity.slots || []) {
+//         if (String(slot.staffId) === String(staffObjectId)) {
+//           const bookings = await FitnessBooking.find({
+//             activityId: activity._id,
+//             slotId: slot._id,
+//             date: selectedDate,
+//           })
+//             .populate("memberId", "name")
+//             .lean();
+
+//           data.push({
+//             activityId: activity._id,
+//             activityName: activity.name,
+//             capacity: activity.capacity,
+//             startTime: slot.startTime,
+//             endTime: slot.endTime,
+//             slotId: slot._id,
+//             participants: bookings.map((b) => ({
+//               bookingId: b._id,
+//               name: b.memberId?.name || b.customerName || "Participant",
+//               customerName: b.customerName || "",
+//               phone: b.phone || "",
+//             })),
+//           });
+//         }
+//       }
+//     }
+
+//     return res.json({
+//       success: true,
+//       count: data.length,
+//       data,
+//     });
+//   } catch (error) {
+//     console.error("getMySchedule error:", error);
+//     return res.status(500).json({
+//       success: false,
+//       message: "Failed to fetch schedule",
+//     });
+//   }
+// };
+
+
+
+
+
 
 exports.getMySchedule = async (req, res) => {
   try {
-    const rawStaffId = getLoggedInStaffId(req);
+    const staffObjectId = await resolveLoggedInStaffObjectId(req);
 
-    if (!rawStaffId) {
-      return res.status(401).json({
+    if (!staffObjectId) {
+      return res.status(404).json({
         success: false,
-        message: 'Staff ID not found in token'
+        message: "Staff not found",
       });
     }
 
-    if (!mongoose.Types.ObjectId.isValid(rawStaffId)) {
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid staff ID in token'
-      });
-    }
-
-    const staffId = new mongoose.Types.ObjectId(rawStaffId);
+    const selectedDate = req.query.date || getTodayDateString();
 
     const activities = await FitnessActivity.find({
-      'slots.staffId': staffId
-    });
+      "slots.staffId": staffObjectId,
+    }).lean();
 
     const data = [];
 
-    activities.forEach((activity) => {
-      activity.slots.forEach((slot) => {
-        if (slot.staffId && String(slot.staffId) === String(staffId)) {
+    for (const activity of activities) {
+      for (const slot of activity.slots || []) {
+        if (String(slot.staffId) === String(staffObjectId)) {
+          const bookings = await FitnessBooking.find({
+            activityId: activity._id,
+            slotId: slot._id,
+            date: selectedDate,
+          })
+            .populate("memberId", "name")
+            .lean();
+
           data.push({
             activityId: activity._id,
             activityName: activity.name,
             capacity: activity.capacity,
             startTime: slot.startTime,
             endTime: slot.endTime,
-            slotId: slot._id
+            slotId: slot._id,
+            participants: bookings.map((b) => ({
+              bookingId: b._id,
+              name: b.memberId?.name || b.customerName || "Participant",
+              customerName: b.customerName || "",
+              phone: b.phone || "",
+            })),
           });
         }
-      });
-    });
+      }
+    }
 
     return res.json({
       success: true,
-      data
+      count: data.length,
+      data,
     });
   } catch (error) {
-    console.error('getMySchedule error:', error);
-    console.log('LOGGED IN STAFF TOKEN DATA 👉', req.admin);
-
+    console.error("getMySchedule error:", error);
     return res.status(500).json({
       success: false,
-      message: 'Failed to fetch schedule'
+      message: "Failed to fetch schedule",
     });
   }
 };
 
 exports.getAvailableActivities = async (req, res) => {
   try {
-    const rawStaffId = getLoggedInStaffId(req);
+    const staffObjectId = await resolveLoggedInStaffObjectId(req);
 
-    if (!rawStaffId) {
-      return res.status(401).json({
+    if (!staffObjectId) {
+      return res.status(404).json({
         success: false,
-        message: 'Staff ID not found in token'
+        message: "Staff not found",
       });
     }
 
-    if (!mongoose.Types.ObjectId.isValid(rawStaffId)) {
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid staff ID in token'
-      });
-    }
-
-    const staffId = new mongoose.Types.ObjectId(rawStaffId);
+    const selectedDate = req.query.date || getTodayDateString();
 
     const activities = await FitnessActivity.find({
-      'slots.staffId': staffId
-    });
+      "slots.staffId": staffObjectId,
+    }).lean();
 
     const data = [];
 
-    activities.forEach((activity) => {
-      activity.slots.forEach((slot) => {
-        if (slot.staffId && String(slot.staffId) === String(staffId)) {
+    for (const activity of activities) {
+      for (const slot of activity.slots || []) {
+        if (String(slot.staffId) === String(staffObjectId)) {
+          const bookedCount = await FitnessBooking.countDocuments({
+            activityId: activity._id,
+            slotId: slot._id,
+            date: selectedDate,
+          });
+
           data.push({
             activityId: activity._id,
             activityName: activity.name,
             capacity: activity.capacity,
             startTime: slot.startTime,
             endTime: slot.endTime,
-            slotId: slot._id
+            slotId: slot._id,
+            bookedCount,
+            remainingSeats: Math.max(activity.capacity - bookedCount, 0),
           });
         }
-      });
-    });
+      }
+    }
 
     return res.json({
       success: true,
-      data
+      count: data.length,
+      data,
     });
   } catch (error) {
-    console.error('getAvailableActivities error:', error);
-    console.log('LOGGED IN STAFF TOKEN DATA 👉', req.admin);
-
+    console.error("getAvailableActivities error:", error);
     return res.status(500).json({
       success: false,
-      message: 'Failed to fetch activities'
+      message: "Failed to fetch activities",
     });
   }
 };
