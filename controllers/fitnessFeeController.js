@@ -2157,8 +2157,20 @@ exports.getFitnessFeeTypes = async (req, res) => {
       FeeType.countDocuments(query)
     ]);
 
-    setPaginationHeaders(res, total, page, limit);
-    res.json(types);
+    const totalPages = Math.ceil(total / limit);
+
+    res.json({
+      success: true,
+      data: types,
+      pagination: {
+        total,
+        page,
+        limit,
+        totalPages,
+        hasNextPage: page < totalPages,
+        hasPrevPage: page > 1
+      }
+    });
   } catch (err) {
     logError('getFitnessFeeTypes', err);
     res.status(500).json({ message: 'Failed to fetch fee types. Please try again.' });
@@ -2356,8 +2368,6 @@ exports.getFitnessAllotments = async (req, res) => {
       query.responsibleStaff = responsibleStaff;
     }
 
-    let memberIds = null;
-
     if (search?.trim()) {
       const searchRegex = new RegExp(escapeRegex(search.trim()), 'i');
 
@@ -2369,7 +2379,7 @@ exports.getFitnessAllotments = async (req, res) => {
         ]
       }).select('_id');
 
-      memberIds = matchedMembers.map(m => m._id);
+      const memberIds = matchedMembers.map(m => m._id);
 
       query.$or = [
         { description: searchRegex },
@@ -2397,8 +2407,20 @@ exports.getFitnessAllotments = async (req, res) => {
         '-',
     }));
 
-    setPaginationHeaders(res, total, page, limit);
-    res.json(formattedAllotments);
+    const totalPages = Math.ceil(total / limit);
+
+    res.json({
+      success: true,
+      data: formattedAllotments,
+      pagination: {
+        total,
+        page,
+        limit,
+        totalPages,
+        hasNextPage: page < totalPages,
+        hasPrevPage: page > 1
+      }
+    });
   } catch (err) {
     logError('getFitnessAllotments', err);
     res.status(500).json({ message: 'Failed to fetch allotments. Please try again.' });
@@ -2635,8 +2657,20 @@ exports.getFitnessPayments = async (req, res) => {
       FeePayment.countDocuments(query)
     ]);
 
-    setPaginationHeaders(res, total, page, limit);
-    res.json(payments);
+    const totalPages = Math.ceil(total / limit);
+
+    res.json({
+      success: true,
+      data: payments,
+      pagination: {
+        total,
+        page,
+        limit,
+        totalPages,
+        hasNextPage: page < totalPages,
+        hasPrevPage: page > 1
+      }
+    });
   } catch (err) {
     logError('getFitnessPayments', err);
     res.status(500).json({ message: 'Failed to fetch payments. Please try again.' });
