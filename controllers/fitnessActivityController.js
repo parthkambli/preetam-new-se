@@ -1286,6 +1286,46 @@ exports.getBookings = async (req, res) => {
   }
 };
 
+
+// =========================
+// 📊 DASHBOARD BOOKINGS (NO PAGINATION)
+// =========================
+exports.getAllBookingsForDashboard = async (req, res) => {
+  try {
+    const bookings = await FitnessBooking.find({})
+      .populate('activityId')
+      .sort({ createdAt: -1 });
+
+    const formatted = bookings.map(b => {
+      let activityName = 'N/A';
+      let slotTime = 'N/A';
+
+      if (b.activityId && b.activityId.slots) {
+        activityName = b.activityId.name;
+        const slot = b.activityId.slots.id(b.slotId);
+        if (slot) slotTime = `${slot.startTime} - ${slot.endTime}`;
+      }
+
+      return {
+        _id:         b._id,
+        memberId:    b.memberId?.name || b.customerName,
+        customerName: b.customerName,
+        activityName,
+        slotTime,
+        staffName: b.staffId?.fullName || '—',
+        date:        b.date,
+        isRecurring: b.isRecurring,
+        isException: b.isException
+      };
+    });
+
+    res.json({ success: true, data: formatted });
+  } catch (err) {
+    console.error("Dashboard Booking Error:", err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
 /* =========================
    📋 CANCEL BOOKING
 ========================= */
