@@ -2351,7 +2351,7 @@
 //     if (!isValidObjectId(req.params.id)) {
 //       return res.status(400).json({ message: 'Invalid member ID.' });
 //     }
- 
+
 //     const member = await FitnessMember.findOne({
 //       _id: req.params.id,
 //       organizationId: req.organizationId,
@@ -2361,11 +2361,11 @@
 //       .populate('activityFees.feeType', 'description annual monthly weekly daily hourly')
 //       .populate('activityFees.staff',   'fullName name')
 //       .select('-password');
- 
+
 //     if (!member) return res.status(404).json({ message: 'Member not found.' });
- 
+
 //     const obj = applyComputedStatuses(member.toObject());
- 
+
 //     res.json(obj);
 //   } catch (err) {
 //     console.error('getMemberById error:', err);
@@ -2373,7 +2373,7 @@
 //     res.status(500).json({ message: 'Server error while fetching member.' });
 //   }
 // };
- 
+
 
 // // ─── CREATE ───────────────────────────────────────────────────────────────────
 // exports.createMember = async (req, res) => {
@@ -2420,7 +2420,7 @@
 //         if (req.file) deleteOldPhoto(`/uploads/members/${req.file.filename}`);
 //         return res.status(400).json({ message: fieldErrors.join(' ') });
 //       }
-      
+
 
 //       // ── Duplicate mobile check ──────────────────────────────────────────
 //       const existingMobile = await FitnessMember.findOne({
@@ -3016,17 +3016,16 @@
 
 
 
-
 // controllers/fitnessMemberController.js
-const fs   = require('fs');
+const fs = require('fs');
 const path = require('path');
 const mongoose = require('mongoose');
 
-const FitnessMember    = require('../models/FitnessMember');
-const FitnessEnquiry   = require('../models/FitnessEnquiry');
-const FeeAllotment     = require('../models/FitnessFeeAllotment');
-const FeePayment       = require('../models/FitnessFeePayment');
-const FitnessBooking   = require('../models/FitnessBooking');
+const FitnessMember = require('../models/FitnessMember');
+const FitnessEnquiry = require('../models/FitnessEnquiry');
+const FeeAllotment = require('../models/FitnessFeeAllotment');
+const FeePayment = require('../models/FitnessFeePayment');
+const FitnessBooking = require('../models/FitnessBooking');
 
 const { generateRecurringBookings } = require('./fitnessActivityController');
 
@@ -3035,7 +3034,7 @@ const deleteOldPhoto = (photoPath) => {
   // Now stored as /uploads/fitness/members/filename
   if (photoPath && photoPath.startsWith('/uploads/')) {
     const fullPath = path.join(__dirname, '..', photoPath);
-    try { if (fs.existsSync(fullPath)) fs.unlinkSync(fullPath); } catch (_) {}
+    try { if (fs.existsSync(fullPath)) fs.unlinkSync(fullPath); } catch (_) { }
   }
 };
 
@@ -3049,7 +3048,7 @@ const computeActivityMembershipStatus = (af) => {
   today.setHours(0, 0, 0, 0);
 
   const start = new Date(af.startDate); start.setHours(0, 0, 0, 0);
-  const end   = new Date(af.endDate);   end.setHours(23, 59, 59, 999);
+  const end = new Date(af.endDate); end.setHours(23, 59, 59, 999);
 
   return (today >= start && today <= end) ? 'Active' : 'Inactive';
 };
@@ -3073,30 +3072,30 @@ const validateActivityFee = (af, index) => {
   }
 
   if (!af.startDate) return { error: `${prefix}: start date is required.` };
-  if (!af.endDate)   return { error: `${prefix}: end date is required.` };
+  if (!af.endDate) return { error: `${prefix}: end date is required.` };
 
   const start = new Date(af.startDate);
-  const end   = new Date(af.endDate);
+  const end = new Date(af.endDate);
 
   if (isNaN(start.getTime())) return { error: `${prefix}: start date is invalid.` };
-  if (isNaN(end.getTime()))   return { error: `${prefix}: end date is invalid.` };
+  if (isNaN(end.getTime())) return { error: `${prefix}: end date is invalid.` };
 
   if (end < start) {
     return { error: `${prefix}: end date cannot be before start date.` };
   }
 
-  const planFee     = Number(af.planFee)     || 0;
-  const discount    = Number(af.discount)    || 0;
+  const planFee = Number(af.planFee) || 0;
+  const discount = Number(af.discount) || 0;
   const finalAmount = Number(af.finalAmount) || 0;
 
-  if (planFee < 0)  return { error: `${prefix}: plan fee cannot be negative.` };
+  if (planFee < 0) return { error: `${prefix}: plan fee cannot be negative.` };
   if (discount < 0) return { error: `${prefix}: discount cannot be negative.` };
   if (discount > planFee && planFee > 0) {
     return { error: `${prefix}: discount (₹${discount}) cannot exceed plan fee (₹${planFee}).` };
   }
 
-  const validPlans    = ['Annual', 'Monthly', 'Weekly', 'Daily', 'Hourly'];
-  const validModes    = ['Cash', 'Bank Transfer', ''];
+  const validPlans = ['Annual', 'Monthly', 'Weekly', 'Daily', 'Hourly'];
+  const validModes = ['Cash', 'Bank Transfer', ''];
   const validStatuses = ['Paid', 'Pending'];
 
   if (af.plan && !validPlans.includes(af.plan)) {
@@ -3127,27 +3126,27 @@ const validateActivityFee = (af, index) => {
 
   const membershipStatus = computeActivityMembershipStatus({
     paymentStatus: af.paymentStatus || 'Pending',
-    startDate:     start,
-    endDate:       end,
+    startDate: start,
+    endDate: end,
   });
 
   return {
     data: {
-      activity:        af.activity,
-      feeType:         af.feeType  || null,
-      plan:            af.plan     || 'Monthly',
+      activity: af.activity,
+      feeType: af.feeType || null,
+      plan: af.plan || 'Monthly',
       planFee,
       discount,
-      finalAmount:     Math.max(0, planFee - discount),
-      paymentStatus:   af.paymentStatus  || 'Pending',
-      paymentMode:     af.paymentMode    || '',
-      paymentDate:     af.paymentDate    ? new Date(af.paymentDate) : null,
-      planNotes:       af.planNotes      || '',
-      startDate:       start,
-      endDate:         end,
+      finalAmount: Math.max(0, planFee - discount),
+      paymentStatus: af.paymentStatus || 'Pending',
+      paymentMode: af.paymentMode || '',
+      paymentDate: af.paymentDate ? new Date(af.paymentDate) : null,
+      planNotes: af.planNotes || '',
+      startDate: start,
+      endDate: end,
       membershipStatus,
-      staff:           af.staff || null,
-      slot:            af.slot  || null,
+      staff: af.staff || null,
+      slot: af.slot || null,
     },
   };
 };
@@ -3180,27 +3179,27 @@ const syncFeesToTables = async (member, orgId, previousAllotmentIds = []) => {
       allotment = await FeeAllotment.findByIdAndUpdate(
         af.allotmentId,
         {
-          memberId:         member._id,
-          feeTypeId:        af.feeType,
-          amount:           af.finalAmount || af.planFee || 0,
+          memberId: member._id,
+          feeTypeId: af.feeType,
+          amount: af.finalAmount || af.planFee || 0,
           feePlan,
-          dueDate:          af.endDate,
+          dueDate: af.endDate,
           responsibleStaff: af.staff || null,
-          organizationId:   orgId,
-          status:           af.paymentStatus === 'Paid' ? 'Paid' : 'Pending',
+          organizationId: orgId,
+          status: af.paymentStatus === 'Paid' ? 'Paid' : 'Pending',
         },
         { new: true }
       );
     } else {
       allotment = await FeeAllotment.create({
-        memberId:         member._id,
-        feeTypeId:        af.feeType,
-        amount:           af.finalAmount || af.planFee || 0,
+        memberId: member._id,
+        feeTypeId: af.feeType,
+        amount: af.finalAmount || af.planFee || 0,
         feePlan,
-        dueDate:          af.endDate,
+        dueDate: af.endDate,
         responsibleStaff: af.staff || null,
-        organizationId:   orgId,
-        status:           af.paymentStatus === 'Paid' ? 'Paid' : 'Pending',
+        organizationId: orgId,
+        status: af.paymentStatus === 'Paid' ? 'Paid' : 'Pending',
       });
 
       member.activityFees[i].allotmentId = allotment._id;
@@ -3210,9 +3209,9 @@ const syncFeesToTables = async (member, orgId, previousAllotmentIds = []) => {
       await FeePayment.findOneAndUpdate(
         { allotmentId: allotment._id, organizationId: orgId },
         {
-          memberId:    member._id,
+          memberId: member._id,
           allotmentId: allotment._id,
-          amount:      af.finalAmount || af.planFee,
+          amount: af.finalAmount || af.planFee,
           paymentMode: af.paymentMode || 'Cash',
           paymentDate: af.paymentDate || new Date(),
           organizationId: orgId,
@@ -3249,7 +3248,7 @@ const createRecurringSlotBookings = async (member, activityFeesSerialized) => {
       if (!af.slot || !af.activity) continue;
 
       await FitnessBooking.deleteMany({
-        memberId:         member._id,
+        memberId: member._id,
         activityFeeIndex: i,
       });
 
@@ -3309,6 +3308,7 @@ exports.getAllMembers = async (req, res) => {
       query.$or = [
         { name: { $regex: search, $options: 'i' } },
         { mobile: { $regex: search, $options: 'i' } },
+        { userId: { $regex: search, $options: 'i' } },
         { memberId: { $regex: search, $options: 'i' } },
       ];
     }
@@ -3333,18 +3333,24 @@ exports.getAllMembers = async (req, res) => {
       .select('-password');
 
     const result = members.map((m) => applyComputedStatuses(m.toObject()));
+    const totalPages = Math.ceil(total / parsedLimit);
 
-    res.set('X-Total-Count', String(total));
-    res.set('X-Page', String(parsedPage));
-    res.set('X-Limit', String(parsedLimit));
-    res.set('X-Total-Pages', String(Math.ceil(total / parsedLimit)));
-    res.set('X-Has-Next-Page', String(parsedPage < Math.ceil(total / parsedLimit)));
-    res.set('X-Has-Prev-Page', String(parsedPage > 1));
-
-    res.json(result);
+    res.json({
+      success: true,
+      data: result,
+      pagination: {
+        total,
+        page: parsedPage,
+        limit: parsedLimit,
+        totalPages,
+        hasNextPage: parsedPage < totalPages,
+        hasPrevPage: parsedPage > 1,
+      },
+    });
   } catch (err) {
     console.error('getAllMembers error:', err);
     res.status(500).json({
+      success: false,
       message: 'Server error while fetching members.'
     });
   }
@@ -3358,12 +3364,12 @@ exports.getMemberById = async (req, res) => {
     }
 
     const member = await FitnessMember.findOne({
-      _id:            req.params.id,
+      _id: req.params.id,
       organizationId: req.organizationId,
     })
       .populate('activityFees.activity', 'name activityName')
-      .populate('activityFees.feeType',  'description annual monthly weekly daily hourly')
-      .populate('activityFees.staff',    'fullName name')
+      .populate('activityFees.feeType', 'description annual monthly weekly daily hourly')
+      .populate('activityFees.staff', 'fullName name')
       .select('-password');
 
     if (!member) return res.status(404).json({ message: 'Member not found.' });
@@ -3421,7 +3427,7 @@ exports.createMember = async (req, res) => {
 
     // ── Duplicate mobile check ────────────────────────────────────────────
     const existingMobile = await FitnessMember.findOne({
-      mobile:         mobile.trim(),
+      mobile: mobile.trim(),
       organizationId: req.organizationId,
     });
     if (existingMobile) {
@@ -3461,7 +3467,7 @@ exports.createMember = async (req, res) => {
     }
 
     // Duplicate activity check
-    const activityIds       = validatedFees.map((af) => af.activity?.toString()).filter(Boolean);
+    const activityIds = validatedFees.map((af) => af.activity?.toString()).filter(Boolean);
     const uniqueActivityIds = new Set(activityIds);
     if (uniqueActivityIds.size !== activityIds.length) {
       if (req.file) deleteOldPhoto(`/uploads/fitness/members/${req.file.filename}`);
@@ -3470,22 +3476,22 @@ exports.createMember = async (req, res) => {
 
     // ── Build member document ─────────────────────────────────────────────
     const memberData = {
-      name:             name.trim(),
-      mobile:           mobile.trim(),
-      email:            email?.trim()   || undefined,
-      age:              age             ? Number(age) : undefined,
-      gender:           gender          || 'Male',
-      address:          address?.trim() || undefined,
-      userId:           userId?.trim()  || mobile.trim(),
-      password:         password.trim(),
-      enquiryId:        enquiryId       || null,
-      membershipPass:   req.body.membershipPass || null,
-      activityFees:     validatedFees,
+      name: name.trim(),
+      mobile: mobile.trim(),
+      email: email?.trim() || undefined,
+      age: age ? Number(age) : undefined,
+      gender: gender || 'Male',
+      address: address?.trim() || undefined,
+      userId: userId?.trim() || mobile.trim(),
+      password: password.trim(),
+      enquiryId: enquiryId || null,
+      membershipPass: req.body.membershipPass || null,
+      activityFees: validatedFees,
       membershipStatus: req.body.membershipPass
         ? 'Active'
         : computeOverallMembershipStatus(validatedFees),
-      numberOfPersons:  req.body.numberOfPersons || 1,
-      organizationId:   req.organizationId,
+      numberOfPersons: req.body.numberOfPersons || 1,
+      organizationId: req.organizationId,
     };
 
     // ── Photo path uses the new folder structure ──────────────────────────
@@ -3516,8 +3522,8 @@ exports.createMember = async (req, res) => {
 
     const created = await FitnessMember.findById(member._id)
       .populate('activityFees.activity', 'name activityName')
-      .populate('activityFees.feeType',  'description')
-      .populate('activityFees.staff',    'fullName name')
+      .populate('activityFees.feeType', 'description')
+      .populate('activityFees.staff', 'fullName name')
       .select('-password');
 
     res.status(201).json({
@@ -3551,7 +3557,7 @@ exports.renewMember = async (req, res) => {
     }
 
     const member = await FitnessMember.findOne({
-      _id:            req.params.id,
+      _id: req.params.id,
       organizationId: req.organizationId,
     });
 
@@ -3566,7 +3572,7 @@ exports.renewMember = async (req, res) => {
     const validatedRenewals = [];
 
     for (let i = 0; i < renewals.length; i++) {
-      const r      = renewals[i];
+      const r = renewals[i];
       const prefix = `Renewal ${i + 1}`;
 
       if (!r.activityId && !r.feeTypeId) {
@@ -3580,7 +3586,7 @@ exports.renewMember = async (req, res) => {
       }
 
       const start = new Date(r.startDate);
-      const end   = new Date(r.endDate);
+      const end = new Date(r.endDate);
 
       if (!r.startDate || isNaN(start.getTime())) {
         return res.status(400).json({ message: `${prefix}: valid start date is required.` });
@@ -3592,7 +3598,7 @@ exports.renewMember = async (req, res) => {
         return res.status(400).json({ message: `${prefix}: end date cannot be before start date.` });
       }
 
-      const planFee  = Number(r.planFee)  || 0;
+      const planFee = Number(r.planFee) || 0;
       const discount = Number(r.discount) || 0;
 
       if (discount > planFee && planFee > 0) {
@@ -3601,26 +3607,26 @@ exports.renewMember = async (req, res) => {
 
       const membershipStatus = computeActivityMembershipStatus({
         paymentStatus: r.paymentStatus || 'Pending',
-        startDate:     start,
-        endDate:       end,
+        startDate: start,
+        endDate: end,
       });
 
       validatedRenewals.push({
-        activity:       r.activityId || null,
-        feeType:        r.feeTypeId  || null,
-        plan:           r.plan       || 'Monthly',
+        activity: r.activityId || null,
+        feeType: r.feeTypeId || null,
+        plan: r.plan || 'Monthly',
         planFee,
         discount,
-        finalAmount:    planFee > 0 ? Math.max(0, planFee - discount) : 0,
-        paymentStatus:  r.paymentStatus || 'Pending',
-        paymentMode:    r.paymentMode   || '',
-        paymentDate:    r.paymentDate   ? new Date(r.paymentDate) : null,
-        planNotes:      r.planNotes     || '',
-        startDate:      start,
-        endDate:        end,
+        finalAmount: planFee > 0 ? Math.max(0, planFee - discount) : 0,
+        paymentStatus: r.paymentStatus || 'Pending',
+        paymentMode: r.paymentMode || '',
+        paymentDate: r.paymentDate ? new Date(r.paymentDate) : null,
+        planNotes: r.planNotes || '',
+        startDate: start,
+        endDate: end,
         membershipStatus,
-        staff:          r.staffId || null,
-        slot:           null,
+        staff: r.staffId || null,
+        slot: null,
         _renewedFromId: r.activityFeeId || null,
       });
     }
@@ -3633,7 +3639,7 @@ exports.renewMember = async (req, res) => {
 
     try {
       const newFeesOnly = {
-        _id:          member._id,
+        _id: member._id,
         activityFees: member.activityFees.slice(newStartIndex),
       };
       await syncFeesToTables(newFeesOnly, req.organizationId, []);
@@ -3655,8 +3661,8 @@ exports.renewMember = async (req, res) => {
 
     const updated = await FitnessMember.findById(member._id)
       .populate('activityFees.activity', 'name activityName')
-      .populate('activityFees.feeType',  'description annual monthly weekly daily hourly')
-      .populate('activityFees.staff',    'fullName name')
+      .populate('activityFees.feeType', 'description annual monthly weekly daily hourly')
+      .populate('activityFees.staff', 'fullName name')
       .select('-password');
 
     res.json({
@@ -3684,7 +3690,7 @@ exports.updateMember = async (req, res) => {
     }
 
     const member = await FitnessMember.findOne({
-      _id:            req.params.id,
+      _id: req.params.id,
       organizationId: req.organizationId,
     });
 
@@ -3731,9 +3737,9 @@ exports.updateMember = async (req, res) => {
     // ── Duplicate mobile check (excluding self) ───────────────────────────
     if (mobile && mobile.trim() !== member.mobile) {
       const dup = await FitnessMember.findOne({
-        mobile:         mobile.trim(),
+        mobile: mobile.trim(),
         organizationId: req.organizationId,
-        _id:            { $ne: member._id },
+        _id: { $ne: member._id },
       });
       if (dup) {
         if (req.file) deleteOldPhoto(`/uploads/fitness/members/${req.file.filename}`);
@@ -3776,9 +3782,9 @@ exports.updateMember = async (req, res) => {
           new Date(existing.startDate).toISOString().split('T')[0] === parsedActivityFees[i].startDate;
 
         if (dateUnchanged) {
-          const af    = parsedActivityFees[i];
+          const af = parsedActivityFees[i];
           const start = new Date(af.startDate);
-          const end   = new Date(af.endDate);
+          const end = new Date(af.endDate);
 
           if (!af.activity || !isValidObjectId(af.activity)) {
             if (req.file) deleteOldPhoto(`/uploads/fitness/members/${req.file.filename}`);
@@ -3791,28 +3797,28 @@ exports.updateMember = async (req, res) => {
 
           const membershipStatus = computeActivityMembershipStatus({
             paymentStatus: af.paymentStatus || 'Pending',
-            startDate:     start,
-            endDate:       end,
+            startDate: start,
+            endDate: end,
           });
 
           tempValidated.push({
-            _id:             existing._id,
-            allotmentId:     existing.allotmentId || null,
-            activity:        af.activity,
-            feeType:         af.feeType   || null,
-            plan:            af.plan      || 'Monthly',
-            planFee:         Number(af.planFee)    || 0,
-            discount:        Number(af.discount)   || 0,
-            finalAmount:     Math.max(0, Number(af.planFee) - Number(af.discount)),
-            paymentStatus:   af.paymentStatus || 'Pending',
-            paymentMode:     af.paymentMode   || '',
-            paymentDate:     af.paymentDate   ? new Date(af.paymentDate) : null,
-            planNotes:       af.planNotes     || '',
-            startDate:       start,
-            endDate:         end,
+            _id: existing._id,
+            allotmentId: existing.allotmentId || null,
+            activity: af.activity,
+            feeType: af.feeType || null,
+            plan: af.plan || 'Monthly',
+            planFee: Number(af.planFee) || 0,
+            discount: Number(af.discount) || 0,
+            finalAmount: Math.max(0, Number(af.planFee) - Number(af.discount)),
+            paymentStatus: af.paymentStatus || 'Pending',
+            paymentMode: af.paymentMode || '',
+            paymentDate: af.paymentDate ? new Date(af.paymentDate) : null,
+            planNotes: af.planNotes || '',
+            startDate: start,
+            endDate: end,
             membershipStatus,
-            staff:           af.staff || null,
-            slot:            af.slot  || existing.slot || null,
+            staff: af.staff || null,
+            slot: af.slot || existing.slot || null,
           });
         } else {
           const result = validateActivityFee(parsedActivityFees[i], i);
@@ -3822,33 +3828,33 @@ exports.updateMember = async (req, res) => {
           }
           tempValidated.push({
             ...result.data,
-            _id:         existing?._id         || undefined,
+            _id: existing?._id || undefined,
             allotmentId: existing?.allotmentId || null,
-            slot:        parsedActivityFees[i].slot || null,
+            slot: parsedActivityFees[i].slot || null,
           });
         }
       }
 
       // Duplicate activity check
-      const activityIds       = tempValidated.map((af) => af.activity?.toString()).filter(Boolean);
+      const activityIds = tempValidated.map((af) => af.activity?.toString()).filter(Boolean);
       const uniqueActivityIds = new Set(activityIds);
       if (uniqueActivityIds.size !== activityIds.length) {
         if (req.file) deleteOldPhoto(`/uploads/fitness/members/${req.file.filename}`);
         return res.status(400).json({ message: 'Duplicate activities are not allowed for the same member.' });
       }
 
-      validatedFees        = tempValidated;
-      member.activityFees  = validatedFees;
+      validatedFees = tempValidated;
+      member.activityFees = validatedFees;
     }
 
     // ── Apply scalar field updates ────────────────────────────────────────
-    if (name     !== undefined) member.name     = name.trim();
-    if (mobile   !== undefined) member.mobile   = mobile.trim();
-    if (email    !== undefined) member.email    = email.trim() || undefined;
-    if (age      !== undefined && age !== '') member.age = Number(age);
-    if (gender   !== undefined) member.gender   = gender;
-    if (address  !== undefined) member.address  = address?.trim();
-    if (userId   !== undefined) member.userId   = userId?.trim();
+    if (name !== undefined) member.name = name.trim();
+    if (mobile !== undefined) member.mobile = mobile.trim();
+    if (email !== undefined) member.email = email.trim() || undefined;
+    if (age !== undefined && age !== '') member.age = Number(age);
+    if (gender !== undefined) member.gender = gender;
+    if (address !== undefined) member.address = address?.trim();
+    if (userId !== undefined) member.userId = userId?.trim();
     if (password !== undefined && password.trim()) member.password = password.trim();
 
     member.membershipStatus = computeOverallMembershipStatus(
@@ -3877,8 +3883,8 @@ exports.updateMember = async (req, res) => {
 
     const updated = await FitnessMember.findById(member._id)
       .populate('activityFees.activity', 'name activityName')
-      .populate('activityFees.feeType',  'description')
-      .populate('activityFees.staff',    'fullName name')
+      .populate('activityFees.feeType', 'description')
+      .populate('activityFees.staff', 'fullName name')
       .select('-password');
 
     res.json({
@@ -3912,7 +3918,7 @@ exports.deleteMember = async (req, res) => {
     }
 
     const member = await FitnessMember.findOneAndDelete({
-      _id:            req.params.id,
+      _id: req.params.id,
       organizationId: req.organizationId,
     });
 
