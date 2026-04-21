@@ -1,29 +1,4 @@
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 const FitnessActivity = require('../models/FitnessActivity');
 const FitnessBooking  = require('../models/FitnessBooking');
 const FeeAllotment    = require('../models/FitnessFeeAllotment');
@@ -656,34 +631,47 @@ exports.bookSlot = async (req, res) => {
 ========================= */
 exports.getBookings = async (req, res) => {
   try {
-    const { page, limit } = getValidatedPageAndLimit(req.query);
-    const { search, activityName, customerName, date, fromDate, toDate } = req.query;
+let page = Number(req.query.page) || 1;
+let limit = Number(req.query.limit) || 10;
+
+if (page < 1) page = 1;
+if (limit < 1) limit = 10;    const { search, activityName, customerName, date, fromDate, toDate } = req.query;
 
     const bookingFilter = {};
 
-    if (date) {
-      const selectedDate = new Date(date);
-      const nextDate = new Date(date);
-      nextDate.setDate(nextDate.getDate() + 1);
-
-      bookingFilter.date = {
-        $gte: selectedDate,
-        $lt: nextDate
-      };
-    } else if (fromDate || toDate) {
-      bookingFilter.date = {};
-      if (fromDate) {
-        bookingFilter.date.$gte = new Date(fromDate);
-      }
-      if (toDate) {
-        const nextToDate = new Date(toDate);
-        nextToDate.setDate(nextToDate.getDate() + 1);
-        bookingFilter.date.$lt = nextToDate;
-      }
-      if (Object.keys(bookingFilter.date).length === 0) {
-        delete bookingFilter.date;
-      }
-    }
+    // ✅ DATE FILTER (FIXED FOR STRING DATE)
+if (date) {
+  // exact match
+  bookingFilter.date = date;
+} else if (fromDate && toDate) {
+  // range filter (string comparison works for YYYY-MM-DD)
+  bookingFilter.date = {
+    $gte: fromDate,
+    $lte: toDate
+  };
+} else if (fromDate) {
+  bookingFilter.date = {
+    $gte: fromDate
+  };
+} else if (toDate) {
+  bookingFilter.date = {
+    $lte: toDate
+  };
+ }
+//else if (fromDate || toDate) {
+//       bookingFilter.date = {};
+//       if (fromDate) {
+//         bookingFilter.date.$gte = new Date(fromDate);
+//       }
+//       if (toDate) {
+//         const nextToDate = new Date(toDate);
+//         nextToDate.setDate(nextToDate.getDate() + 1);
+//         bookingFilter.date.$lt = nextToDate;
+//       }
+//       if (Object.keys(bookingFilter.date).length === 0) {
+//         delete bookingFilter.date;
+//       }
+//     }
 
     if (customerName?.trim()) {
       bookingFilter.customerName = { $regex: customerName.trim(), $options: 'i' };
@@ -767,6 +755,48 @@ exports.getBookings = async (req, res) => {
     res.status(500).json({ success: false, message: err.message });
   }
 };
+
+
+// =========================
+// 📊 DASHBOARD BOOKINGS (NO PAGINATION)
+// =========================
+exports.getAllBookingsForDashboard = async (req, res) => {
+  try {
+    const bookings = await FitnessBooking.find({})
+      .populate('activityId')
+      .sort({ createdAt: -1 });
+
+    const formatted = bookings.map(b => {
+      let finalActivityName = 'N/A';
+      let slotTime = 'N/A';
+
+      if (b.activityId && b.activityId.slots) {
+        finalActivityName = b.activityId.name;
+        const slot = b.activityId.slots.id(b.slotId);
+        if (slot) slotTime = `${slot.startTime} - ${slot.endTime}`;
+      }
+
+      return {
+        _id: b._id,
+        customerName: b.customerName,
+        activityName: finalActivityName,
+        slotTime,
+        date: b.date
+      };
+    });
+
+    res.json({
+      success: true,
+      data: formatted
+    });
+
+  } catch (err) {
+    console.error("Dashboard Booking Error:", err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+
 
 /* =========================
    📋 CANCEL BOOKING
