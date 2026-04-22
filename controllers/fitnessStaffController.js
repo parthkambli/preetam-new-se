@@ -886,14 +886,6 @@ const createFitnessStaff = async (req, res) => {
 // ═════════════════════════════════════════════════════════════════════════════
 const getFitnessStaff = async (req, res) => {
   try {
-    const page = Math.max(1, parseInt(req.query.page, 10) || 1);
-
-    let limit = parseInt(req.query.limit, 10) || 5;
-    if (limit < 5) limit = 5;
-    if (limit > 100) limit = 100;
-
-    const skip = (page - 1) * limit;
-
     const filter = {};
 
     if (req.query.status && req.query.status.trim()) {
@@ -927,25 +919,12 @@ const getFitnessStaff = async (req, res) => {
       ];
     }
 
-    const [staff, total] = await Promise.all([
-      FitnessStaff.find(filter)
-        .sort({ createdAt: -1 })
-        .skip(skip)
-        .limit(limit)
-        .lean(),
-      FitnessStaff.countDocuments(filter),
-    ]);
+    const staff = await FitnessStaff.find(filter)
+      .sort({ createdAt: -1 })
+      .lean();
 
     return respond(res, 200, true, "Staff members retrieved successfully", {
       staff,
-      pagination: {
-        total,
-        page,
-        limit,
-        totalPages: Math.ceil(total / limit),
-        hasNextPage: page < Math.ceil(total / limit),
-        hasPrevPage: page > 1,
-      },
       filters: {
         status: req.query.status || "",
         role: req.query.role || "",
