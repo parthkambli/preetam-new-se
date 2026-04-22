@@ -45,6 +45,7 @@ const fitnessFeePaymentSchema = new mongoose.Schema({
     ref: 'FitnessMember',
     required: false,        // ← Changed for walk-ins
     default: null
+    
   },
   allotmentId: {
     type: mongoose.Schema.Types.ObjectId,
@@ -68,7 +69,14 @@ const fitnessFeePaymentSchema = new mongoose.Schema({
   remarks: String,
 
   organizationId: { type: String, required: true },
-  createdAt: { type: Date, default: Date.now }
+  createdAt: { type: Date, default: Date.now },
 });
+fitnessFeePaymentSchema.pre('save', function(next) {
+  if (!this.allotmentId) {
+    return next(new Error('Payment must have allotmentId'));
+  }
+  next();
+});
+
 
 module.exports = mongoose.model('FitnessFeePayment', fitnessFeePaymentSchema);

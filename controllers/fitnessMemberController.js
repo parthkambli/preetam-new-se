@@ -3097,6 +3097,9 @@ const validateActivityFee = (af, index) => {
   const validPlans    = ['Annual', 'Monthly', 'Weekly', 'Daily', 'Hourly'];
   const validModes    = ['Cash', 'Bank Transfer', ''];
   const validStatuses = ['Paid', 'Pending'];
+  if (af.paymentStatus === 'Paid' && !af.feeType && !af.activity) {
+  return { error: `${prefix}: Cannot mark as Paid without feeType or activity.` };
+}
 
   if (af.plan && !validPlans.includes(af.plan)) {
     return { error: `${prefix}: invalid plan "${af.plan}". Must be one of: ${validPlans.join(', ')}.` };
@@ -3168,7 +3171,8 @@ const syncFeesToTables = async (member, orgId, previousAllotmentIds = []) => {
   for (let i = 0; i < member.activityFees.length; i++) {
     const af = member.activityFees[i];
 
-    if (!af.feeType) continue;
+    // if (!af.feeType) continue;
+    if (!af.feeType && !af.activity) continue;
 
     const planMap = { Annual: 'Annual', Monthly: 'Monthly', Weekly: 'Weekly', Daily: 'Daily', Hourly: 'Hourly' };
     const feePlan = planMap[af.plan] || 'Monthly';
@@ -3205,7 +3209,32 @@ const syncFeesToTables = async (member, orgId, previousAllotmentIds = []) => {
       member.activityFees[i].allotmentId = allotment._id;
     }
 
-    if (af.paymentStatus === 'Paid' && (af.finalAmount || af.planFee) > 0 && allotment) {
+    if (af.paymentStatus === 'Paid') {
+  if (!allotment) {
+    throw new Error(`CRITICAL: Paid fee without allotment for member ${member._id}`);
+  }
+
+  if ((af.finalAmount || af.planFee) > 0) {
+    await FeePayment.findOneAndUpdate(
+      { allotmentId: allotment._id, organizationId: orgId },
+      {
+        memberId: member._id,
+        allotmentId: allotment._id,
+        amount: af.finalAmount || af.planFee,
+        paymentMode: af.paymentMode || 'Cash',
+        paymentDate: af.paymentDate || new Date(),
+        organizationId: orgId,
+        description: af.activity
+          ? `Activity fee - ${af.plan} plan`
+          : `Membership pass - ${af.plan} plan`,
+        feePlan,
+      },
+      { upsert: true, new: true }
+    );
+
+    await FeeAllotment.findByIdAndUpdate(allotment._id, { status: 'Paid' });
+  }
+} {
       await FeePayment.findOneAndUpdate(
         { allotmentId: allotment._id, organizationId: orgId },
         {

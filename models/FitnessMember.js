@@ -363,11 +363,26 @@ fitnessMemberSchema.pre('save', async function (next) {
 
   // Only generate memberId if it's a NEW document
   if (this.isNew && !this.memberId) {
-    const count = await mongoose.model('FitnessMember').countDocuments({
-      organizationId: this.organizationId,
-    });
-    const seq = (count + 1).toString().padStart(4, '0');
-    this.memberId = `MEM-CLUB-${seq}`;
+    // const count = await mongoose.model('FitnessMember').countDocuments({
+    //   organizationId: this.organizationId,
+    // });
+    // const seq = (count + 1).toString().padStart(4, '0');
+    // this.memberId = `MEM-CLUB-${seq}`;
+
+    const lastMember = await mongoose.model('FitnessMember')
+  .findOne({ organizationId: this.organizationId })
+  .sort({ createdAt: -1 });
+
+let nextNumber = 1;
+
+if (lastMember && lastMember.memberId) {
+  const lastNum = parseInt(lastMember.memberId.split('-').pop());
+  if (!isNaN(lastNum)) {
+    nextNumber = lastNum + 1;
+  }
+}
+
+this.memberId = `MEM-CLUB-${String(nextNumber).padStart(4, '0')}`;
   }
 
   // Rest of your status computation logic...
