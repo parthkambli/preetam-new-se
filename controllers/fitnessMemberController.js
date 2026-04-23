@@ -4983,7 +4983,7 @@ const validateActivityFee = (af, index) => {
     return { error: `${prefix}: final amount cannot be negative.` };
   }
 
-  const validPlans    = ['Annual','Halfyearly','Quarterly', 'Monthly', 'Weekly', 'Daily', 'Hourly'];
+  const validPlans    = ['Annual','halfYearly','quarterly', 'Monthly', 'Weekly', 'Daily', 'Hourly'];
   const validModes    = ['Cash', 'Bank Transfer', ''];
   const validStatuses = ['Paid', 'Pending'];
   if (af.paymentStatus === 'Paid' && !af.feeType && !af.activity) {
@@ -5063,7 +5063,7 @@ const syncFeesToTables = async (member, orgId, previousAllotmentIds = []) => {
     // if (!af.feeType) continue;
     if (!af.feeType && !af.activity) continue;
 
-    const planMap = { Annual: 'Annual', Halfyearly: 'Halfyearly',Quarterly: 'Quarterly', Monthly: 'Monthly', Weekly: 'Weekly', Daily: 'Daily', Hourly: 'Hourly' };
+    const planMap = { Annual: 'Annual', Halfyearly: 'halfYearly',Quarterly: 'quarterly', Monthly: 'Monthly', Weekly: 'Weekly', Daily: 'Daily', Hourly: 'Hourly' };
     const feePlan = planMap[af.plan] || 'Monthly';
 
     let allotment;
@@ -5247,7 +5247,7 @@ exports.getMemberById = async (req, res) => {
       organizationId: req.organizationId,
     })
       .populate('activityFees.activity', 'name activityName')
-      .populate('activityFees.feeType',  'description annual halfyearly quarterly monthly weekly daily hourly')
+      .populate('activityFees.feeType',  'description annual halfYearly quarterly monthly weekly daily hourly')
       .populate('activityFees.staff',    'fullName name')
       .select('-password');
 
@@ -5540,7 +5540,7 @@ exports.renewMember = async (req, res) => {
 
     const updated = await FitnessMember.findById(member._id)
       .populate('activityFees.activity', 'name activityName')
-      .populate('activityFees.feeType',  'description annual halfyearly quaterly monthly weekly daily hourly')
+      .populate('activityFees.feeType',  'description annual halfYearly quaterly monthly weekly daily hourly')
       .populate('activityFees.staff',    'fullName name')
       .select('-password');
 
