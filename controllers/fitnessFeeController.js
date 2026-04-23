@@ -1497,7 +1497,15 @@ const FitnessMember = require('../models/FitnessMember');
 // ─────────────────────────────────────────────
 
 const VALID_FEE_TYPES = ['Visitor', 'Residency', 'Membership Pass'];
-const VALID_FEE_PLANS = ['Annual', 'Monthly', 'Weekly', 'Daily', 'Hourly'];
+const VALID_FEE_PLANS = [
+  'Annual',
+  'Half-Yearly',   // ✅ NEW
+  'Quarterly',     // ✅ NEW
+  'Monthly',
+  'Weekly',
+  'Daily',
+  'Hourly'
+];
 const VALID_PAYMENT_MODES = ['Cash', 'Cheque', 'Online', 'UPI'];
 
 const isBadId = (err) => err.name === 'CastError' && err.kind === 'ObjectId';
@@ -1528,7 +1536,7 @@ exports.getFitnessFeeTypes = async (req, res) => {
 
 exports.createFitnessFeeType = async (req, res) => {
   try {
-    const { description, type, annual, monthly, weekly, daily, hourly } = req.body;
+    const { description, type, annual, halfYearly, quarterly, monthly, weekly, daily, hourly } = req.body;
 
     if (!description || !description.trim()) {
       return res.status(400).json({ message: 'Description is required.' });
@@ -1540,7 +1548,7 @@ exports.createFitnessFeeType = async (req, res) => {
       });
     }
 
-    const amounts = { annual, monthly, weekly, daily, hourly };
+    const amounts = { annual, halfYearly, quarterly, monthly, weekly, daily, hourly };
     for (const [key, val] of Object.entries(amounts)) {
       if (val !== undefined && val !== '' && Number(val) < 0) {
         return res.status(400).json({ message: `${key} amount cannot be negative.` });
@@ -1563,11 +1571,13 @@ exports.createFitnessFeeType = async (req, res) => {
     const feeType = new FeeType({
       description: trimmedDesc,
       type: type || 'Membership Pass',
-      annual: annual !== '' && annual != null ? Number(annual) : 0,
-      monthly: monthly !== '' && monthly != null ? Number(monthly) : 0,
-      weekly: weekly !== '' && weekly != null ? Number(weekly) : 0,
-      daily: daily !== '' && daily != null ? Number(daily) : 0,
-      hourly: hourly !== '' && hourly != null ? Number(hourly) : 0,
+      annual: Number(annual) || 0,
+      halfYearly: Number(halfYearly) || 0,   // ✅
+      quarterly: Number(quarterly) || 0,     // ✅
+      monthly: Number(monthly) || 0,
+      weekly: Number(weekly) || 0,
+      daily: Number(daily) || 0,
+      hourly: Number(hourly) || 0,
       organizationId: req.organizationId,
     });
 
@@ -1590,7 +1600,7 @@ exports.createFitnessFeeType = async (req, res) => {
 
 exports.updateFitnessFeeType = async (req, res) => {
   try {
-    const { description, type, annual, monthly, weekly, daily, hourly } = req.body;
+    const { description, type, annual, halfYearly, quarterly, monthly, weekly, daily, hourly } = req.body;
 
     const feeType = await FeeType.findOne({
       _id: req.params.id,
@@ -1607,7 +1617,8 @@ exports.updateFitnessFeeType = async (req, res) => {
       });
     }
 
-    const amounts = { annual, monthly, weekly, daily, hourly };
+    const amounts = { annual, halfYearly, quarterly, monthly, weekly, daily, hourly };
+
     for (const [key, val] of Object.entries(amounts)) {
       if (val !== undefined && val !== '' && Number(val) < 0) {
         return res.status(400).json({ message: `${key} amount cannot be negative.` });
@@ -1636,6 +1647,8 @@ exports.updateFitnessFeeType = async (req, res) => {
         description: trimmedDesc,
         type: type || feeType.type,
         annual: annual !== undefined ? Number(annual) || 0 : feeType.annual,
+        halfYearly: halfYearly !== undefined ? Number(halfYearly) || 0 : feeType.halfYearly,
+        quarterly: quarterly !== undefined ? Number(quarterly) || 0 : feeType.quarterly,
         monthly: monthly !== undefined ? Number(monthly) || 0 : feeType.monthly,
         weekly: weekly !== undefined ? Number(weekly) || 0 : feeType.weekly,
         daily: daily !== undefined ? Number(daily) || 0 : feeType.daily,
