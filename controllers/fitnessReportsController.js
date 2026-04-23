@@ -161,10 +161,29 @@ const diffDaysInclusive = (start, end) => {
 
 const getPlanDurationDays = (plan) => {
   switch (plan) {
-    case 'Weekly': return 7;
-    case 'Monthly': return 30;
-    case 'Annual': return 365;
-    default: return null;
+    case 'Daily':
+      return 1;
+
+    case 'Hourly':
+      return 1;
+
+    case 'Weekly':
+      return 7;
+
+    case 'Monthly':
+      return 30;
+
+    case 'quarterly':
+      return 90;
+
+    case 'halfYearly':
+      return 180;
+
+    case 'Annual':
+      return 365;
+
+    default:
+      return null;
   }
 };
 

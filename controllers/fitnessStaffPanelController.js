@@ -871,6 +871,60 @@ exports.getStaffProfile = async (req, res) => {
   }
 };
 
+
+// exports.getStaffProfile = async (req, res) => {
+//   try {
+//     const user = await User.findOne({
+//       userId: req.user.userId
+//     }).lean();
+
+//     if (!user || !user.staffId) {
+//       return res.json({
+//         success: true,
+//         data: null
+//       });
+//     }
+
+//     const staff = await FitnessStaff.findById(user.staffId).lean();
+
+//     if (!staff) {
+//       return res.json({
+//         success: true,
+//         data: null
+//       });
+//     }
+
+//     // Fetch assigned activities
+//     const activities = await FitnessActivity.find({
+//       "slots.staffId": staff._id
+//     })
+//       .select("name")
+//       .lean();
+
+//     return res.json({
+//       success: true,
+//       data: {
+//         name: staff.fullName || "",
+//         mobile: staff.mobileNumber || "",
+//         email: staff.emailId || "",
+//         role: staff.role || "",
+//         assignedActivities: activities.map(a => a.name),
+//         profileImage: staff.profilePhoto
+//           ? `${req.protocol}://${req.get("host")}${staff.profilePhoto}`
+//           : ""
+//       }
+//     });
+
+//   } catch (error) {
+//     console.error("getStaffProfile error:", error);
+//     return res.status(500).json({
+//       success: false,
+//       message: "Failed to fetch profile"
+//     });
+//   }
+// };
+
+
 exports.getStaffEvents = async (req, res) => {
   try {
     console.log("🔥 EVENTS API HIT");
