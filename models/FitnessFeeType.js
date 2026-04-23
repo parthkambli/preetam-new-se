@@ -12,6 +12,8 @@ const fitnessFeeTypeSchema = new mongoose.Schema({
     required: true
   },
   annual: { type: Number, default: 0 },
+  halfYearly: { type: Number, default: 0 },   
+  quarterly: { type: Number, default: 0 }, 
   monthly: { type: Number, default: 0 },
   weekly: { type: Number, default: 0 },
   daily: { type: Number, default: 0 },
