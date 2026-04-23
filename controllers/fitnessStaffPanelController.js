@@ -472,23 +472,58 @@ function getTodayDateString() {
 // }
 
 
+// const resolveLoggedInStaffObjectId = async (req) => {
+//   const userId = req.admin.userId;
+//   const organizationId = req.organizationId;
+
+//   const user = await User.findOne({
+//     userId,
+//     organizationId,
+//     role: "FitnessStaff",
+//   }).lean();
+
+//   if (!user || !user.linkedId) {
+//     return null;
+//   }
+
+//   return mongoose.Types.ObjectId.isValid(user.linkedId)
+//     ? new mongoose.Types.ObjectId(user.linkedId)
+//     : null;
+// };
+
 const resolveLoggedInStaffObjectId = async (req) => {
-  const userId = req.admin.userId;
-  const organizationId = req.organizationId;
+  try {
+    // Support both admin & user tokens
+    const currentUser = req.user || req.admin;
 
-  const user = await User.findOne({
-    userId,
-    organizationId,
-    role: "FitnessStaff",
-  }).lean();
+    if (!currentUser) return null;
 
-  if (!user || !user.linkedId) {
+    const userId = currentUser.userId;
+    const organizationId = req.organizationId;
+
+    const user = await User.findOne({
+      userId,
+      organizationId,
+      role: "FitnessStaff",
+    }).lean();
+
+    if (!user) return null;
+
+    // ✅ PRIMARY: staffId (correct mapping)
+    if (user.staffId && mongoose.Types.ObjectId.isValid(user.staffId)) {
+      return new mongoose.Types.ObjectId(user.staffId);
+    }
+
+    // ⚠️ FALLBACK: linkedId (your existing logic fallback)
+    if (user.linkedId && mongoose.Types.ObjectId.isValid(user.linkedId)) {
+      return new mongoose.Types.ObjectId(user.linkedId);
+    }
+
+    return null;
+  } catch (err) {
+    console.error("resolveLoggedInStaffObjectId error:", err.message);
     return null;
   }
-
-  return mongoose.Types.ObjectId.isValid(user.linkedId)
-    ? new mongoose.Types.ObjectId(user.linkedId)
-    : null;
 };
 
 
@@ -792,9 +827,14 @@ exports.getStaffProfile = async (req, res) => {
     console.log("USER:", req.user);
 
     // Step 1: Find logged-in user
+    // const user = await User.findOne({
+    //   userId: req.user.userId
+    // }).lean();
     const user = await User.findOne({
-      userId: req.user.userId
+      userId: req.user.userId,
+      organizationId: req.organizationId
     }).lean();
+
 
     if (!user || !user.staffId) {
       return res.json({

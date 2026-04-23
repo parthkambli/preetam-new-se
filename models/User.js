@@ -260,6 +260,11 @@ const userSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Staff'
   },
+  accessRoleId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'AccessRole',
+    default: null
+  },
   createdAt: {
     type: Date,
     default: Date.now

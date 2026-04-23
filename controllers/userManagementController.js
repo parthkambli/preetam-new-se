@@ -1,0 +1,100 @@
+const User = require('../models/User');
+const AccessRole = require('../models/AccessRole');
+const bcrypt = require('bcryptjs');
+
+// ================= CREATE USER =================
+exports.createUser = async (req, res) => {
+  try {
+    const {
+      userId,
+      password,
+      fullName,
+      role,
+      mobile,
+      organizationId,
+      accessRoleId
+    } = req.body;
+
+    if (!userId || !password || !fullName || !mobile || !organizationId) {
+      return res.status(400).json({ message: 'Missing required fields' });
+    }
+
+    const existing = await User.findOne({ userId, organizationId });
+    if (existing) {
+      return res.status(400).json({ message: 'User already exists' });
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    const user = await User.create({
+      userId,
+      password: hashedPassword,
+      fullName,
+      role,
+      mobile,
+      organizationId,
+      accessRoleId: accessRoleId || null,
+      isActive: 'Yes'
+    });
+
+    res.json({ success: true, data: user });
+
+  } catch (err) {
+    console.error('createUser error:', err.message);
+    res.status(500).json({ message: 'Failed to create user' });
+  }
+};
+
+// ================= GET USERS =================
+exports.getUsers = async (req, res) => {
+  try {
+    const users = await User.find({
+      organizationId: req.organizationId
+    })
+      .select('-password')
+      .populate('accessRoleId', 'name permissions')
+      .lean();
+
+    res.json({ success: true, count: users.length, data: users });
+
+  } catch (err) {
+    console.error('getUsers error:', err.message);
+    res.status(500).json({ message: 'Failed to fetch users' });
+  }
+};
+
+// ================= UPDATE USER =================
+exports.updateUser = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const updates = req.body;
+
+    if (updates.password) {
+      updates.password = await bcrypt.hash(updates.password, 10);
+    }
+
+    const user = await User.findByIdAndUpdate(id, updates, { new: true })
+      .select('-password');
+
+    res.json({ success: true, data: user });
+
+  } catch (err) {
+    console.error('updateUser error:', err.message);
+    res.status(500).json({ message: 'Failed to update user' });
+  }
+};
+
+// ================= DELETE USER =================
+exports.deleteUser = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    await User.findByIdAndDelete(id);
+
+    res.json({ success: true, message: 'User deleted' });
+
+  } catch (err) {
+    console.error('deleteUser error:', err.message);
+    res.status(500).json({ message: 'Failed to delete user' });
+  }
+};

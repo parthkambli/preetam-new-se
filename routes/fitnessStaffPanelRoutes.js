@@ -27,14 +27,41 @@ const {
 } = require("../controllers/fitnessStaffPanelController");
 
 const auth = require("../middleware/auth");
+const { allowPermissions } = require("../middleware/permissions");
 
-router.get("/my-schedule", auth, getMySchedule);
-router.get("/available-activities", auth, getAvailableActivities);
+router.get(
+  "/my-schedule",
+  auth,
+  allowPermissions('VIEW_OWN_SCHEDULE'),
+  getMySchedule
+);
 
-router.get('/attendance-by-date', auth, getAttendanceByDate );
+router.get(
+  "/available-activities",
+  auth,
+  allowPermissions('VIEW_ACTIVITIES'),
+  getAvailableActivities
+);
 
-router.get("/profile", auth, getStaffProfile);
+router.get(
+  "/attendance-by-date",
+  auth,
+  allowPermissions('MARK_ATTENDANCE'),
+  getAttendanceByDate
+);
 
-router.get("/events", auth, getStaffEvents);
+router.get(
+  "/profile",
+  auth,
+  allowPermissions('VIEW_OWN_SCHEDULE'),
+  getStaffProfile
+);
+
+router.get(
+  "/events",
+  auth,
+  allowPermissions('VIEW_EVENTS'),
+  getStaffEvents
+);
 
 module.exports = router;
