@@ -414,6 +414,9 @@ const User = require("../models/User");
 const FitnessActivity = require("../models/FitnessActivity");
 const FitnessBooking = require("../models/FitnessBooking");
 const FitnessStaff = require("../models/FitnessStaff");
+const FitnessAttendance = require("../models/FitnessAttendance");
+
+const FitnessEvent = require("../models/FitnessEvent");
 
 function getTodayDateString() {
   return new Date().toISOString().split("T")[0];
@@ -558,10 +561,12 @@ const resolveLoggedInStaffObjectId = async (req) => {
 
 exports.getMySchedule = async (req, res) => {
   try {
+    // console.log("REQ USER:", req.staff || req.admin);
     const staffObjectId = await resolveLoggedInStaffObjectId(req);
 
     if (!staffObjectId) {
       return res.status(404).json({
+        
         success: false,
         message: "Staff not found",
       });
@@ -670,6 +675,184 @@ exports.getAvailableActivities = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Failed to fetch activities",
+    });
+  }
+};
+
+
+
+
+
+
+exports.getAttendanceByDate = async (req, res) => {
+  try {
+    const staffObjectId = await resolveLoggedInStaffObjectId(req);
+
+    if (!staffObjectId) {
+      return res.status(404).json({
+        success: false,
+        message: "Staff not found",
+      });
+    }
+
+    const selectedDate = req.query.date || getTodayDateString();
+
+    const selectedDateStr = new Date(selectedDate)
+  .toISOString()
+  .split("T")[0];
+
+    const activities = await FitnessActivity.find({
+      "slots.staffId": staffObjectId,
+    }).lean();
+
+    const data = [];
+
+    for (const activity of activities) {
+      for (const slot of activity.slots || []) {
+
+        if (String(slot.staffId) !== String(staffObjectId)) continue;
+
+        // ✅ 1. GET BOOKINGS (PRIMARY)
+        const bookings = await FitnessBooking.find({
+          activityId: activity._id,
+          slotId: slot._id,
+          date: selectedDate,
+        })
+        .populate("memberId", "name")
+        .lean();
+
+        // ✅ 2. GET ATTENDANCE (SECONDARY)
+        const attendanceRecords = await FitnessAttendance.find({
+          activity: activity._id,
+          attendanceDate: new Date(selectedDate).setHours(0, 0, 0, 0),
+          organizationId: req.organizationId
+        }).lean();
+
+        // ✅ 3. MAP ATTENDANCE
+        const attendanceMap = {};
+        attendanceRecords.forEach(a => {
+          attendanceMap[a.member.toString()] = a.status;
+        });
+
+        // ✅ 4. MERGE DATA
+        const participants = bookings.map(b => {
+          const memberId = b.memberId?._id?.toString();
+
+          return {
+            name: b.memberId?.name || b.customerName || "Participant",
+            status: memberId && attendanceMap[memberId]
+              ? attendanceMap[memberId]
+              : "Not Marked"
+          };
+        });
+
+        // ✅ 5. COUNTS
+        const total = participants.length;
+        const present = participants.filter(p => p.status === "Present").length;
+        const absent = participants.filter(p => p.status === "Absent").length;
+
+        // ✅ 6. STATUS (TIME BASED)
+        const now = new Date();
+        const endTime = new Date(`${selectedDate}T${slot.endTime}`);
+
+        const status = now >= endTime ? "Completed" : "Pending";
+
+        data.push({
+          activityId: activity._id,
+          activityName: activity.name,
+          slotId: slot._id,
+          startTime: slot.startTime,
+          endTime: slot.endTime,
+          total,
+          present,
+          absent,
+          status,
+          participants,
+        });
+      }
+    }
+
+    return res.json({
+      success: true,
+      count: data.length,
+      data,
+    });
+
+  } catch (error) {
+    console.error("getAttendanceByDate error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch attendance",
+    });
+  }
+};
+
+exports.getStaffProfile = async (req, res) => {
+  try {
+    console.log("USER:", req.user);
+
+    // Step 1: Find logged-in user
+    const user = await User.findOne({
+      userId: req.user.userId
+    }).lean();
+
+    if (!user || !user.staffId) {
+      return res.json({
+        success: true,
+        data: {
+          name: "Staff",
+          profileImage: "",
+        },
+      });
+    }
+
+    // Step 2: Find staff using linked staffId
+    const staff = await FitnessStaff.findById(user.staffId).lean();
+
+    console.log("STAFF:", staff);
+
+    // Step 3: Return proper full image URL
+    return res.json({
+      success: true,
+      data: {
+        name: staff?.fullName || "Staff",
+        profileImage: staff?.profilePhoto
+          ? `${req.protocol}://${req.get("host")}${staff.profilePhoto}`
+          : "",
+      },
+    });
+
+  } catch (error) {
+    console.error("getStaffProfile error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch profile",
+    });
+  }
+};
+
+exports.getStaffEvents = async (req, res) => {
+  try {
+    console.log("🔥 EVENTS API HIT");
+    console.log("ORG ID:", req.organizationId);
+
+    const events = await FitnessEvent.find({})
+      .sort({ date: 1, startTime: 1 })
+      .lean();
+
+    console.log("EVENTS FOUND:", events);
+
+    return res.json({
+      success: true,
+      count: events.length,
+      data: events,
+    });
+
+  } catch (error) {
+    console.error("❌ getStaffEvents ERROR:", error);
+    return res.status(500).json({
+      success: false,
+      message: error.message, // IMPORTANT
     });
   }
 };

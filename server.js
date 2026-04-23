@@ -79,7 +79,7 @@ app.use('/api/health-records', healthRecordRoutes);
 app.use('/api/events', eventRoutes);
 
 
-app.use('/api/fitness/staff-panel', staffPanelRoutes);/// staff
+app.use('/api/fitness/staff-panel', staffPanelRoutes);/// staff-panel
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Fitness routes - ONE CLEAR SECTION
