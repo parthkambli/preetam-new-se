@@ -21,6 +21,16 @@ const PERMISSIONS = {
     'VIEW_SCHOOL_DASHBOARD',
     'MANAGE_STUDENTS',
   ],
+//fitness member
+  member: [
+  "VIEW_OWN_PROFILE",
+  "VIEW_MEMBERSHIP",
+  "VIEW_BOOKINGS",
+  "VIEW_ATTENDANCE",
+  "VIEW_PAYMENTS",
+  "VIEW_ACTIVITIES",
+  "BOOK_ACTIVITY"
+],
 
   // Others
   Student: [],

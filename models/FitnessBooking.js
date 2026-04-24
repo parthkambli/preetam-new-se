@@ -166,7 +166,29 @@ const bookingSchema = new mongoose.Schema({
   createdAt: {
     type: Date,
     default: Date.now
-  }
+  },
+
+  bookingStatus: {
+  type: String,
+  enum: [
+    "Pending Approval",
+    "Confirmed",
+    "Rejected",
+    "Cancelled"
+  ],
+  default: "Pending Approval"
+},
+
+paymentStatus: {
+  type: String,
+  enum: ["Pending", "Paid", "Failed"],
+  default: "Pending"
+},
+
+paymentSource: {
+  type: String,
+  default: "Razorpay Booking Payment"
+}
 });
 
 // Compound index for fast availability checks
