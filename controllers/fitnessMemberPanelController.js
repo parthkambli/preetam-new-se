@@ -1,7 +1,30 @@
 const FitnessMember = require("../models/FitnessMember");
 const FitnessBooking = require("../models/FitnessBooking");
 const FitnessFeePayment = require("../models/FitnessFeePayment");
-const FitnessActivity = require("../models/FitnessActivity");
+
+
+// =====================================================
+// COMMON MEMBER FINDER
+// Because login may come from User collection OR FitnessMember
+// so using req.user.id is unreliable
+// =====================================================
+const findLoggedInMember = async (req) => {
+  const identifier = req.user?.userId;
+
+  if (!identifier) return null;
+
+  const member = await FitnessMember.findOne({
+    $or: [
+      { mobile: identifier },
+      { userId: identifier }
+    ]
+  })
+    .populate("activityFees.activity")
+    .populate("membershipPass")
+    .lean();
+
+  return member;
+};
 
 
 // ============================================
@@ -10,13 +33,9 @@ const FitnessActivity = require("../models/FitnessActivity");
 // ============================================
 exports.getMemberDashboard = async (req, res) => {
   try {
-    const memberId = req.user.id;
     const organizationId = req.organizationId;
 
-    const member = await FitnessMember.findById(memberId)
-      .populate("activityFees.activity")
-      .populate("membershipPass")
-      .lean();
+    const member = await findLoggedInMember(req);
 
     if (!member) {
       return res.status(404).json({
@@ -30,7 +49,7 @@ exports.getMemberDashboard = async (req, res) => {
       item => item.membershipStatus === "Active"
     );
 
-    // Upcoming bookings
+    // Recent bookings
     const bookings = await FitnessBooking.find({
       memberId: member._id
     })
@@ -48,7 +67,7 @@ exports.getMemberDashboard = async (req, res) => {
       .limit(5)
       .lean();
 
-    // Pending dues calculation
+    // Pending dues
     let pendingDues = 0;
 
     for (const item of member.activityFees || []) {
@@ -68,7 +87,8 @@ exports.getMemberDashboard = async (req, res) => {
           mobile: member.mobile,
           email: member.email || "",
           photo: member.photo || "",
-          membershipStatus: member.membershipStatus
+          membershipStatus: member.membershipStatus,
+          status: member.status
         },
 
         membershipSummary: {
@@ -93,7 +113,9 @@ exports.getMemberDashboard = async (req, res) => {
           activityName: item.activityId?.name || "N/A",
           bookingDate: item.date,
           customerName: item.customerName,
-          phone: item.phone
+          phone: item.phone,
+          bookingStatus: item.bookingStatus || "Pending Approval",
+          paymentStatus: item.paymentStatus || "Paid"
         })),
 
         recentPayments: recentPayments.map(item => ({
@@ -124,9 +146,7 @@ exports.getMemberDashboard = async (req, res) => {
 // ============================================
 exports.getMemberProfile = async (req, res) => {
   try {
-    const member = await FitnessMember.findById(req.user.id)
-      .select("-password")
-      .lean();
+    const member = await findLoggedInMember(req);
 
     if (!member) {
       return res.status(404).json({
@@ -135,10 +155,26 @@ exports.getMemberProfile = async (req, res) => {
       });
     }
 
+    delete member.password;
+
     return res.status(200).json({
       success: true,
       message: "Profile fetched successfully",
-      data: member
+      data: {
+        id: member._id,
+        memberId: member.memberId,
+        name: member.name,
+        mobile: member.mobile,
+        email: member.email || "",
+        age: member.age || null,
+        gender: member.gender || "",
+        address: member.address || "",
+        photo: member.photo || "",
+        membershipStatus: member.membershipStatus,
+        status: member.status,
+        numberOfPersons: member.numberOfPersons || 1,
+        isPassMember: !!member.membershipPass
+      }
     });
 
   } catch (error) {
@@ -158,10 +194,7 @@ exports.getMemberProfile = async (req, res) => {
 // ============================================
 exports.getMemberMembershipSummary = async (req, res) => {
   try {
-    const member = await FitnessMember.findById(req.user.id)
-      .populate("activityFees.activity")
-      .populate("membershipPass")
-      .lean();
+    const member = await findLoggedInMember(req);
 
     if (!member) {
       return res.status(404).json({
@@ -174,10 +207,24 @@ exports.getMemberMembershipSummary = async (req, res) => {
       success: true,
       message: "Membership summary fetched successfully",
       data: {
+        memberId: member.memberId,
         isPassMember: !!member.membershipPass,
         numberOfPersons: member.numberOfPersons || 1,
         membershipStatus: member.membershipStatus,
-        memberships: member.activityFees || []
+        memberships: (member.activityFees || []).map(item => ({
+          activityName: item.activity?.name || "Membership Pass",
+          plan: item.plan,
+          planFee: item.planFee,
+          discount: item.discount,
+          finalAmount: item.finalAmount,
+          paymentStatus: item.paymentStatus,
+          paymentMode: item.paymentMode,
+          paymentDate: item.paymentDate,
+          startDate: item.startDate,
+          endDate: item.endDate,
+          membershipStatus: item.membershipStatus,
+          notes: item.planNotes || ""
+        }))
       }
     });
 

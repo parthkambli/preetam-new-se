@@ -176,6 +176,8 @@ const fitnessReportsRoutes = require('./routes/fitnessReportsRoutes');
 const userManagementRoutes = require('./routes/userManagementRoutes');
 const accessRoleRoutes = require('./routes/accessRoleRoutes');
 
+const fitnessMemberPanelRoutes = require("./routes/fitnessMemberPanelRoutes");
+
 
 const path = require('path');
 
@@ -248,6 +250,10 @@ app.use('/api', auth, fitnessReportsRoutes);
 // ===================== USER MANAGEMENT =====================
 app.use('/api/user-management', userManagementRoutes);
 app.use('/api/access-roles', accessRoleRoutes);
+
+// fitness member panel
+app.use("/api/fitness/member-panel",auth, fitnessMemberPanelRoutes);
+
 
 // ===================== HEALTH =====================
 app.get('/api/health', (req, res) => {

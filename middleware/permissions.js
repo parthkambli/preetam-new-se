@@ -60,41 +60,125 @@
 
 
 
-const AccessRole = require('../models/AccessRole');
-const User = require('../models/User');
-const { PERMISSIONS } = require('../utils/permissions');
+// const AccessRole = require('../models/AccessRole');
+// const User = require('../models/User');
+// const { PERMISSIONS } = require('../utils/permissions');
+
+// const allowPermissions = (...requiredPermissions) => {
+//   return async (req, res, next) => {
+//     try {
+//       if (!req.identity) {
+//         return res.status(403).json({ message: 'No identity found' });
+//       }
+
+//       // Admin override
+//       if (req.identity.isAdmin) {
+//         return next();
+//       }
+
+//       let finalPermissions = [];
+
+//       if (req.user?.id) {
+//         const user = await User.findById(req.user.id)
+//           .populate('accessRoleId')
+//           .lean();
+
+//         let rolePermissions = [];
+
+//         // 🔹 Role permissions
+//         if (user?.accessRoleId?.permissions) {
+//           rolePermissions = user.accessRoleId.permissions;
+//         } else {
+//           rolePermissions = PERMISSIONS[req.identity.role] || [];
+//         }
+
+//         // 🔹 Apply overrides
+//         const added = user.customPermissions || [];
+//         const removed = user.removedPermissions || [];
+
+//         finalPermissions = [
+//           ...new Set([
+//             ...rolePermissions.filter(p => !removed.includes(p)),
+//             ...added
+//           ])
+//         ];
+//       }
+
+//       const hasPermission = requiredPermissions.every(p =>
+//         finalPermissions.includes(p)
+//       );
+
+//       if (!hasPermission) {
+//         return res.status(403).json({
+//           message: 'Permission denied'
+//         });
+//       }
+
+//       next();
+
+//     } catch (err) {
+//       console.error('Permission error:', err.message);
+//       res.status(500).json({ message: 'Permission check failed' });
+//     }
+//   };
+// };
+
+// module.exports = { allowPermissions };
+
+
+
+
+
+
+
+const User = require("../models/User");
+const { PERMISSIONS } = require("../utils/permissions");
 
 const allowPermissions = (...requiredPermissions) => {
   return async (req, res, next) => {
     try {
       if (!req.identity) {
-        return res.status(403).json({ message: 'No identity found' });
+        return res.status(403).json({
+          message: "No identity found"
+        });
       }
 
-      // Admin override
+      // ======================================
+      // ADMIN OVERRIDE
+      // ======================================
       if (req.identity.isAdmin) {
         return next();
       }
 
       let finalPermissions = [];
 
-      if (req.user?.id) {
+      // ======================================
+      // PARTICIPANT (Fitness Member)
+      // DO NOT CHECK User MODEL
+      // ======================================
+      if (req.identity.role === "Participant") {
+        finalPermissions = PERMISSIONS["Participant"] || [];
+      }
+
+      // ======================================
+      // STAFF / NORMAL USERS
+      // CHECK User MODEL + ACCESS ROLE
+      // ======================================
+      else if (req.user?.id) {
         const user = await User.findById(req.user.id)
-          .populate('accessRoleId')
+          .populate("accessRoleId")
           .lean();
 
         let rolePermissions = [];
 
-        // 🔹 Role permissions
         if (user?.accessRoleId?.permissions) {
           rolePermissions = user.accessRoleId.permissions;
         } else {
           rolePermissions = PERMISSIONS[req.identity.role] || [];
         }
 
-        // 🔹 Apply overrides
-        const added = user.customPermissions || [];
-        const removed = user.removedPermissions || [];
+        const added = user?.customPermissions || [];
+        const removed = user?.removedPermissions || [];
 
         finalPermissions = [
           ...new Set([
@@ -104,21 +188,33 @@ const allowPermissions = (...requiredPermissions) => {
         ];
       }
 
-      const hasPermission = requiredPermissions.every(p =>
-        finalPermissions.includes(p)
+      // ======================================
+      // DEBUG
+      // ======================================
+      console.log("========== PERMISSION DEBUG ==========");
+      console.log("req.identity:", req.identity);
+      console.log("requiredPermissions:", requiredPermissions);
+      console.log("finalPermissions:", finalPermissions);
+      console.log("=====================================");
+
+      const hasPermission = requiredPermissions.every(permission =>
+        finalPermissions.includes(permission)
       );
 
       if (!hasPermission) {
         return res.status(403).json({
-          message: 'Permission denied'
+          message: "Permission denied"
         });
       }
 
       next();
 
     } catch (err) {
-      console.error('Permission error:', err.message);
-      res.status(500).json({ message: 'Permission check failed' });
+      console.error("Permission error:", err.message);
+
+      return res.status(500).json({
+        message: "Permission check failed"
+      });
     }
   };
 };

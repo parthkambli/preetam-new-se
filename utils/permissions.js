@@ -22,7 +22,7 @@ const PERMISSIONS = {
     'MANAGE_STUDENTS',
   ],
 //fitness member
-  member: [
+  Participant: [
   "VIEW_OWN_PROFILE",
   "VIEW_MEMBERSHIP",
   "VIEW_BOOKINGS",
@@ -34,7 +34,7 @@ const PERMISSIONS = {
 
   // Others
   Student: [],
-  Participant: [],
+  // Participant: [],
 };
 
 module.exports = { PERMISSIONS };
