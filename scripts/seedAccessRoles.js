@@ -24,6 +24,13 @@ const seedRoles = async () => {
       isDefault: true
     },
     {
+      name: 'Participant',
+      roleKey: 'PARTICIPANT',
+      organizationId: 'fitness',
+      permissions: [],
+      isDefault: true
+    },
+    {
       name: 'Admin',
       roleKey: 'ADMIN',
       organizationId: 'fitness',

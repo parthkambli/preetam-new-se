@@ -5,18 +5,29 @@ const auth = require('../middleware/auth');
 const { allowPermissions } = require('../middleware/permissions');
 
 const {
-  createUser,
   getUsers,
   updateUser,
-  deleteUser
+  deleteUser,
+  assignRole,
+  updateUserPermissions
 } = require('../controllers/userManagementController');
 
-// 🔐 Only admins (USER_MANAGE)
+// 🔐 Only admins
 router.use(auth, allowPermissions('USER_MANAGE'));
 
-router.post('/', createUser);
+// GET all users
 router.get('/', getUsers);
+
+// ASSIGN ROLE
+router.put('/assign-role', assignRole);
+
+// UPDATE user
 router.put('/:id', updateUser);
+
+// DELETE user
 router.delete('/:id', deleteUser);
+
+// UPDATE user permissions
+router.put('/permissions', updateUserPermissions);
 
 module.exports = router;

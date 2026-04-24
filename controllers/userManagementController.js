@@ -98,3 +98,67 @@ exports.deleteUser = async (req, res) => {
     res.status(500).json({ message: 'Failed to delete user' });
   }
 };
+
+// ================= ASSIGN ROLE =================
+exports.assignRole = async (req, res) => {
+  try {
+    const { userId, accessRoleId } = req.body;
+
+    if (!userId || !accessRoleId) {
+      return res.status(400).json({
+        message: 'userId and accessRoleId are required'
+      });
+    }
+
+    const role = await AccessRole.findById(accessRoleId);
+
+    if (!role) {
+      return res.status(404).json({ message: 'Access role not found' });
+    }
+
+    const user = await User.findByIdAndUpdate(
+      userId,
+      { accessRoleId },
+      { new: true }
+    ).populate('accessRoleId', 'name permissions');
+
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    res.json({
+      success: true,
+      message: 'Role assigned successfully',
+      data: user
+    });
+
+  } catch (err) {
+    console.error('assignRole error:', err.message);
+    res.status(500).json({ message: 'Failed to assign role' });
+  }
+};
+
+// ================= UPDATE USER PERMISSIONS =================
+exports.updateUserPermissions = async (req, res) => {
+  try {
+    const { userId, customPermissions, removedPermissions } = req.body;
+
+    const user = await User.findByIdAndUpdate(
+      userId,
+      {
+        customPermissions: customPermissions || [],
+        removedPermissions: removedPermissions || []
+      },
+      { new: true }
+    );
+
+    res.json({
+      success: true,
+      data: user
+    });
+
+  } catch (err) {
+    console.error('updateUserPermissions error:', err.message);
+    res.status(500).json({ message: 'Failed to update permissions' });
+  }
+};

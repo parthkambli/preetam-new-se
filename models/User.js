@@ -265,6 +265,14 @@ const userSchema = new mongoose.Schema({
     ref: 'AccessRole',
     default: null
   },
+  customPermissions: {
+    type: [String],
+    default: []
+  },
+  removedPermissions: {
+    type: [String],
+    default: []
+  },
   createdAt: {
     type: Date,
     default: Date.now
