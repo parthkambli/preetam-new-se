@@ -990,6 +990,7 @@
 const fs   = require('fs');
 const path = require('path');
 const mongoose = require('mongoose');
+const QRCode = require('qrcode');
 
 const FitnessMember    = require('../models/FitnessMember');
 const FitnessEnquiry   = require('../models/FitnessEnquiry');
@@ -1472,6 +1473,15 @@ exports.createMember = async (req, res) => {
     }
 
     const member = new FitnessMember(memberData);
+    await member.save();
+    const qrData = JSON.stringify({
+        memberId: member.memberId,
+        org: member.organizationId
+      });
+
+    const qrImage = await QRCode.toDataURL(qrData);
+
+    member.qrCode = qrImage;
     await member.save();
 
     // ================= CREATE USER FOR MEMBER =================

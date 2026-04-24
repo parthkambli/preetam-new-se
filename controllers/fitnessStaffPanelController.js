@@ -950,3 +950,94 @@ exports.getStaffEvents = async (req, res) => {
     });
   }
 };
+
+// ================= GATEKEEPER QR FLOW =================
+exports.handleQRScan = async (req, res) => {
+  try {
+    const { memberId } = req.body;
+    const organizationId = req.organizationId;
+
+    if (!memberId) {
+      return res.status(400).json({ success: false, message: "memberId required" });
+    }
+
+    // 1️⃣ Validate member
+    const member = await FitnessMember.findOne({
+      memberId,
+      organizationId
+    }).populate("activityFees.activity", "name");
+
+    if (!member) {
+      return res.status(404).json({ success: false, message: "Member not found" });
+    }
+
+    // 2️⃣ Get active activities
+    const activeActivities = member.activityFees.filter(
+      (af) => af.membershipStatus === "Active"
+    );
+
+    if (activeActivities.length === 0) {
+      return res.json({
+        success: false,
+        message: "No active activities"
+      });
+    }
+
+    // 3️⃣ If only ONE → auto mark attendance
+    if (activeActivities.length === 1) {
+      const af = activeActivities[0];
+
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      const attendance = await FitnessAttendance.findOneAndUpdate(
+        {
+          member: member._id,
+          activity: af.activity,
+          activityFeeId: af._id,
+          attendanceDate: today
+        },
+        {
+          member: member._id,
+          activity: af.activity,
+          activityFeeId: af._id,
+          attendanceDate: today,
+          markedBy: req.user?._id || req.admin?._id,
+          status: "Present",
+          organizationId
+        },
+        { upsert: true, new: true }
+      );
+
+      return res.json({
+        success: true,
+        autoMarked: true,
+        member: {
+          name: member.name,
+          memberId: member.memberId
+        },
+        activity: af.activity,
+        attendance
+      });
+    }
+
+    // 4️⃣ Multiple → return selection list
+    return res.json({
+      success: true,
+      autoMarked: false,
+      member: {
+        name: member.name,
+        memberId: member.memberId
+      },
+      activities: activeActivities.map((af) => ({
+        activityFeeId: af._id,
+        activityId: af.activity?._id,
+        activityName: af.activity?.name
+      }))
+    });
+
+  } catch (err) {
+    console.error("handleQRScan error:", err);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+};

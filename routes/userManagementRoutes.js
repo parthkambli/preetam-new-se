@@ -9,7 +9,8 @@ const {
   updateUser,
   deleteUser,
   assignRole,
-  updateUserPermissions
+  updateUserPermissions,
+  createUser 
 } = require('../controllers/userManagementController');
 
 // 🔐 Only admins
@@ -17,6 +18,12 @@ router.use(auth, allowPermissions('USER_MANAGE'));
 
 // GET all users
 router.get('/', getUsers);
+
+//create user
+router.post('/', createUser);
+
+// UPDATE user permissions
+router.put('/permissions', updateUserPermissions);
 
 // ASSIGN ROLE
 router.put('/assign-role', assignRole);
@@ -26,8 +33,5 @@ router.put('/:id', updateUser);
 
 // DELETE user
 router.delete('/:id', deleteUser);
-
-// UPDATE user permissions
-router.put('/permissions', updateUserPermissions);
 
 module.exports = router;

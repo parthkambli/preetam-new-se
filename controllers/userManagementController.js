@@ -3,25 +3,69 @@ const AccessRole = require('../models/AccessRole');
 const bcrypt = require('bcryptjs');
 
 // ================= CREATE USER =================
+// exports.createUser = async (req, res) => {
+//   try {
+//     const {
+//       userId,
+//       password,
+//       fullName,
+//       role,
+//       mobile,
+//       organizationId,
+//       accessRoleId
+//     } = req.body;
+
+//     if (!userId || !password || !fullName || !mobile || !organizationId) {
+//       return res.status(400).json({ message: 'Missing required fields' });
+//     }
+
+//     const existing = await User.findOne({ userId, organizationId });
+//     if (existing) {
+//       return res.status(400).json({ message: 'User already exists' });
+//     }
+
+//     const hashedPassword = await bcrypt.hash(password, 10);
+
+//     const user = await User.create({
+//       userId,
+//       password: hashedPassword,
+//       fullName,
+//       role,
+//       mobile,
+//       organizationId,
+//       accessRoleId: accessRoleId || null,
+//       isActive: 'Yes'
+//     });
+
+//     res.json({ success: true, data: user });
+
+//   } catch (err) {
+//     console.error('createUser error:', err.message);
+//     res.status(500).json({ message: 'Failed to create user' });
+//   }
+// };
+
 exports.createUser = async (req, res) => {
   try {
     const {
-      userId,
-      password,
       fullName,
-      role,
       mobile,
+      password,
+      role,
       organizationId,
       accessRoleId
     } = req.body;
 
-    if (!userId || !password || !fullName || !mobile || !organizationId) {
+    if (!fullName || !mobile || !password || !organizationId) {
       return res.status(400).json({ message: 'Missing required fields' });
     }
 
-    const existing = await User.findOne({ userId, organizationId });
+    // 🔥 Auto-generate userId
+    const userId = `USR${Date.now()}`;
+
+    const existing = await User.findOne({ mobile, organizationId });
     if (existing) {
-      return res.status(400).json({ message: 'User already exists' });
+      return res.status(400).json({ message: 'User already exists with this mobile' });
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
@@ -30,14 +74,20 @@ exports.createUser = async (req, res) => {
       userId,
       password: hashedPassword,
       fullName,
-      role,
+      role: role || 'Gatekeeper',
       mobile,
       organizationId,
+      userType: 'manual',       // ✅ IMPORTANT
+      linkedId: null,           // ✅ IMPORTANT
       accessRoleId: accessRoleId || null,
       isActive: 'Yes'
     });
 
-    res.json({ success: true, data: user });
+    res.json({
+      success: true,
+      message: 'Manual user created',
+      data: user
+    });
 
   } catch (err) {
     console.error('createUser error:', err.message);
@@ -49,7 +99,8 @@ exports.createUser = async (req, res) => {
 exports.getUsers = async (req, res) => {
   try {
     const users = await User.find({
-      organizationId: req.organizationId
+      organizationId: req.organizationId,
+      role: { $nin: ['Participant'] }   // 🔥 hide members
     })
       .select('-password')
       .populate('accessRoleId', 'name permissions')
@@ -139,18 +190,47 @@ exports.assignRole = async (req, res) => {
 };
 
 // ================= UPDATE USER PERMISSIONS =================
+// exports.updateUserPermissions = async (req, res) => {
+//   try {
+//     const { userId, customPermissions, removedPermissions } = req.body;
+
+//     const user = await User.findByIdAndUpdate(
+//       userId,
+//       {
+//         customPermissions: customPermissions || [],
+//         removedPermissions: removedPermissions || []
+//       },
+//       { new: true }
+//     );
+
+//     res.json({
+//       success: true,
+//       data: user
+//     });
+
+//   } catch (err) {
+//     console.error('updateUserPermissions error:', err.message);
+//     res.status(500).json({ message: 'Failed to update permissions' });
+//   }
+// };
+
 exports.updateUserPermissions = async (req, res) => {
   try {
     const { userId, customPermissions, removedPermissions } = req.body;
 
-    const user = await User.findByIdAndUpdate(
-      userId,
-      {
-        customPermissions: customPermissions || [],
-        removedPermissions: removedPermissions || []
-      },
-      { new: true }
-    );
+    const user = await User.findById(userId);
+
+    // 🔥 ADD THIS BLOCK HERE
+    if (user.role === 'Participant') {
+      return res.status(403).json({
+        message: 'Participant permissions cannot be modified'
+      });
+    }
+
+    user.customPermissions = customPermissions || [];
+    user.removedPermissions = removedPermissions || [];
+
+    await user.save();
 
     res.json({
       success: true,

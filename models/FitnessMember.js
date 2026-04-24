@@ -309,6 +309,11 @@ numberOfPersons: {
   default: 1
 },
 
+qrCode: {
+  type: String,
+  default: ""
+},
+
   organizationId: { type: String, required: [true, 'Organization ID is required'], index: true },
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now },

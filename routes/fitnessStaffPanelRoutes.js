@@ -24,6 +24,7 @@ const {
   getAttendanceByDate,
   getStaffProfile,
   getStaffEvents,
+  handleQRScan,
 } = require("../controllers/fitnessStaffPanelController");
 
 const auth = require("../middleware/auth");
@@ -63,5 +64,7 @@ router.get(
   allowPermissions('VIEW_EVENTS'),
   getStaffEvents
 );
+
+router.post('/scan-qr', auth, handleQRScan);
 
 module.exports = router;

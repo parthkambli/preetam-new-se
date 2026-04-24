@@ -216,7 +216,7 @@ const userSchema = new mongoose.Schema({
   },
   role: {
     type: String,
-    enum: ['Student', 'Participant', 'Admin', 'SchoolStaff', 'FitnessStaff'],
+    enum: ['Student', 'Participant', 'Admin', 'SchoolStaff', 'FitnessStaff', 'Gatekeeper'],
     default: 'Student'
   },
   mobile: {
@@ -237,15 +237,24 @@ const userSchema = new mongoose.Schema({
     required: true,
     trim: true
   },
+  // userType: {
+  //   type: String,
+  //   enum: ['school', 'fitness', 'member'],
+  //   required: true
+  // },
   userType: {
     type: String,
-    enum: ['school', 'fitness', 'member'],
+    enum: ['school', 'fitness', 'member', 'manual'], // ✅ ADD manual
     required: true
   },
+  // linkedId: {
+  //   type: mongoose.Schema.Types.ObjectId,
+  //   required: true,
+  //   description: 'References Student, Admission, or FitnessMember _id'
+  // },
   linkedId: {
     type: mongoose.Schema.Types.ObjectId,
-    required: true,
-    description: 'References Student, Admission, or FitnessMember _id'
+    default: null
   },
   isActive: {
     type: String,
