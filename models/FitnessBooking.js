@@ -187,7 +187,13 @@ paymentStatus: {
 
 paymentSource: {
   type: String,
-  default: "Razorpay Booking Payment"
+  enum: [
+    "Admin Panel",
+    "Member App Razorpay",
+    "Walk-in Collection",
+    "Manual Adjustment"
+  ],
+  default: "Admin Panel"
 }
 });
 
