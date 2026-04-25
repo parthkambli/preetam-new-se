@@ -606,17 +606,17 @@ exports.getActivityFeePlans = async (req, res) => {
     // FIND FEE TYPE USING DESCRIPTION
     // description = activity name
     // ======================================
-    const feeType = await FitnessFeeType.findOne({
-      description: activity.name,
-      organizationId: req.organizationId
-    }).lean();
+const feeType = await FitnessFeeType.findOne({
+  organizationId: req.organizationId,
+  description: activity.name
+}).lean();
 
-    if (!feeType) {
-      return res.status(404).json({
-        success: false,
-        message: "Fee structure not found for this activity"
-      });
-    }
+if (!feeType) {
+  return res.status(404).json({
+    success: false,
+    message: "Fee structure not found for this activity"
+  });
+}
 
     // ======================================
     // FORMAT AVAILABLE PLANS
@@ -1400,9 +1400,8 @@ exports.getMemberMemberships = async (req, res) => {
   }
 };
 
-
 // ============================================
-// MEMBER PROFILE
+// MEMBER PROFILE WITH QR
 // GET /api/fitness/member-panel/profile
 // ============================================
 exports.getMemberProfile = async (req, res) => {
@@ -1415,6 +1414,30 @@ exports.getMemberProfile = async (req, res) => {
         message: "Member not found"
       });
     }
+
+    const today = new Date();
+
+    const activeActivities = (member.activityFees || [])
+      .filter((item) => {
+        if (
+          item.paymentStatus !== "Paid" ||
+          item.membershipStatus !== "Active"
+        ) {
+          return false;
+        }
+
+        if (!item.endDate) return false;
+
+        return new Date(item.endDate) >= today;
+      })
+      .map((item) => ({
+        activityFeeId: item._id,
+        activityId: item.activity,
+        plan: item.plan,
+        startDate: item.startDate,
+        endDate: item.endDate,
+        membershipStatus: item.membershipStatus
+      }));
 
     return res.status(200).json({
       success: true,
@@ -1429,8 +1452,17 @@ exports.getMemberProfile = async (req, res) => {
         gender: member.gender || "",
         address: member.address || "",
         photo: member.photo || "",
-        membershipStatus: member.membershipStatus || "Inactive",
-        status: member.status || "Inactive"
+
+        membershipStatus:
+          member.membershipStatus || "Inactive",
+
+        status: member.status || "Inactive",
+
+        // IMPORTANT
+        qrCode: member.qrCode || "",
+
+        // staff scanner support
+        activeActivities
       }
     });
 

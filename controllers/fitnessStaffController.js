@@ -709,6 +709,30 @@ const updateFitnessStaff = async (req, res) => {
 // ═════════════════════════════════════════════════════════════════════════════
 // DELETE STAFF
 // ═════════════════════════════════════════════════════════════════════════════
+// const deleteFitnessStaff = async (req, res) => {
+//   try {
+//     const { id } = req.params;
+
+//     if (!id.match(/^[0-9a-fA-F]{24}$/)) {
+//       return respond(res, 400, false, "Invalid staff ID format");
+//     }
+
+//     const staff = await FitnessStaff.findById(id);
+//     if (!staff) {
+//       return respond(res, 404, false, "Staff member not found");
+//     }
+
+//     deleteFile(staff.profilePhoto);
+
+//     await staff.deleteOne();
+
+//     return respond(res, 200, true, "Staff member deleted successfully");
+//   } catch (err) {
+//     console.error("[deleteFitnessStaff]", err);
+//     return respond(res, 500, false, "Internal server error while deleting staff member");
+//   }
+// };
+
 const deleteFitnessStaff = async (req, res) => {
   try {
     const { id } = req.params;
@@ -718,18 +742,44 @@ const deleteFitnessStaff = async (req, res) => {
     }
 
     const staff = await FitnessStaff.findById(id);
+
     if (!staff) {
       return respond(res, 404, false, "Staff member not found");
     }
 
+    // Delete profile photo
     deleteFile(staff.profilePhoto);
 
+    // ================= DELETE LINKED USER =================
+    try {
+      await User.findOneAndDelete({
+        linkedId: staff._id,
+        organizationId: "fitness",
+        userType: "fitness"
+      });
+    } catch (userErr) {
+      console.error("User deletion failed (non-fatal):", userErr.message);
+    }
+
+    // Delete staff record
     await staff.deleteOne();
 
-    return respond(res, 200, true, "Staff member deleted successfully");
+    return respond(
+      res,
+      200,
+      true,
+      "Staff member deleted successfully"
+    );
+
   } catch (err) {
     console.error("[deleteFitnessStaff]", err);
-    return respond(res, 500, false, "Internal server error while deleting staff member");
+
+    return respond(
+      res,
+      500,
+      false,
+      "Internal server error while deleting staff member"
+    );
   }
 };
 

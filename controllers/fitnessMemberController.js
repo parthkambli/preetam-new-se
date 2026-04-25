@@ -2004,6 +2004,17 @@ exports.deleteMember = async (req, res) => {
 
     await FitnessBooking.deleteMany({ memberId: req.params.id });
 
+    // ================= DELETE LINKED USER =================
+try {
+  await User.deleteOne({
+    linkedId: member._id,
+    organizationId: req.organizationId,
+    userType: "member"
+  });
+} catch (userErr) {
+  console.error('User deletion failed (non-fatal):', userErr.message);
+}
+
     res.json({ message: 'Member deleted successfully.' });
   } catch (err) {
     console.error('deleteMember error:', err);
