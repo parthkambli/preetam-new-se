@@ -6,6 +6,7 @@ const AccessRole = require('../models/AccessRole');
 dotenv.config();
 
 connectDB();
+// Do not run it will delete all the roles and re-create the default ones. Only run if you want to reset the roles to default.
 
 const seedRoles = async () => {
   await AccessRole.deleteMany({});
@@ -18,7 +19,7 @@ const seedRoles = async () => {
       permissions: [
         'VIEW_OWN_SCHEDULE',
         'VIEW_ACTIVITIES',
-        'MARK_ATTENDANCE',
+        'VIEW_ATTENDANCE',
         'VIEW_EVENTS'
       ],
       isDefault: true

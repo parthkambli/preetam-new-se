@@ -12,7 +12,7 @@ const PERMISSIONS = {
   FitnessStaff: [
     'VIEW_OWN_SCHEDULE',
     'VIEW_ACTIVITIES',
-    'MARK_ATTENDANCE',
+    'VIEW_ATTENDANCE',
     'VIEW_EVENTS',
   ],
 

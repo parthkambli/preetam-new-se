@@ -386,7 +386,10 @@ exports.login = async (req, res) => {
 
     // ── 2. Staff / User check ──────────────────────────────────────────────
     const filter = buildUserIdentifierFilter(userId);
-    const user = await User.findOne(filter).populate('staffId');
+    const user = await User.findOne(filter)
+      .populate('staffId')
+      .populate('accessRoleId', 'name permissions') // ✅ CRITICAL
+      .lean();
 
     if (user) {
       const match = await bcrypt.compare(password, user.password);
@@ -432,7 +435,12 @@ exports.login = async (req, res) => {
           role: user.role,
           userType: user.userType,
           organizationId: user.organizationId,
-          staffId: user.staffId
+          staffId: user.staffId,
+
+          // 🔥 ADD THESE
+          accessRoleId: user.accessRoleId || null,
+          customPermissions: user.customPermissions || [],
+          removedPermissions: user.removedPermissions || []
         }
       });
     }
