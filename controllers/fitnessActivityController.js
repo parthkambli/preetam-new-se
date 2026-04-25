@@ -1648,28 +1648,54 @@ exports.getAvailability = async (req, res) => {
 
     const result = [];
 
+    // for (let slot of activity.slots) {
+    //   let fullyAvailableDays = 0;
+
+    //   for (let d of dates) {
+    //     const count = await FitnessBooking.countDocuments({ slotId: slot._id, date: d });
+    //     const isAvailable = count < activity.capacity;
+    //     if (isAvailable) fullyAvailableDays++;
+    //   }
+
+    //   const percentage = Math.round((fullyAvailableDays / dates.length) * 100);
+
+    //   // membersOnly removed from response
+    //   result.push({
+    //     slotId:                 slot._id,
+    //     startTime:              slot.startTime,
+    //     endTime:                slot.endTime,
+    //     capacity:               activity.capacity,
+    //     totalDays:              dates.length,
+    //     fullyAvailableDays,
+    //     availabilityPercentage: percentage,
+    //   });
+    // }
+
     for (let slot of activity.slots) {
-      let fullyAvailableDays = 0;
+  let booked = 0;
 
-      for (let d of dates) {
-        const count = await FitnessBooking.countDocuments({ slotId: slot._id, date: d });
-        const isAvailable = count < activity.capacity;
-        if (isAvailable) fullyAvailableDays++;
-      }
+  // for single date booking page
+  if (date) {
+    booked = await FitnessBooking.countDocuments({
+      activityId: activityId,
+      slotId: slot._id,
+      date: new Date(date)
+    });
+  }
 
-      const percentage = Math.round((fullyAvailableDays / dates.length) * 100);
+  const isFull = booked >= activity.capacity;
+  const remaining = Math.max(activity.capacity - booked, 0);
 
-      // membersOnly removed from response
-      result.push({
-        slotId:                 slot._id,
-        startTime:              slot.startTime,
-        endTime:                slot.endTime,
-        capacity:               activity.capacity,
-        totalDays:              dates.length,
-        fullyAvailableDays,
-        availabilityPercentage: percentage,
-      });
-    }
+  result.push({
+    slotId: slot._id,
+    startTime: slot.startTime,
+    endTime: slot.endTime,
+    capacity: activity.capacity,
+    booked,
+    remaining,
+    isFull
+  });
+}
 
     res.json({
       success: true,
