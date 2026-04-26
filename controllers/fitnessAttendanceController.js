@@ -62,7 +62,15 @@ exports.markAttendance = async (req, res) => {
     const { memberId, activityFeeId, activityId, status = 'Present', notes } = req.body;
     
     const organizationId = req.organizationId;
-    const markedBy = req.admin?._id || req.admin?.id;   // Try both possible structures
+    const User = require('../models/User');
+
+    const user = await User.findOne({ userId: req.user.userId });
+
+    if (!user) {
+      return res.status(401).json({ error: 'User not found' });
+    }
+
+    const markedBy = user._id;   // Try both possible structures
 
     // === DEBUG (Keep temporarily) ===
     console.log("=== Mark Attendance Debug ===");
@@ -72,7 +80,7 @@ exports.markAttendance = async (req, res) => {
     console.log("Body:", req.body);
     // ================================
 
-    if (!memberId || !activityFeeId || !activityId || !organizationId || !markedBy) {
+    if (!memberId || !activityFeeId || !activityId || !organizationId) {
       return res.status(400).json({ 
         error: 'Missing required fields',
         debug: {
@@ -91,6 +99,41 @@ exports.markAttendance = async (req, res) => {
 
     const activityFee = member.activityFees.id(activityFeeId);
     if (!activityFee || activityFee.membershipStatus !== 'Active') {
+      // 🔥 TIME VALIDATION (CRITICAL)
+      const FitnessActivity = require('../models/FitnessActivity');
+
+      const activity = await FitnessActivity.findById(activityId).lean();
+
+      if (!activity || !activity.slots || activity.slots.length === 0) {
+        return res.status(400).json({ error: "No slots found for activity" });
+      }
+
+      // ⚠️ ASSUMPTION: first slot (since your current system doesn't store slotId)
+      const slot = activity.slots[0];
+
+      const now = new Date();
+      const todayStr = new Date().toISOString().split("T")[0];
+
+      const slotStartTime = new Date(`${todayStr}T${slot.startTime}:00`);
+      const slotEndTime = new Date(`${todayStr}T${slot.endTime}:00`);
+
+      const allowedStartTime = new Date(
+        slotStartTime.getTime() - 10 * 60 * 1000
+      );
+
+      // ❌ TOO EARLY
+      if (now < allowedStartTime) {
+        return res.status(400).json({
+          error: "Attendance not started yet"
+        });
+      }
+
+      // ❌ TOO LATE
+      if (now > slotEndTime) {
+        return res.status(400).json({
+          error: "Attendance window closed"
+        });
+      }
       return res.status(400).json({ error: 'This activity is not active for the member today' });
     }
 

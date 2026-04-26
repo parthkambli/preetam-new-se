@@ -11,62 +11,30 @@ const fixMemberQR = async () => {
     console.log('🔌 Connecting DB...');
     await mongoose.connect(process.env.MONGO_URI);
 
-    console.log('🚀 Fixing QR codes...');
+    console.log('🚀 Regenerating QR codes...');
 
     const members = await FitnessMember.find();
 
     let updatedCount = 0;
 
     for (const member of members) {
-      try {
-        // ❌ Skip if no memberId (should not happen, but be safe)
-        if (!member.memberId) {
-          console.log(`⚠️ Skipping member without memberId: ${member._id}`);
-          continue;
-        }
+      if (!member.memberId) continue;
 
-        // 🔍 Detect broken QR
-        let isBroken = false;
+      const qrData = JSON.stringify({
+        memberId: member.memberId,
+        organizationId: member.organizationId,
+      });
 
-        if (!member.qrCode) {
-          isBroken = true;
-        } else {
-          try {
-            const decoded = JSON.parse(
-              Buffer.from(member.qrCode.split(',')[1], 'base64').toString()
-            );
+      const qrImage = await QRCode.toDataURL(qrData);
 
-            if (!decoded.memberId) {
-              isBroken = true;
-            }
-          } catch {
-            isBroken = true;
-          }
-        }
+      member.qrCode = qrImage;
+      await member.save();
 
-        if (!isBroken) continue;
-
-        // ✅ Generate correct QR
-        const qrData = JSON.stringify({
-          memberId: member.memberId,
-          org: member.organizationId,
-        });
-
-        const qrImage = await QRCode.toDataURL(qrData);
-
-        member.qrCode = qrImage;
-        await member.save();
-
-        updatedCount++;
-        console.log(`✅ Fixed: ${member.memberId}`);
-
-      } catch (err) {
-        console.error(`❌ Error fixing member ${member._id}:`, err.message);
-      }
+      updatedCount++;
+      console.log(`✅ Updated: ${member.memberId}`);
     }
 
     console.log(`🎉 Done. Updated ${updatedCount} members`);
-
     process.exit(0);
 
   } catch (err) {

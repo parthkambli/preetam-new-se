@@ -25,6 +25,8 @@ const {
   getStaffProfile,
   getStaffEvents,
   handleQRScan,
+  getAllMembersForStaff,
+  getAllStaffForStaff
 } = require("../controllers/fitnessStaffPanelController");
 
 const auth = require("../middleware/auth");
@@ -47,14 +49,28 @@ router.get(
 router.get(
   "/attendance-by-date",
   auth,
-  allowPermissions('MARK_ATTENDANCE'),
+  allowPermissions('VIEW_ATTENDANCE'),
   getAttendanceByDate
+);
+
+router.get(
+  "/members",
+  auth,
+  allowPermissions("VIEW_PARTICIPANTS"),
+  getAllMembersForStaff
+);
+
+router.get(
+  "/staff",
+  auth,
+  allowPermissions("VIEW_STAFF"),
+  getAllStaffForStaff
 );
 
 router.get(
   "/profile",
   auth,
-  allowPermissions('VIEW_OWN_SCHEDULE'),
+  // allowPermissions('VIEW_OWN_SCHEDULE'),
   getStaffProfile
 );
 
@@ -65,6 +81,10 @@ router.get(
   getStaffEvents
 );
 
-router.post('/scan-qr', auth, handleQRScan);
+router.post(
+  '/scan-qr',
+   auth,
+   allowPermissions('MARK_ATTENDANCE'),
+   handleQRScan);
 
 module.exports = router;

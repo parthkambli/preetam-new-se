@@ -25,7 +25,7 @@ exports.getRoles = async (req, res) => {
 // ================= CREATE ROLE =================
 exports.createRole = async (req, res) => {
   try {
-    const { name, permissions } = req.body;
+    const { name, permissions, isDefault } = req.body;
 
     if (!name) {
       return res.status(400).json({ message: 'Role name is required' });
@@ -45,11 +45,19 @@ exports.createRole = async (req, res) => {
       });
     }
 
+    if (isDefault) {
+      await AccessRole.updateMany(
+        { organizationId: req.organizationId },
+        { $set: { isDefault: false } }
+      );
+    }
+
     const role = await AccessRole.create({
       name,
       roleKey,
       permissions: permissions || [],
-      organizationId: req.organizationId
+      organizationId: req.organizationId,
+      isDefault: isDefault || false
     });
 
     res.json({ success: true, data: role });

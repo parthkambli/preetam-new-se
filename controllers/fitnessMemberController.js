@@ -1475,9 +1475,9 @@ exports.createMember = async (req, res) => {
     const member = new FitnessMember(memberData);
     await member.save();
     const qrData = JSON.stringify({
-        memberId: member.memberId,
-        org: member.organizationId
-      });
+      memberId: member.memberId,
+      organizationId: member.organizationId
+    });
 
     const qrImage = await QRCode.toDataURL(qrData);
 

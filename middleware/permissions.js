@@ -164,10 +164,17 @@ const allowPermissions = (...requiredPermissions) => {
       // STAFF / NORMAL USERS
       // CHECK User MODEL + ACCESS ROLE
       // ======================================
-      else if (req.user?.id) {
-        const user = await User.findById(req.user.id)
-          .populate("accessRoleId")
-          .lean();
+      // else if (req.user?.id) {
+      //   const user = await User.findById(req.user.id)
+      //     .populate("accessRoleId")
+      //     .lean();
+
+        else if (req.user?._id || req.user?.id) {
+          const userId = req.user._id || req.user.id;
+
+          const user = await User.findById(userId)
+            .populate("accessRoleId")
+            .lean();      
 
         let rolePermissions = [];
 

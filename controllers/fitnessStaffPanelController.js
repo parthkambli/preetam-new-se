@@ -415,6 +415,7 @@ const FitnessActivity = require("../models/FitnessActivity");
 const FitnessBooking = require("../models/FitnessBooking");
 const FitnessStaff = require("../models/FitnessStaff");
 const FitnessAttendance = require("../models/FitnessAttendance");
+const FitnessMember = require("../models/FitnessMember");
 
 const FitnessEvent = require("../models/FitnessEvent");
 
@@ -869,11 +870,22 @@ exports.getAttendanceByDate = async (req, res) => {
 
         const now = new Date();
 
-        // IMPORTANT:
-        // add :00 if your DB stores time like "18:30"
+        const slotStartTime = new Date(
+          `${selectedDate}T${slot.startTime}:00`
+        );
+
         const slotEndTime = new Date(
           `${selectedDate}T${slot.endTime}:00`
         );
+
+        // ✅ allow 10 min before start
+        const allowedStartTime = new Date(
+          slotStartTime.getTime() - 10 * 60 * 1000
+        );
+
+        // ✅ can mark logic
+        const canMarkAttendance =
+          now >= allowedStartTime && now <= slotEndTime;
 
         // 4. Merge participant data
         const participants = bookings.map((b) => {
@@ -887,7 +899,7 @@ exports.getAttendanceByDate = async (req, res) => {
           }
 
           // If slot completed and still not marked → auto absent
-          else if (now >= slotEndTime) {
+          else if (now > slotEndTime) {
             finalStatus = "Absent";
           }
 
@@ -921,6 +933,7 @@ exports.getAttendanceByDate = async (req, res) => {
           present,
           absent,
           status,
+          canMarkAttendance,
           participants,
         });
       }
@@ -1357,3 +1370,58 @@ exports.handleQRScan = async (req, res) => {
 //     res.status(500).json({ success: false, message: "Server error" });
 //   }
 // };
+
+exports.getAllStaffForStaff = async (req, res) => {
+  try {
+    const staff = await FitnessStaff.find({})
+      .select("fullName mobileNumber emailId role")
+      .lean();
+
+    return res.json({
+      success: true,
+      count: staff.length,
+      data: staff,
+    });
+
+  } catch (err) {
+    console.error("getAllStaffForStaff error:", err);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch staff",
+    });
+  }
+};
+
+exports.getAllMembersForStaff = async (req, res) => {
+  try {
+    const staffObjectId = await resolveLoggedInStaffObjectId(req);
+
+    if (!staffObjectId) {
+      return res.status(403).json({
+        success: false,
+        message: "Unauthorized staff",
+      });
+    }
+
+    // ✅ Fetch ALL members (not just bookings)
+    const members = await FitnessMember.find({
+      organizationId: req.organizationId
+    })
+      .select("name memberId mobile membershipStatus activityFees")
+      .lean();
+
+    return res.json({
+      success: true,
+      count: members.length,
+      data: members,
+    });
+
+  } catch (err) {
+    console.error("getAllMembersForStaff error:", err);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch members",
+    });
+  }
+};
+
