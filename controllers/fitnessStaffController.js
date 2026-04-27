@@ -505,11 +505,43 @@ const createFitnessStaff = async (req, res) => {
 
     const employeeId = "EMP" + String(nextNumber).padStart(4, "0");
 
-    const staffData = {
-      ...value,
-      employeeId,
-      profilePhoto: req.file ? buildPhotoPath(req.file.filename) : null,
-    };
+//    const staffData = {
+//   ...value,
+//   employeeId,
+//   profilePhoto: req.file ? buildPhotoPath(req.file.filename) : null,
+// };
+
+// if (value.emailId?.trim()) {
+//   staffData.emailId = value.emailId.trim();
+// } else {
+//   delete staffData.emailId;
+// }
+
+
+const staffData = {
+  employeeId,
+  fullName: value.fullName,
+  role: value.role,
+  gender: value.gender,
+  dateOfBirth: value.dateOfBirth,
+  joiningDate: value.joiningDate,
+  employmentType: value.employmentType,
+  status: value.status,
+  salary: value.salary,
+  mobileNumber: value.mobileNumber,
+  password: value.password,
+  fullAddress: value.fullAddress,
+  emergencyContactName: value.emergencyContactName,
+  emergencyRelation: value.emergencyRelation,
+  emergencyContactMobile: value.emergencyContactMobile,
+  profilePhoto: req.file ? buildPhotoPath(req.file.filename) : null,
+};
+
+if (value.emailId?.trim()) {
+  staffData.emailId = value.emailId.trim();
+}
+
+// console.log("FINAL staffData before save:", staffData);
 
     const savedStaff = await FitnessStaff.create(staffData);
 
@@ -529,7 +561,10 @@ const accessRole = await AccessRole.findOne({
       password: hashedPassword,
       fullName: value.fullName,
       mobile: value.mobileNumber,
-      email: value.emailId || "",
+
+        ...(value.emailId?.trim() && {
+    email: value.emailId.trim(),
+  }),
       role: "FitnessStaff",
       userType: "fitness",
       organizationId: "fitness",
@@ -673,30 +708,100 @@ const updateFitnessStaff = async (req, res) => {
       }
     }
 
-    if (value.emailId && value.emailId !== existing.emailId) {
-      const dup = await FitnessStaff.findOne({ emailId: value.emailId, _id: { $ne: id } });
+    // if (value.emailId && value.emailId !== existing.emailId) 
+    const incomingEmail = value.emailId?.trim();
+
+if (incomingEmail && incomingEmail !== existing.emailId){
+      const dup = await FitnessStaff.findOne({
+  emailId: incomingEmail,
+  _id: { $ne: id }
+});
       if (dup) {
         if (req.file) deleteFile(req.file.path);
         return respond(res, 409, false, "Email address is already used by another staff member");
       }
     }
 
-    if (!value.password) delete value.password;
+    // if (!value.password) delete value.password;
 
-    // === MOST IMPORTANT PART ===
-    if (req.file) {
-      // Delete old photo
-      deleteFile(existing.profilePhoto);
-      // Set new photo
-      value.profilePhoto = buildPhotoPath(req.file.filename);
-    }
-    // If no new file uploaded, do NOT overwrite profilePhoto with null/undefined
+    // // === MOST IMPORTANT PART ===
+    // if (req.file) {
+    //   // Delete old photo
+    //   deleteFile(existing.profilePhoto);
+    //   // Set new photo
+    //   value.profilePhoto = buildPhotoPath(req.file.filename);
+    // }
+    // // If no new file uploaded, do NOT overwrite profilePhoto with null/undefined
 
-    const updated = await FitnessStaff.findByIdAndUpdate(
-      id,
-      { $set: value },
-      { new: true, runValidators: true }
-    );
+    // const updated = await FitnessStaff.findByIdAndUpdate(
+    //   id,
+    //   { $set: value },
+    //   { new: true, runValidators: true }
+    // );
+
+if (!value.password) {
+  delete value.password;
+}
+
+const updateData = { ...value };
+const unsetData = {};
+
+// Handle email safely
+if (value.emailId?.trim()) {
+  updateData.emailId = value.emailId.trim();
+} else {
+  delete updateData.emailId;
+  unsetData.emailId = "";
+}
+
+// Handle profile photo
+if (req.file) {
+  deleteFile(existing.profilePhoto);
+  updateData.profilePhoto = buildPhotoPath(req.file.filename);
+}
+
+// Final update object
+const updateQuery = {
+  $set: updateData,
+};
+
+if (Object.keys(unsetData).length > 0) {
+  updateQuery.$unset = unsetData;
+}
+
+const updated = await FitnessStaff.findByIdAndUpdate(
+  id,
+  updateQuery,
+  {
+    new: true,
+    runValidators: true,
+  }
+);
+
+await User.findOneAndUpdate(
+  {
+    linkedId: existing._id,
+    organizationId: "fitness",
+    userType: "fitness",
+  },
+  {
+    $set: {
+      fullName: updated.fullName,
+      mobile: updated.mobileNumber,
+      ...(updated.emailId
+        ? { email: updated.emailId }
+        : {}),
+    },
+    ...(updated.emailId
+      ? {}
+      : {
+          $unset: {
+            email: "",
+          },
+        }),
+  }
+);
+
 
     return respond(res, 200, true, "Staff member updated successfully", updated);
   } catch (err) {

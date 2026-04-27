@@ -208,14 +208,13 @@ const fitnessStaffSchema = new mongoose.Schema(
     },
 
     emailId: {
-      type: String,
-      unique: true,
-      sparse: true,          // allows multiple null values despite unique index
-      trim: true,
-      lowercase: true,
-      match: [/^\S+@\S+\.\S+$/, "Please enter a valid email address"],
-      default: null,
-    },
+  type: String,
+  unique: true,
+  sparse: true,
+  trim: true,
+  lowercase: true,
+  match: [/^\S+@\S+\.\S+$/, "Please enter a valid email address"],
+},
 
     password: {
       type: String,
