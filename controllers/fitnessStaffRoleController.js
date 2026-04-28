@@ -67,10 +67,12 @@ exports.createRole = async (req, res) => {
           roleKey,
           organizationId: req.organizationId,
           permissions: [
-            "VIEW_OWN_SCHEDULE",
-            "VIEW_ACTIVITIES",
-            "VIEW_ATTENDANCE",
-            "VIEW_EVENTS"
+            'VIEW_OWN_SCHEDULE',
+            'VIEW_ACTIVITIES',
+            'VIEW_ATTENDANCE',
+            'VIEW_EVENTS',
+            'VIEW_STAFF',
+            'VIEW_PARTICIPANTS'
           ],
           isDefault: false
         });
