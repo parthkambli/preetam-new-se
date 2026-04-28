@@ -265,7 +265,9 @@ const run = async () => {
           'VIEW_OWN_SCHEDULE',
           'VIEW_ACTIVITIES',
           'VIEW_ATTENDANCE',
-          'VIEW_EVENTS'
+          'VIEW_EVENTS',
+          'VIEW_STAFF',
+          'VIEW_PARTICIPANTS'
         ],
         isDefault: false
       });
