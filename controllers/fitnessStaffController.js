@@ -599,6 +599,12 @@ const getFitnessStaff = async (req, res) => {
     if (req.query.status && req.query.status.trim()) {
       filter.status = req.query.status.trim();
     }
+    if (req.query.mobile && req.query.mobile.trim()) {
+  filter.mobileNumber = {
+    $regex: req.query.mobile.trim(),
+    $options: "i",
+  };
+}
 
     if (req.query.role && req.query.role.trim()) {
       filter.role = { $regex: req.query.role.trim(), $options: "i" };
@@ -627,20 +633,80 @@ const getFitnessStaff = async (req, res) => {
       ];
     }
 
-    const staff = await FitnessStaff.find(filter)
-      .sort({ createdAt: -1 })
-      .lean();
 
-    return respond(res, 200, true, "Staff members retrieved successfully", {
-      staff,
-      filters: {
-        status: req.query.status || "",
-        role: req.query.role || "",
-        gender: req.query.gender || "",
-        employmentType: req.query.employmentType || "",
-        search: req.query.search || "",
-      },
-    });
+const page = parseInt(req.query.page) || 1;
+const limit = parseInt(req.query.limit) || 10;
+const skip = (page - 1) * limit;
+
+const totalRecords =
+  await FitnessStaff.countDocuments(filter);
+
+const staff = await FitnessStaff.find(filter)
+  .sort({ createdAt: -1 })
+  .skip(skip)
+  .limit(limit)
+  .lean();
+
+    // return respond(res, 200, true, "Staff members retrieved successfully", {
+    //   staff,
+    //   filters: {
+    //     status: req.query.status || "",
+    //     role: req.query.role || "",
+    //     gender: req.query.gender || "",
+    //     employmentType: req.query.employmentType || "",
+    //     search: req.query.search || "",
+    //   },
+    // });
+// return respond(res, 200, true, "Staff members retrieved successfully", {
+//   staff,
+//   pagination: {
+//     totalRecords,
+//     currentPage: page,
+//     totalPages: Math.ceil(totalRecords / limit),
+//     limit,
+//     hasNextPage: page < Math.ceil(totalRecords / limit),
+//     hasPrevPage: page > 1
+//   },
+//   filters: {
+//     status: req.query.status || "",
+//     role: req.query.role || "",
+//     gender: req.query.gender || "",
+//     employmentType: req.query.employmentType || "",
+//     search: req.query.search || "",
+//   }
+// });
+
+return respond(
+  res,
+  200,
+  true,
+  "Staff members retrieved successfully",
+  {
+    staff,
+    pagination: {
+      totalRecords,
+      currentPage: page,
+      totalPages: Math.ceil(
+        totalRecords / limit
+      ),
+      limit,
+      hasNextPage:
+        page < Math.ceil(totalRecords / limit),
+      hasPrevPage: page > 1,
+    },
+    filters: {
+      status: req.query.status || "",
+      mobile: req.query.mobile || "",
+      role: req.query.role || "",
+      gender: req.query.gender || "",
+      employmentType:
+        req.query.employmentType || "",
+      search: req.query.search || "",
+    },
+  }
+);
+
+
   } catch (err) {
     console.error("[getFitnessStaff]", err);
     return respond(res, 500, false, "Internal server error while fetching staff members");

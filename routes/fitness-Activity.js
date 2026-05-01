@@ -10,7 +10,7 @@ router.get('/', controller.getActivities);
 router.get('/availability', controller.getAvailability);
 router.post('/book', controller.bookSlot);
 router.get('/bookings', controller.getBookings);
-router.get('/bookings/all', controller.getAllBookingsForDashboard);  // For Bookings  dashboard only...
+router.get('/dashboard', controller.getDashboardByDate);  // For Bookings  dashboard only...
 router.delete('/bookings/:id', controller.cancelBooking); 
 
 // ================= ID ROUTES (ALWAYS LAST) =================

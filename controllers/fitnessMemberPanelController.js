@@ -1732,6 +1732,85 @@ exports.getMemberMembershipSummary = async (req, res) => {
 // AVAILABLE ACTIVITIES + SLOT AVAILABILITY
 // GET /api/fitness/member-panel/available-activities
 // ============================================
+// exports.getAvailableActivities = async (req, res) => {
+//   try {
+//     const member = await findLoggedInMember(req);
+
+//     if (!member) {
+//       return res.status(404).json({
+//         success: false,
+//         message: "Member not found"
+//       });
+//     }
+
+//     // FIX:
+//     // populate fullName instead of name
+//     const activities = await FitnessActivity.find({})
+//       .populate("slots.staffId", "fullName")
+//       .lean();
+
+//     const today = new Date().toISOString().split("T")[0];
+
+//     const formattedActivities = [];
+
+//     for (const activity of activities) {
+//       const formattedSlots = [];
+
+//       for (const slot of activity.slots || []) {
+//         const bookedCount = await FitnessBooking.countDocuments({
+//           activityId: activity._id,
+//           slotId: slot._id,
+//           date: today,
+//           bookingStatus: "Confirmed"
+//         });
+
+//         const availableSeats = Math.max(
+//           (activity.capacity || 0) - bookedCount,
+//           0
+//         );
+
+//         formattedSlots.push({
+//           slotId: slot._id,
+//           startTime: slot.startTime,
+//           endTime: slot.endTime,
+
+//           // FIX:
+//           // use fullName
+//           trainerName: slot.staffId?.fullName || "N/A",
+
+//           totalCapacity: activity.capacity || 0,
+//           bookedCount,
+//           availableSeats,
+//           isAvailable: availableSeats > 0
+//         });
+//       }
+
+//       formattedActivities.push({
+//         activityId: activity._id,
+//         activityName: activity.name,
+//         isPassMember: !!member.membershipPass,
+//         paymentRequired: true,
+//         canBook: true,
+//         slots: formattedSlots
+//       });
+//     }
+
+//     return res.status(200).json({
+//       success: true,
+//       message: "Available activities fetched successfully",
+//       data: formattedActivities
+//     });
+
+//   } catch (error) {
+//     console.error("getAvailableActivities error:", error.message);
+
+//     return res.status(500).json({
+//       success: false,
+//       message: "Failed to fetch available activities"
+//     });
+//   }
+// };
+
 exports.getAvailableActivities = async (req, res) => {
   try {
     const member = await findLoggedInMember(req);
@@ -1743,11 +1822,20 @@ exports.getAvailableActivities = async (req, res) => {
       });
     }
 
-    // FIX:
-    // populate fullName instead of name
-    const activities = await FitnessActivity.find({})
-      .populate("slots.staffId", "fullName")
-      .lean();
+ // Get already purchased active activity IDs
+const purchasedActivityIds = (member.activityFees || [])
+  .filter(item =>
+    item.activity &&
+    item.membershipStatus === "Active"
+  )
+  .map(item => String(item.activity._id || item.activity));
+
+// Fetch only activities NOT already purchased
+const activities = await FitnessActivity.find({
+  _id: { $nin: purchasedActivityIds }
+})
+  .populate("slots.staffId", "fullName")
+  .lean();
 
     const today = new Date().toISOString().split("T")[0];
 
@@ -2388,6 +2476,10 @@ exports.verifyMembershipPayment = async (req, res) => {
     // ======================================
     // VERIFY RAZORPAY SIGNATURE
     // ======================================
+
+    // TEMPORARY DEV TEST ONLY
+    // console.log("Razorpay verification bypassed for local testing");
+
     const generatedSignature = crypto
       .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
       .update(`${razorpay_order_id}|${razorpay_payment_id}`)
@@ -2399,6 +2491,7 @@ exports.verifyMembershipPayment = async (req, res) => {
         message: "Payment verification failed"
       });
     }
+    
 
     // ======================================
     // FIND ACTIVITY

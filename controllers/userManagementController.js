@@ -96,21 +96,76 @@ exports.createUser = async (req, res) => {
 };
 
 // ================= GET USERS =================
+// exports.getUsers = async (req, res) => {
+//   try {
+//     const users = await User.find({
+//       organizationId: req.organizationId,
+//       role: { $nin: ['Participant'] }   // 🔥 hide members
+//     })
+//       .select('-password')
+//       .populate('accessRoleId', 'name permissions')
+//       .lean();
+
+//     res.json({ success: true, count: users.length, data: users });
+
+//   } catch (err) {
+//     console.error('getUsers error:', err.message);
+//     res.status(500).json({ message: 'Failed to fetch users' });
+//   }
+// };
+
 exports.getUsers = async (req, res) => {
   try {
-    const users = await User.find({
+    // STEP A: Get page + limit from query
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const skip = (page - 1) * limit;
+
+    // STEP B: Base filter
+    let filter = {
       organizationId: req.organizationId,
-      role: { $nin: ['Participant'] }   // 🔥 hide members
-    })
-      .select('-password')
-      .populate('accessRoleId', 'name permissions')
+      role: { $nin: ['Participant'] }
+    };
+
+    // STEP C: Optional search filter
+    if (req.query.search) {
+      filter.fullName = {
+        $regex: req.query.search,
+        $options: "i"
+      };
+    }
+
+    // STEP D: Total count BEFORE pagination
+    const totalRecords = await User.countDocuments(filter);
+
+    // STEP E: Fetch paginated users
+    const users = await User.find(filter)
+      .select("-password")
+      .populate("accessRoleId", "name permissions")
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
       .lean();
 
-    res.json({ success: true, count: users.length, data: users });
+    // STEP F: Response
+    res.json({
+      success: true,
+      data: users,
+      pagination: {
+        totalRecords,
+        currentPage: page,
+        totalPages: Math.ceil(totalRecords / limit),
+        limit,
+        hasNextPage: page < Math.ceil(totalRecords / limit),
+        hasPrevPage: page > 1
+      }
+    });
 
   } catch (err) {
-    console.error('getUsers error:', err.message);
-    res.status(500).json({ message: 'Failed to fetch users' });
+    console.error("getUsers error:", err.message);
+    res.status(500).json({
+      message: "Failed to fetch users"
+    });
   }
 };
 

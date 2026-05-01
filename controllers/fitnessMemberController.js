@@ -1296,13 +1296,53 @@ const applyComputedStatuses = (obj) => {
 };
 
 // ─── GET ALL ──────────────────────────────────────────────────────────────────
+// exports.getAllMembers = async (req, res) => {
+//   try {
+//     const { search, status, activity, plan } = req.query;
+//     const query = { organizationId: req.organizationId };
+
+//     if (status)   query.membershipStatus = status;
+//     if (plan)     query['activityFees.plan'] = plan;
+//     if (activity) query['activityFees.activity'] = activity;
+
+//     if (search) {
+//       query.$or = [
+//         { name:     { $regex: search, $options: 'i' } },
+//         { mobile:   { $regex: search, $options: 'i' } },
+//         { memberId: { $regex: search, $options: 'i' } },
+//       ];
+//     }
+
+//     const members = await FitnessMember.find(query)
+//       .populate('activityFees.activity', 'name activityName')
+//       .populate('activityFees.feeType',  'description')
+//       .populate('activityFees.staff',    'fullName name')
+//       .sort({ createdAt: -1 })
+//       .select('-password');
+
+//     const result = members.map((m) => applyComputedStatuses(m.toObject()));
+
+//     res.json(result);
+//   } catch (err) {
+//     console.error('getAllMembers error:', err);
+//     res.status(500).json({ message: 'Server error while fetching members.' });
+//   }
+// };
+
 exports.getAllMembers = async (req, res) => {
   try {
     const { search, status, activity, plan } = req.query;
     const query = { organizationId: req.organizationId };
 
+    if (plan === "Pass") {
+  query.membershipPass = { $ne: null };
+} else if (plan === "Activity") {
+  query.activityFees = { $exists: true, $not: { $size: 0 } };
+}
+
+
     if (status)   query.membershipStatus = status;
-    if (plan)     query['activityFees.plan'] = plan;
+    // if (plan)     query['activityFees.plan'] = plan;
     if (activity) query['activityFees.activity'] = activity;
 
     if (search) {
@@ -1313,16 +1353,34 @@ exports.getAllMembers = async (req, res) => {
       ];
     }
 
-    const members = await FitnessMember.find(query)
-      .populate('activityFees.activity', 'name activityName')
-      .populate('activityFees.feeType',  'description')
-      .populate('activityFees.staff',    'fullName name')
-      .sort({ createdAt: -1 })
-      .select('-password');
+ const page = parseInt(req.query.page) || 1;
+const limit = parseInt(req.query.limit) || 10;
+const skip = (page - 1) * limit;
+
+const totalRecords = await FitnessMember.countDocuments(query);
+
+const members = await FitnessMember.find(query)
+  .populate('activityFees.activity', 'name activityName')
+  .populate('activityFees.feeType', 'description')
+  .populate('activityFees.staff', 'fullName name')
+  .sort({ createdAt: -1 })
+  .skip(skip)
+  .limit(limit)
+  .select('-password');
 
     const result = members.map((m) => applyComputedStatuses(m.toObject()));
 
-    res.json(result);
+    res.json({
+  data: result,
+  pagination: {
+    totalRecords,
+    currentPage: page,
+    totalPages: Math.ceil(totalRecords / limit),
+    limit,
+    hasNextPage: page < Math.ceil(totalRecords / limit),
+    hasPrevPage: page > 1
+  }
+});
   } catch (err) {
     console.error('getAllMembers error:', err);
     res.status(500).json({ message: 'Server error while fetching members.' });

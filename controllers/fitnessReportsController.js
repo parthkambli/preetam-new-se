@@ -92,6 +92,7 @@ const FitnessMember = require('../models/FitnessMember');
 const FeePayment = require('../models/FitnessFeePayment');
 const FeeAllotment = require('../models/FitnessFeeAllotment');
 const { buildDateMatch } = require('../helpers/dateFilterHelper');
+const FitnessAttendance = require('../models/FitnessAttendance');
 
 // ── Proration helper (inline) ──────────────────────────────────────────────
 // Calculates how much of a membership's fee falls within the filter range.
@@ -232,67 +233,265 @@ const getProratedAmount = (finalAmount, plan, startDate, endDate, from, to) => {
 };
 
 
+// exports.getSummary = async (req, res) => {
+//   try {
+//     const orgId = req.organizationId;
+
+//     // ── Extract optional date range from query params ──────────────────────
+//     // Frontend sends: GET /api/reports/summary?fromDate=2026-01-01&toDate=2026-01-31
+//     // If omitted, no date filter is applied (show everything till date).
+//     const { fromDate, toDate } = req.query;
+
+//     // ── 1. Total Enquiries ─────────────────────────────────────────────────
+//     // Filtered by enquiry creation date when a range is selected.
+//     const enquiryMatch = buildDateMatch(
+//       { organizationId: orgId },
+//       'createdAt',
+//       fromDate,
+//       toDate
+//     );
+//     const totalEnquiries = await FitnessEnquiry.countDocuments(enquiryMatch);
+
+//     // ── 2. Total Admissions (Members) ──────────────────────────────────────
+//     // Filtered by member join / creation date.
+//     const admissionMatch = buildDateMatch(
+//       { organizationId: orgId },
+//       'createdAt',
+//       fromDate,
+//       toDate
+//     );
+//     const totalAdmissions = await FitnessMember.countDocuments(admissionMatch);
+
+//     // ── 3. Active Participants ─────────────────────────────────────────────
+//     // Count members whose status is Active and who joined within the range.
+//     const activeMatch = buildDateMatch(
+//       { organizationId: orgId, status: 'Active' },
+//       'createdAt',
+//       fromDate,
+//       toDate
+//     );
+    
+    
+// const activeParticipants = await FitnessMember.countDocuments({
+//   organizationId: orgId,
+//   membershipStatus: "Active"
+// });
+
+
+// // ── 4. Total Revenue (Prorated) ────────────────────────────────────────
+//     // Source of truth: FitnessMember.activityFees
+//     // Only count fees where paymentStatus === 'Paid'
+//     // Prorate Weekly/Monthly/Annual by day overlap with filter range
+//     // Daily/Hourly count full amount if startDate falls in filter range
+//     const allMembers = await FitnessMember.find(
+//       { organizationId: orgId },
+//       'activityFees'
+//     ).lean();
+
+//     let totalRevenue = 0;
+//     for (const member of allMembers) {
+//       for (const af of member.activityFees || []) {
+//         // Only count paid activities
+//         if (af.paymentStatus !== 'Paid') continue;
+//         if (!af.startDate || !af.endDate)  continue;
+
+//         totalRevenue += getProratedAmount(
+//           af.finalAmount,
+//           af.plan,
+//           af.startDate,
+//           af.endDate,
+//           fromDate,
+//           toDate
+//         );
+//       }
+//     }
+//     totalRevenue = Math.round(totalRevenue * 100) / 100;
+
+//     // ── 4B. Add Booking Revenue (ONLY bookings) ─────────────────────────
+
+// // Apply same date filter
+// const paymentMatch = buildDateMatch(
+//   { organizationId: orgId },
+//   'paymentDate',
+//   fromDate,
+//   toDate
+// );
+
+// // Only pick booking payments (based on description)
+// const bookingPayments = await FeePayment.aggregate([
+//   {
+//     $match: {
+//       ...paymentMatch,
+//       description: { $regex: /^Booking:/ } // VERY IMPORTANT FILTER
+//     }
+//   },
+//   {
+//     $group: {
+//       _id: null,
+//       total: { $sum: "$amount" }
+//     }
+//   }
+// ]);
+
+// const bookingRevenue = bookingPayments[0]?.total || 0;
+
+// // Add to total revenue
+// totalRevenue += bookingRevenue;
+
+//     // ── 5. Pending Fees ────────────────────────────────────────────────────
+//     // Allotment amount minus sum of payments already made.
+//     // When a date range is selected, only allotments created in that range
+//     // are considered; payments are still summed in full so the pending
+//     // balance for that cohort is accurate.
+//     const allotmentMatch = buildDateMatch(
+//       { organizationId: orgId },
+//       'createdAt',
+//       fromDate,
+//       toDate
+//     );
+//     const pendingData = await FeeAllotment.aggregate([
+//       { $match: allotmentMatch },
+//       {
+//         $lookup: {
+//           from: 'fitnessfeepayments',
+//           localField: '_id',
+//           foreignField: 'allotmentId',
+//           as: 'payments'
+//         }
+//       },
+//       {
+//         $addFields: {
+//           paid: { $sum: '$payments.amount' }
+//         }
+//       },
+//       {
+//         $addFields: {
+//           pending: {
+//             $max: [{ $subtract: ['$amount', '$paid'] }, 0] // floor at 0
+//           }
+//         }
+//       },
+//       {
+//         $group: {
+//           _id: null,
+//           totalPending: { $sum: '$pending' }
+//         }
+//       }
+//     ]);
+//     const pendingFees = pendingData[0]?.totalPending || 0;
+
+//     // ── Response ───────────────────────────────────────────────────────────
+//     res.json({
+//       totalEnquiries,
+//       totalAdmissions,
+//       activeParticipants,
+//       totalRevenue,
+//       pendingFees,
+//       // echo back so the frontend can confirm what range was applied
+//       appliedFilter: {
+//         fromDate: fromDate || null,
+//         toDate: toDate || null,
+//       },
+//     });
+
+//   } catch (err) {
+//     console.error('Summary error:', err);
+//     res.status(500).json({ message: 'Failed to fetch summary' });
+//   }
+// };
+
+
 exports.getSummary = async (req, res) => {
   try {
     const orgId = req.organizationId;
-
-    // ── Extract optional date range from query params ──────────────────────
-    // Frontend sends: GET /api/reports/summary?fromDate=2026-01-01&toDate=2026-01-31
-    // If omitted, no date filter is applied (show everything till date).
     const { fromDate, toDate } = req.query;
 
-    // ── 1. Total Enquiries ─────────────────────────────────────────────────
-    // Filtered by enquiry creation date when a range is selected.
-    const enquiryMatch = buildDateMatch(
-      { organizationId: orgId },
-      'createdAt',
-      fromDate,
-      toDate
-    );
-    const totalEnquiries = await FitnessEnquiry.countDocuments(enquiryMatch);
+    // ─────────────────────────────────────────────────────────────
+    // Helper: Build date filter (SAFE)
+    // ─────────────────────────────────────────────────────────────
+    const buildDateFilter = (field) => {
+      if (!fromDate && !toDate) return {};
 
-    // ── 2. Total Admissions (Members) ──────────────────────────────────────
-    // Filtered by member join / creation date.
-    const admissionMatch = buildDateMatch(
-      { organizationId: orgId },
-      'createdAt',
-      fromDate,
-      toDate
-    );
-    const totalAdmissions = await FitnessMember.countDocuments(admissionMatch);
+      const filter = {};
 
-    // ── 3. Active Participants ─────────────────────────────────────────────
-    // Count members whose status is Active and who joined within the range.
-    const activeMatch = buildDateMatch(
-      { organizationId: orgId, status: 'Active' },
-      'createdAt',
-      fromDate,
-      toDate
-    );
-    
-    
-const activeParticipants = await FitnessMember.countDocuments({
-  organizationId: orgId,
-  membershipStatus: "Active"
-});
+      if (fromDate) {
+        filter.$gte = new Date(fromDate + "T00:00:00.000Z");
+      }
 
+      if (toDate) {
+        filter.$lte = new Date(toDate + "T23:59:59.999Z");
+      }
 
-// ── 4. Total Revenue (Prorated) ────────────────────────────────────────
-    // Source of truth: FitnessMember.activityFees
-    // Only count fees where paymentStatus === 'Paid'
-    // Prorate Weekly/Monthly/Annual by day overlap with filter range
-    // Daily/Hourly count full amount if startDate falls in filter range
+      return { [field]: filter };
+    };
+
+    // ─────────────────────────────────────────────────────────────
+    // 1. Total Enquiries
+    // ─────────────────────────────────────────────────────────────
+    const totalEnquiries = await FitnessEnquiry.countDocuments({
+      organizationId: orgId,
+      ...buildDateFilter("createdAt"),
+    });
+
+    // ─────────────────────────────────────────────────────────────
+    // 2. Total Admissions
+    // ─────────────────────────────────────────────────────────────
+    const totalAdmissions = await FitnessMember.countDocuments({
+      organizationId: orgId,
+      ...buildDateFilter("createdAt"),
+    });
+
+    // ─────────────────────────────────────────────────────────────
+    // 3. Active Participants
+    // ─────────────────────────────────────────────────────────────
+    const activeParticipants = await FitnessMember.countDocuments({
+      organizationId: orgId,
+      membershipStatus: "Active",
+      ...buildDateFilter("createdAt"),
+    });
+
+    // ─────────────────────────────────────────────────────────────
+    // 4. TODAY'S ATTENDANCE (DYNAMIC FIX)
+    // ─────────────────────────────────────────────────────────────
+
+    let attendanceFilter = {
+      organizationId: orgId,
+      status: "Present",
+    };
+
+    if (fromDate || toDate) {
+      // If user selects range → use that
+      Object.assign(attendanceFilter, buildDateFilter("attendanceDate"));
+    } else {
+      // Default → TODAY
+      const start = new Date();
+      start.setHours(0, 0, 0, 0);
+
+      const end = new Date();
+      end.setHours(23, 59, 59, 999);
+
+      attendanceFilter.attendanceDate = {
+        $gte: start,
+        $lte: end,
+      };
+    }
+
+    const todaysAttendance = await FitnessAttendance.countDocuments(attendanceFilter);
+
+    // ─────────────────────────────────────────────────────────────
+    // 5. TOTAL REVENUE
+    // ─────────────────────────────────────────────────────────────
     const allMembers = await FitnessMember.find(
       { organizationId: orgId },
-      'activityFees'
+      "activityFees"
     ).lean();
 
     let totalRevenue = 0;
+
     for (const member of allMembers) {
       for (const af of member.activityFees || []) {
-        // Only count paid activities
-        if (af.paymentStatus !== 'Paid') continue;
-        if (!af.startDate || !af.endDate)  continue;
+        if (af.paymentStatus !== "Paid") continue;
+        if (!af.startDate || !af.endDate) continue;
 
         totalRevenue += getProratedAmount(
           af.finalAmount,
@@ -304,89 +503,81 @@ const activeParticipants = await FitnessMember.countDocuments({
         );
       }
     }
+
     totalRevenue = Math.round(totalRevenue * 100) / 100;
 
-    // ── 4B. Add Booking Revenue (ONLY bookings) ─────────────────────────
-
-// Apply same date filter
-const paymentMatch = buildDateMatch(
-  { organizationId: orgId },
-  'paymentDate',
-  fromDate,
-  toDate
-);
-
-// Only pick booking payments (based on description)
-const bookingPayments = await FeePayment.aggregate([
-  {
-    $match: {
-      ...paymentMatch,
-      description: { $regex: /^Booking:/ } // VERY IMPORTANT FILTER
-    }
-  },
-  {
-    $group: {
-      _id: null,
-      total: { $sum: "$amount" }
-    }
-  }
-]);
-
-const bookingRevenue = bookingPayments[0]?.total || 0;
-
-// Add to total revenue
-totalRevenue += bookingRevenue;
-
-    // ── 5. Pending Fees ────────────────────────────────────────────────────
-    // Allotment amount minus sum of payments already made.
-    // When a date range is selected, only allotments created in that range
-    // are considered; payments are still summed in full so the pending
-    // balance for that cohort is accurate.
-    const allotmentMatch = buildDateMatch(
-      { organizationId: orgId },
-      'createdAt',
-      fromDate,
-      toDate
-    );
-    const pendingData = await FeeAllotment.aggregate([
-      { $match: allotmentMatch },
+    // ─────────────────────────────────────────────────────────────
+    // 5B. BOOKING REVENUE
+    // ─────────────────────────────────────────────────────────────
+    const bookingPayments = await FeePayment.aggregate([
       {
-        $lookup: {
-          from: 'fitnessfeepayments',
-          localField: '_id',
-          foreignField: 'allotmentId',
-          as: 'payments'
-        }
-      },
-      {
-        $addFields: {
-          paid: { $sum: '$payments.amount' }
-        }
-      },
-      {
-        $addFields: {
-          pending: {
-            $max: [{ $subtract: ['$amount', '$paid'] }, 0] // floor at 0
-          }
-        }
+        $match: {
+          organizationId: orgId,
+          description: { $regex: /^Booking:/ },
+          ...buildDateFilter("paymentDate"),
+        },
       },
       {
         $group: {
           _id: null,
-          totalPending: { $sum: '$pending' }
-        }
-      }
+          total: { $sum: "$amount" },
+        },
+      },
     ]);
+
+    const bookingRevenue = bookingPayments[0]?.total || 0;
+    totalRevenue += bookingRevenue;
+
+    // ─────────────────────────────────────────────────────────────
+    // 6. PENDING FEES
+    // ─────────────────────────────────────────────────────────────
+    const pendingData = await FeeAllotment.aggregate([
+      {
+        $match: {
+          organizationId: orgId,
+          ...buildDateFilter("createdAt"),
+        },
+      },
+      {
+        $lookup: {
+          from: "fitnessfeepayments",
+          localField: "_id",
+          foreignField: "allotmentId",
+          as: "payments",
+        },
+      },
+      {
+        $addFields: {
+          paid: { $sum: "$payments.amount" },
+        },
+      },
+      {
+        $addFields: {
+          pending: {
+            $max: [{ $subtract: ["$amount", "$paid"] }, 0],
+          },
+        },
+      },
+      {
+        $group: {
+          _id: null,
+          totalPending: { $sum: "$pending" },
+        },
+      },
+    ]);
+
     const pendingFees = pendingData[0]?.totalPending || 0;
 
-    // ── Response ───────────────────────────────────────────────────────────
+    // ─────────────────────────────────────────────────────────────
+    // RESPONSE
+    // ─────────────────────────────────────────────────────────────
     res.json({
       totalEnquiries,
       totalAdmissions,
       activeParticipants,
+      todaysAttendance, // ✅ FIXED
       totalRevenue,
       pendingFees,
-      // echo back so the frontend can confirm what range was applied
       appliedFilter: {
         fromDate: fromDate || null,
         toDate: toDate || null,
@@ -394,7 +585,9 @@ totalRevenue += bookingRevenue;
     });
 
   } catch (err) {
-    console.error('Summary error:', err);
-    res.status(500).json({ message: 'Failed to fetch summary' });
+    console.error("Summary error:", err);
+    res.status(500).json({ message: "Failed to fetch summary" });
   }
 };
+
+

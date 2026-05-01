@@ -9,35 +9,135 @@ const FitnessEnquiry = require('../models/FitnessEnquiry');
  * @query   { status, date, search, enquiryType }
  * @returns Array of followups
  */
+// exports.getAllFollowups = async (req, res) => {
+//   try {
+//     const { status, date, search, enquiryType } = req.query;
+
+//     let query = { organizationId: req.organizationId };
+
+//     if (status) {
+//       query.newStatus = status;
+//     }
+//     if (date) {
+//       query.followupDate = { $gte: new Date(date), $lt: new Date(new Date(date).setDate(new Date(date).getDate() + 1)) };
+//     }
+//     if (search) {
+//       query.$or = [
+//         { personName: { $regex: search, $options: 'i' } },
+//         { mobile: { $regex: search, $options: 'i' } }
+//       ];
+//     }
+//     if (enquiryType) {
+//       query.enquiryType = enquiryType;
+//     }
+
+//     const followups = await Followup.find(query).sort({ createdAt: -1 });
+//     res.json(followups);
+//   } catch (err) {
+//     console.error('Error fetching followups:', err.message);
+//     res.status(500).json({ message: 'Server error while fetching followups' });
+//   }
+// };
+
+
 exports.getAllFollowups = async (req, res) => {
   try {
-    const { status, date, search, enquiryType } = req.query;
+    const {
+      status,
+      date,
+      search,
+      enquiryType,
+      page = 1,
+      limit = 10
+    } = req.query;
 
-    let query = { organizationId: req.organizationId };
+    // pagination values
+    const pageNumber = parseInt(page) || 1;
+    const limitNumber = parseInt(limit) || 10;
+    const skip = (pageNumber - 1) * limitNumber;
 
+    let query = {
+      organizationId: req.organizationId
+    };
+
+    // status filter
     if (status) {
       query.newStatus = status;
     }
+
+    // date filter
     if (date) {
-      query.followupDate = { $gte: new Date(date), $lt: new Date(new Date(date).setDate(new Date(date).getDate() + 1)) };
+      const selectedDate = new Date(date);
+
+      query.followupDate = {
+        $gte: selectedDate,
+        $lt: new Date(
+          new Date(selectedDate).setDate(
+            selectedDate.getDate() + 1
+          )
+        )
+      };
     }
+
+    // search filter
     if (search) {
       query.$or = [
-        { personName: { $regex: search, $options: 'i' } },
-        { mobile: { $regex: search, $options: 'i' } }
+        {
+          personName: {
+            $regex: search,
+            $options: "i"
+          }
+        },
+        {
+          mobile: {
+            $regex: search,
+            $options: "i"
+          }
+        }
       ];
     }
+
+    // enquiry type filter
     if (enquiryType) {
       query.enquiryType = enquiryType;
     }
 
-    const followups = await Followup.find(query).sort({ createdAt: -1 });
-    res.json(followups);
+    // total count BEFORE skip + limit
+    const totalRecords = await Followup.countDocuments(query);
+
+    // paginated data
+    const followups = await Followup.find(query)
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limitNumber);
+
+    res.json({
+      success: true,
+      data: followups,
+      pagination: {
+        totalRecords,
+        currentPage: pageNumber,
+        totalPages: Math.ceil(totalRecords / limitNumber),
+        limit: limitNumber,
+        hasNextPage:
+          pageNumber < Math.ceil(totalRecords / limitNumber),
+        hasPrevPage: pageNumber > 1
+      }
+    });
+
   } catch (err) {
-    console.error('Error fetching followups:', err.message);
-    res.status(500).json({ message: 'Server error while fetching followups' });
+    console.error(
+      "Error fetching followups:",
+      err.message
+    );
+
+    res.status(500).json({
+      message:
+        "Server error while fetching followups"
+    });
   }
 };
+
 
 /**
  * @desc    Get upcoming followups (nextVisit >= today)

@@ -218,29 +218,64 @@ exports.getAttendanceSummary = async (req, res) => {
 };
 
 // 4. Get Detailed Student Attendance
+// exports.getStudentAttendance = async (req, res) => {
+//   try {
+//     const { activityId, date } = req.params;
+//     const organizationId = req.organizationId;
+
+//     const records = await FitnessAttendance.find({
+//       activity: activityId,
+//       attendanceDate: new Date(date).setHours(0, 0, 0, 0),
+//       organizationId
+//     })
+//     .populate('member', 'name memberId photo')
+//     .populate('markedBy', 'fullName name')
+//     .sort({ createdAt: -1 });
+
+//     res.json(records);
+//   } catch (err) {
+//     console.error(err);
+//     res.status(500).json({ error: 'Server error' });
+//   }
+// };
+
+
 exports.getStudentAttendance = async (req, res) => {
   try {
     const { activityId, date } = req.params;
+    const { page = 1, limit = 10 } = req.query;   // ✅ ADD THIS
     const organizationId = req.organizationId;
 
-    const records = await FitnessAttendance.find({
+    const query = {
       activity: activityId,
       attendanceDate: new Date(date).setHours(0, 0, 0, 0),
       organizationId
-    })
-    .populate('member', 'name memberId photo')
-    .populate('markedBy', 'fullName name')
-    .sort({ createdAt: -1 });
+    };
 
-    res.json(records);
+    const total = await FitnessAttendance.countDocuments(query); // ✅ ADD
+
+    const records = await FitnessAttendance.find(query)
+      .populate('member', 'name memberId photo')
+      .populate('markedBy', 'fullName name')
+      .sort({ createdAt: -1 })
+      .skip((page - 1) * limit)   // ✅ ADD
+      .limit(Number(limit));      // ✅ ADD
+
+    res.json({
+      data: records,
+      pagination: {
+        total,
+        page: Number(page),
+        limit: Number(limit),
+        totalPages: Math.ceil(total / limit)
+      }
+    });
+
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Server error' });
   }
 };
-
-
-
 
 
 
