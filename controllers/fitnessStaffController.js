@@ -867,6 +867,24 @@ await User.findOneAndUpdate(
         }),
   }
 );
+// 🔐 Sync password with User collection
+if (value.password) {
+  const salt = await bcrypt.genSalt(10);
+  const hashedPassword = await bcrypt.hash(value.password, salt);
+
+  await User.findOneAndUpdate(
+    {
+      linkedId: existing._id,
+      organizationId: "fitness",
+      userType: "fitness",
+    },
+    {
+      $set: {
+        password: hashedPassword,
+      },
+    }
+  );
+}
 
 
     return respond(res, 200, true, "Staff member updated successfully", updated);
