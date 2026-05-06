@@ -1161,6 +1161,127 @@ exports.getStaffEvents = async (req, res) => {
 };
 
 // ================= GATEKEEPER QR FLOW =================
+// working controller --->
+// exports.handleQRScan = async (req, res) => {
+//   try {
+//     const { memberId } = req.body;
+//     const organizationId = req.organizationId;
+
+//     if (!memberId) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "memberId required"
+//       });
+//     }
+
+//     // 🔥 STEP 1: Resolve logged-in staff
+//     const staffObjectId = await resolveLoggedInStaffObjectId(req);
+
+//     if (!staffObjectId) {
+//       return res.status(403).json({
+//         success: false,
+//         message: "Unauthorized staff"
+//       });
+//     }
+
+//     // 🔥 STEP 2: Validate member
+//     const member = await FitnessMember.findOne({
+//       memberId,
+//       organizationId
+//     }).populate("activityFees.activity", "name slots");
+
+//     if (!member) {
+//       return res.status(404).json({
+//         success: false,
+//         message: "Member not found"
+//       });
+//     }
+
+//     // 🔥 STEP 3: Get ONLY activities assigned to THIS staff
+//     const allowedActivities = member.activityFees.filter((af) => {
+//       if (af.membershipStatus !== "Active") return false;
+
+//       const activity = af.activity;
+
+//       if (!activity || !activity.slots) return false;
+
+//       // ✅ Check if this staff is assigned in any slot
+//       return activity.slots.some(
+//         (slot) => String(slot.staffId) === String(staffObjectId)
+//       );
+//     });
+
+//     if (allowedActivities.length === 0) {
+//       return res.status(403).json({
+//         success: false,
+//         message: "You are not assigned to this member's activity"
+//       });
+//     }
+
+//     // 🔥 STEP 4: AUTO MARK if only one valid activity
+//     if (allowedActivities.length === 1) {
+//       const af = allowedActivities[0];
+
+//       const today = new Date();
+//       today.setHours(0, 0, 0, 0);
+      
+
+//       const attendance = await FitnessAttendance.findOneAndUpdate(
+//         {
+//           member: member._id,
+//           activity: af.activity._id,
+//           activityFeeId: af._id,
+//           attendanceDate: today
+//         },
+//         {
+//           member: member._id,
+//           activity: af.activity._id,
+//           activityFeeId: af._id,
+//           attendanceDate: today,
+//           markedBy: req.user?._id || req.admin?._id,
+//           status: "Present",
+//           organizationId
+//         },
+//         { upsert: true, new: true }
+//       );
+
+//       return res.json({
+//         success: true,
+//         autoMarked: true,
+//         member: {
+//           name: member.name,
+//           memberId: member.memberId
+//         },
+//         activity: af.activity.name,
+//         attendance
+//       });
+//     }
+
+//     // 🔥 STEP 5: MULTIPLE → RETURN ONLY ALLOWED ACTIVITIES
+//     return res.json({
+//       success: true,
+//       autoMarked: false,
+//       member: {
+//         name: member.name,
+//         memberId: member.memberId
+//       },
+//       activities: allowedActivities.map((af) => ({
+//         activityFeeId: af._id,
+//         activityId: af.activity?._id,
+//         activityName: af.activity?.name
+//       }))
+//     });
+
+//   } catch (err) {
+//     console.error("handleQRScan error:", err);
+//     res.status(500).json({
+//       success: false,
+//       message: "Server error"
+//     });
+//   }
+// };
+// <---
+
 exports.handleQRScan = async (req, res) => {
   try {
     const { memberId } = req.body;
@@ -1224,6 +1345,16 @@ exports.handleQRScan = async (req, res) => {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
 
+
+      // ✅ CHECK IF ALREADY MARKED (ADD THIS)
+const existing = await FitnessAttendance.findOne({
+  member: member._id,
+  activity: af.activity._id,
+  activityFeeId: af._id,
+  attendanceDate: today
+});
+      
+
       const attendance = await FitnessAttendance.findOneAndUpdate(
         {
           member: member._id,
@@ -1244,26 +1375,31 @@ exports.handleQRScan = async (req, res) => {
       );
 
       return res.json({
-        success: true,
-        autoMarked: true,
-        member: {
-          name: member.name,
-          memberId: member.memberId
-        },
-        activity: af.activity.name,
-        attendance
-      });
+  success: true,
+  autoMarked: true,
+  alreadyMarked: !!existing, // ✅ NEW (SAFE)
+  message: existing 
+    ? "Attendance already marked"
+    : "Attendance marked successfully", // ✅ NEW
+  member: {
+    name: member.name,
+    memberId: member.memberId
+  },
+  activity: af.activity.name,
+  attendance
+});
     }
 
     // 🔥 STEP 5: MULTIPLE → RETURN ONLY ALLOWED ACTIVITIES
     return res.json({
-      success: true,
-      autoMarked: false,
-      member: {
-        name: member.name,
-        memberId: member.memberId
-      },
-      activities: allowedActivities.map((af) => ({
+  success: true,
+  autoMarked: false,
+  message: "Multiple activities found", // ✅ ADD THIS
+  member: {
+    name: member.name,
+    memberId: member.memberId
+  },
+  activities: allowedActivities.map((af) => ({
         activityFeeId: af._id,
         activityId: af.activity?._id,
         activityName: af.activity?.name
@@ -1278,6 +1414,8 @@ exports.handleQRScan = async (req, res) => {
     });
   }
 };
+
+
 
 
 

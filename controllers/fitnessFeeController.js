@@ -1505,7 +1505,7 @@ const VALID_FEE_PLANS = [
   'Daily',
   'Hourly'
 ];
-const VALID_PAYMENT_MODES = ['Cash', 'Cheque', 'Online', 'UPI'];
+const VALID_PAYMENT_MODES = ['Cash', 'Bank Transfer'];
 
 const isBadId = (err) => err.name === 'CastError' && err.kind === 'ObjectId';
 

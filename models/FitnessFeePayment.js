@@ -62,7 +62,7 @@ const fitnessFeePaymentSchema = new mongoose.Schema({
   paymentDate: { type: Date, default: Date.now },
   paymentMode: {
     type: String,
-    enum: ['Cash', 'Cheque', 'Online', 'UPI', 'Bank Transfer'],
+    enum: ['Cash', 'Bank Transfer'],
     required: true
   },
   transactionId: String,

@@ -75,7 +75,7 @@ const fitnessFeeAllotmentSchema = new mongoose.Schema({
   description: String,
   feePlan: {
     type: String,
-    enum: ['Annual', 'Monthly', 'Weekly', 'Daily', 'Hourly'],
+    enum: ['Annual', 'quarterly', 'halfYearly',  'Monthly', 'Weekly', 'Daily', 'Hourly'],
     required: true
   },
   amount: {
