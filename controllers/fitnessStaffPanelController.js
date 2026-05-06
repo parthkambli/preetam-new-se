@@ -1702,10 +1702,16 @@ exports.getAllMembersForStaff = async (req, res) => {
     return res.json({
       success: true,
       count: members.length,
-      total,               // 🔥 total records
-      currentPage: page,   // 🔥 current page
-      totalPages: Math.ceil(total / limit), // 🔥 total pages
       data: members,
+
+      pagination: {
+        totalRecords: total,
+        currentPage: page,
+        totalPages: Math.ceil(total / limit),
+        limit,
+        hasNextPage: page < Math.ceil(total / limit),
+        hasPrevPage: page > 1,
+      },
     });
 
   } catch (err) {
