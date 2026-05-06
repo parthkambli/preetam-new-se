@@ -1967,7 +1967,14 @@ const activities = await FitnessActivity.find({
   .populate("slots.staffId", "fullName")
   .lean();
 
-    const today = new Date().toISOString().split("T")[0];
+    // const today = new Date().toISOString().split("T")[0];
+    // ======================================
+// SELECTED DATE FROM FLUTTER
+// ======================================
+const selectedDate =
+  req.query.date ||
+  new Date().toISOString().split("T")[0];
+
 
     const formattedActivities = [];
 
@@ -1976,11 +1983,13 @@ const activities = await FitnessActivity.find({
 
       for (const slot of activity.slots || []) {
         const bookedCount = await FitnessBooking.countDocuments({
-          activityId: activity._id,
-          slotId: slot._id,
-          date: today,
-          bookingStatus: "Confirmed"
-        });
+  activityId: activity._id,
+  slotId: slot._id,
+  date: selectedDate,
+  bookingStatus: {
+    $in: ["Confirmed", "Pending Approval"]
+  }
+});
 
         const availableSeats = Math.max(
           (activity.capacity || 0) - bookedCount,
