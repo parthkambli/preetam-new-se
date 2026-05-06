@@ -2008,27 +2008,56 @@ exports.getBookings = async (req, res) => {
 //     res.status(500).json({ success: false, message: err.message });
 //   }
 // };
+// ---> working dashboard date wise..
+// exports.getDashboardByDate = async (req, res) => {
+//   try {
+//     const { date } = req.query;
+
+//     if (!date) {
+//       return res.status(400).json({ success: false, message: 'date required' });
+//     }
+
+//     const bookings = await FitnessBooking.find()
+//       .populate('activityId')
+//       .populate('staffId', 'fullName');
+
+//     const filtered = bookings.filter(b => b.date === date);
+
+//     console.log("FILTERED BOOKINGS:", filtered.length);
+
+//     res.json({ success: true, data: filtered });
+
+//   } catch (err) {
+//     res.status(500).json({ success: false, message: err.message });
+//   }
+// };
+// <---- 
 
 exports.getDashboardByDate = async (req, res) => {
   try {
     const { date } = req.query;
 
     if (!date) {
-      return res.status(400).json({ success: false, message: 'date required' });
+      return res.status(400).json({
+        success: false,
+        message: 'date required'
+      });
     }
 
-    const bookings = await FitnessBooking.find()
+    const filtered = await FitnessBooking.find({ date })
       .populate('activityId')
       .populate('staffId', 'fullName');
 
-    const filtered = bookings.filter(b => b.date === date);
-
-    console.log("FILTERED BOOKINGS:", filtered.length);
-
-    res.json({ success: true, data: filtered });
+    res.json({
+      success: true,
+      data: filtered
+    });
 
   } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
+    res.status(500).json({
+      success: false,
+      message: err.message
+    });
   }
 };
 

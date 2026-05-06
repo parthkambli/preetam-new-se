@@ -1530,6 +1530,39 @@ exports.getAllStaffForStaff = async (req, res) => {
   }
 };
 
+// exports.getAllMembersForStaff = async (req, res) => {
+//   try {
+//     const staffObjectId = await resolveLoggedInStaffObjectId(req);
+
+//     if (!staffObjectId) {
+//       return res.status(403).json({
+//         success: false,
+//         message: "Unauthorized staff",
+//       });
+//     }
+
+//     // ✅ Fetch ALL members (not just bookings)
+//     const members = await FitnessMember.find({
+//       organizationId: req.organizationId
+//     })
+//       .select("name memberId mobile membershipStatus activityFees")
+//       .lean();
+
+//     return res.json({
+//       success: true,
+//       count: members.length,
+//       data: members,
+//     });
+
+//   } catch (err) {
+//     console.error("getAllMembersForStaff error:", err);
+//     return res.status(500).json({
+//       success: false,
+//       message: "Failed to fetch members",
+//     });
+//   }
+// };
+
 exports.getAllMembersForStaff = async (req, res) => {
   try {
     const staffObjectId = await resolveLoggedInStaffObjectId(req);
@@ -1541,16 +1574,32 @@ exports.getAllMembersForStaff = async (req, res) => {
       });
     }
 
-    // ✅ Fetch ALL members (not just bookings)
-    const members = await FitnessMember.find({
+    // ✅ Pagination params (defaults)
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const skip = (page - 1) * limit;
+
+    // ✅ Base filter (unchanged logic)
+    const filter = {
       organizationId: req.organizationId
-    })
+    };
+
+    // ✅ Total count (for frontend pagination UI)
+    const total = await FitnessMember.countDocuments(filter);
+
+    // ✅ Paginated data
+    const members = await FitnessMember.find(filter)
       .select("name memberId mobile membershipStatus activityFees")
+      .skip(skip)
+      .limit(limit)
       .lean();
 
     return res.json({
       success: true,
       count: members.length,
+      total,               // 🔥 total records
+      currentPage: page,   // 🔥 current page
+      totalPages: Math.ceil(total / limit), // 🔥 total pages
       data: members,
     });
 
@@ -1562,4 +1611,3 @@ exports.getAllMembersForStaff = async (req, res) => {
     });
   }
 };
-
