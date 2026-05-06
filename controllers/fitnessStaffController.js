@@ -634,6 +634,35 @@ const getFitnessStaff = async (req, res) => {
     }
 
 
+    const all = req.query.all === "true";
+
+if (all) {
+  const staff = await FitnessStaff.find(filter)
+    .select("_id fullName name")
+    .sort({ fullName: 1 })
+    .lean();
+
+  return respond(
+    res,
+    200,
+    true,
+    "Staff members retrieved successfully",
+    {
+      staff,
+      filters: {
+        status: req.query.status || "",
+        mobile: req.query.mobile || "",
+        role: req.query.role || "",
+        gender: req.query.gender || "",
+        employmentType:
+          req.query.employmentType || "",
+        search: req.query.search || "",
+      },
+    }
+  );
+}
+
+
 const page = parseInt(req.query.page) || 1;
 const limit = parseInt(req.query.limit) || 10;
 const skip = (page - 1) * limit;

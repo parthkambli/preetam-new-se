@@ -1942,6 +1942,106 @@ exports.updateFitnessAllotment = async (req, res) => {
 //     res.status(500).json({ message: 'Failed to fetch payments. Please try again.' });
 //   }
 // };
+// ---> working...
+
+// exports.getFitnessPayments = async (req, res) => {
+//   try {
+//     const page = Math.max(parseInt(req.query.page) || 1, 1);
+//     const limit = Math.max(parseInt(req.query.limit) || 10, 1);
+//     const skip = (page - 1) * limit;
+
+//     const {
+//       member,
+//       status,
+//       mode,
+//       staff,
+//       fromDate,
+//       toDate,
+//     } = req.query;
+
+//     // Base filter
+//     const query = {
+//       organizationId: req.organizationId,
+//     };
+
+//     // 🔹 Payment mode filter
+//     if (mode) {
+//       query.paymentMode = { $regex: mode, $options: "i" };
+//     }
+
+//     // 🔹 Date filter
+//     if (fromDate || toDate) {
+//       query.paymentDate = {};
+//       if (fromDate) query.paymentDate.$gte = new Date(fromDate);
+//       if (toDate) {
+//         const end = new Date(toDate);
+//         end.setHours(23, 59, 59, 999);
+//         query.paymentDate.$lte = end;
+//       }
+//     }
+
+//     // 🔹 Member filter (needs populate match later)
+//     let memberMatch = {};
+//     if (member) {
+//       memberMatch = {
+//         name: { $regex: member, $options: "i" },
+//       };
+//     }
+
+//     // 🔹 Allotment filter (status + staff)
+//     let allotmentMatch = {};
+//     if (status && status !== "All") {
+//       allotmentMatch.status = status;
+//     }
+//     if (staff) {
+//       allotmentMatch.responsibleStaff = staff;
+//     }
+
+//     // Fetch data
+//     const payments = await FeePayment.find(query)
+//       .populate({
+//         path: "memberId",
+//         select: "name memberId",
+//         match: memberMatch,
+//       })
+//       .populate({
+//         path: "allotmentId",
+//         match: allotmentMatch,
+//       })
+//       .sort({ paymentDate: -1 })
+//       .skip(skip)
+//       .limit(limit);
+
+//     // ❗ IMPORTANT: Remove unmatched populated docs
+//     const filteredPayments = payments.filter(
+//       (p) => p.memberId && p.allotmentId
+//     );
+
+//     // Count (this is tricky — must match filters)
+//     const totalRecords = await FeePayment.countDocuments(query);
+
+//     const totalPages = Math.ceil(totalRecords / limit);
+
+//     res.json({
+//       data: filteredPayments,
+//       pagination: {
+//         totalRecords,
+//         currentPage: page,
+//         totalPages,
+//         limit,
+//         hasNextPage: page < totalPages,
+//         hasPrevPage: page > 1,
+//       },
+//     });
+//   } catch (err) {
+//     logError("getFitnessPayments", err);
+//     res.status(500).json({
+//       message: "Failed to fetch payments. Please try again.",
+//     });
+//   }
+// };
+
+// <--- working..
 exports.getFitnessPayments = async (req, res) => {
   try {
     const page = Math.max(parseInt(req.query.page) || 1, 1);
@@ -1957,71 +2057,114 @@ exports.getFitnessPayments = async (req, res) => {
       toDate,
     } = req.query;
 
-    // Base filter
     const query = {
       organizationId: req.organizationId,
     };
 
-    // 🔹 Payment mode filter
+    // =========================
+    // Payment Mode Filter
+    // =========================
     if (mode) {
-      query.paymentMode = { $regex: mode, $options: "i" };
+      query.paymentMode = {
+        $regex: mode,
+        $options: "i",
+      };
     }
 
-    // 🔹 Date filter
+    // =========================
+    // Date Filter
+    // =========================
     if (fromDate || toDate) {
       query.paymentDate = {};
-      if (fromDate) query.paymentDate.$gte = new Date(fromDate);
+
+      if (fromDate) {
+        query.paymentDate.$gte = new Date(fromDate);
+      }
+
       if (toDate) {
         const end = new Date(toDate);
         end.setHours(23, 59, 59, 999);
+
         query.paymentDate.$lte = end;
       }
     }
 
-    // 🔹 Member filter (needs populate match later)
-    let memberMatch = {};
+    // =========================
+    // Member Filter
+    // =========================
     if (member) {
-      memberMatch = {
-        name: { $regex: member, $options: "i" },
+      const matchedMembers = await FitnessMember.find({
+        organizationId: req.organizationId,
+        name: {
+          $regex: member,
+          $options: "i",
+        },
+      }).select("_id");
+
+      const memberIds = matchedMembers.map((m) => m._id);
+
+      query.memberId = { $in: memberIds };
+    }
+
+    // =========================
+    // Allotment Filters
+    // =========================
+    if (
+      (status && status !== "All") ||
+      staff
+    ) {
+      const allotmentQuery = {
+        organizationId: req.organizationId,
+      };
+
+      if (status && status !== "All") {
+        allotmentQuery.status = status;
+      }
+
+      if (staff) {
+        allotmentQuery.responsibleStaff = staff;
+      }
+
+      const matchedAllotments = await FeeAllotment.find(
+        allotmentQuery
+      ).select("_id");
+
+      const allotmentIds = matchedAllotments.map(
+        (a) => a._id
+      );
+
+      query.allotmentId = {
+        $in: allotmentIds,
       };
     }
 
-    // 🔹 Allotment filter (status + staff)
-    let allotmentMatch = {};
-    if (status && status !== "All") {
-      allotmentMatch.status = status;
-    }
-    if (staff) {
-      allotmentMatch.responsibleStaff = staff;
-    }
+    // =========================
+    // Total Count
+    // =========================
+    const totalRecords =
+      await FeePayment.countDocuments(query);
 
-    // Fetch data
+    const totalPages = Math.ceil(
+      totalRecords / limit
+    );
+
+    // =========================
+    // Fetch Paginated Data
+    // =========================
     const payments = await FeePayment.find(query)
       .populate({
         path: "memberId",
         select: "name memberId",
-        match: memberMatch,
       })
       .populate({
         path: "allotmentId",
-        match: allotmentMatch,
       })
       .sort({ paymentDate: -1 })
       .skip(skip)
       .limit(limit);
 
-    // ❗ IMPORTANT: Remove unmatched populated docs
-    const filteredPayments = payments.filter(
-      (p) => p.memberId && p.allotmentId
-    );
-
-    // Count (this is tricky — must match filters)
-    const totalRecords = await FeePayment.countDocuments(query);
-
-    const totalPages = Math.ceil(totalRecords / limit);
-
     res.json({
-      data: filteredPayments,
+      data: payments,
       pagination: {
         totalRecords,
         currentPage: page,
@@ -2033,6 +2176,7 @@ exports.getFitnessPayments = async (req, res) => {
     });
   } catch (err) {
     logError("getFitnessPayments", err);
+
     res.status(500).json({
       message: "Failed to fetch payments. Please try again.",
     });
