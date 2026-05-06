@@ -595,14 +595,76 @@ const resolveLoggedInStaffObjectId = async (req) => {
 
 
 
+// exports.getMySchedule = async (req, res) => {
+//   try {
+//     // console.log("REQ USER:", req.staff || req.admin);
+//     const staffObjectId = await resolveLoggedInStaffObjectId(req);
+
+//     if (!staffObjectId) {
+//       return res.status(404).json({
+        
+//         success: false,
+//         message: "Staff not found",
+//       });
+//     }
+
+//     const selectedDate = req.query.date || getTodayDateString();
+
+//     const activities = await FitnessActivity.find({
+//       "slots.staffId": staffObjectId,
+//     }).lean();
+
+//     const data = [];
+
+//     for (const activity of activities) {
+//       for (const slot of activity.slots || []) {
+//         if (String(slot.staffId) === String(staffObjectId)) {
+//           const bookings = await FitnessBooking.find({
+//             activityId: activity._id,
+//             slotId: slot._id,
+//             date: selectedDate,
+//           })
+//             .populate("memberId", "name")
+//             .lean();
+
+//           data.push({
+//             activityId: activity._id,
+//             activityName: activity.name,
+//             capacity: activity.capacity,
+//             startTime: slot.startTime,
+//             endTime: slot.endTime,
+//             slotId: slot._id,
+//             participants: bookings.map((b) => ({
+//               bookingId: b._id,
+//               name: b.memberId?.name || b.customerName || "Participant",
+//               customerName: b.customerName || "",
+//               phone: b.phone || "",
+//             })),
+//           });
+//         }
+//       }
+//     }
+
+//     return res.json({
+//       success: true,
+//       count: data.length,
+//       data,
+//     });
+//   } catch (error) {
+//     console.error("getMySchedule error:", error);
+//     return res.status(500).json({
+//       success: false,
+//       message: "Failed to fetch schedule",
+//     });
+//   }
+// };
+
 exports.getMySchedule = async (req, res) => {
   try {
-    // console.log("REQ USER:", req.staff || req.admin);
     const staffObjectId = await resolveLoggedInStaffObjectId(req);
 
     if (!staffObjectId) {
       return res.status(404).json({
-        
         success: false,
         message: "Staff not found",
       });
@@ -616,9 +678,13 @@ exports.getMySchedule = async (req, res) => {
 
     const data = [];
 
+    // Current server time
+    const now = new Date();
+
     for (const activity of activities) {
       for (const slot of activity.slots || []) {
         if (String(slot.staffId) === String(staffObjectId)) {
+
           const bookings = await FitnessBooking.find({
             activityId: activity._id,
             slotId: slot._id,
@@ -627,6 +693,15 @@ exports.getMySchedule = async (req, res) => {
             .populate("memberId", "name")
             .lean();
 
+          // Create slot end datetime
+          const slotEndDateTime = new Date(
+            `${selectedDate}T${slot.endTime || slot.startTime}`
+          );
+
+          // Backend status logic
+          const status =
+            now >= slotEndDateTime ? "Completed" : "Pending";
+
           data.push({
             activityId: activity._id,
             activityName: activity.name,
@@ -634,6 +709,10 @@ exports.getMySchedule = async (req, res) => {
             startTime: slot.startTime,
             endTime: slot.endTime,
             slotId: slot._id,
+
+            // ✅ Added status
+            status,
+
             participants: bookings.map((b) => ({
               bookingId: b._id,
               name: b.memberId?.name || b.customerName || "Participant",
@@ -652,6 +731,7 @@ exports.getMySchedule = async (req, res) => {
     });
   } catch (error) {
     console.error("getMySchedule error:", error);
+
     return res.status(500).json({
       success: false,
       message: "Failed to fetch schedule",

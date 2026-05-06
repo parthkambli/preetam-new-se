@@ -1746,6 +1746,52 @@ currentBookings: activeBookings.map(item => {
 // MEMBERSHIP SUMMARY
 // GET /api/fitness/member-panel/membership
 // ============================================
+// exports.getMemberMembershipSummary = async (req, res) => {
+//   try {
+//     const member = await findLoggedInMember(req);
+
+//     if (!member) {
+//       return res.status(404).json({
+//         success: false,
+//         message: "Member not found"
+//       });
+//     }
+
+//     return res.status(200).json({
+//       success: true,
+//       message: "Membership summary fetched successfully",
+//       data: {
+//         memberId: member.memberId,
+//         isPassMember: !!member.membershipPass,
+//         numberOfPersons: member.numberOfPersons || 1,
+//         membershipStatus: member.membershipStatus,
+//         memberships: (member.activityFees || []).map(item => ({
+//           activityName: item.activity?.name || "Membership Pass",
+//           plan: item.plan,
+//           planFee: item.planFee,
+//           discount: item.discount,
+//           finalAmount: item.finalAmount,
+//           paymentStatus: item.paymentStatus,
+//           paymentMode: item.paymentMode,
+//           paymentDate: item.paymentDate,
+//           startDate: item.startDate,
+//           endDate: item.endDate,
+//           membershipStatus: item.membershipStatus,
+//           notes: item.planNotes || ""
+//         }))
+//       }
+//     });
+
+//   } catch (error) {
+//     console.error("getMemberMembershipSummary error:", error.message);
+
+//     return res.status(500).json({
+//       success: false,
+//       message: "Failed to fetch membership summary"
+//     });
+//   }
+// };
+
 exports.getMemberMembershipSummary = async (req, res) => {
   try {
     const member = await findLoggedInMember(req);
@@ -1765,20 +1811,39 @@ exports.getMemberMembershipSummary = async (req, res) => {
         isPassMember: !!member.membershipPass,
         numberOfPersons: member.numberOfPersons || 1,
         membershipStatus: member.membershipStatus,
-        memberships: (member.activityFees || []).map(item => ({
-          activityName: item.activity?.name || "Membership Pass",
-          plan: item.plan,
-          planFee: item.planFee,
-          discount: item.discount,
-          finalAmount: item.finalAmount,
-          paymentStatus: item.paymentStatus,
-          paymentMode: item.paymentMode,
-          paymentDate: item.paymentDate,
-          startDate: item.startDate,
-          endDate: item.endDate,
-          membershipStatus: item.membershipStatus,
-          notes: item.planNotes || ""
-        }))
+        memberships: (member.activityFees || [])
+  .filter(item => {
+
+    // ======================================
+    // REMOVE EXPIRED HOURLY / DAILY
+    // ======================================
+    if (["Hourly", "Daily"].includes(item.plan)) {
+
+      // no endDate → hide it
+      if (!item.endDate) return false;
+
+      return new Date(item.endDate) > new Date();
+    }
+
+    // ======================================
+    // SHOW ALL OTHER MEMBERSHIPS
+    // ======================================
+    return true;
+  })
+  .map(item => ({
+    activityName: item.activity?.name || "Membership Pass",
+    plan: item.plan,
+    planFee: item.planFee,
+    discount: item.discount,
+    finalAmount: item.finalAmount,
+    paymentStatus: item.paymentStatus,
+    paymentMode: item.paymentMode,
+    paymentDate: item.paymentDate,
+    startDate: item.startDate,
+    endDate: item.endDate,
+    membershipStatus: item.membershipStatus,
+    notes: item.planNotes || ""
+  }))
       }
     });
 

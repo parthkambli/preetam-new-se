@@ -1478,7 +1478,10 @@ exports.createActivity = async (req, res) => {
 ========================= */
 exports.getActivities = async (req, res) => {
   try {
-    const activities = await FitnessActivity.find().sort({ name: 1 });
+    // const activities = await FitnessActivity.find().sort({ name: 1 });
+    const activities = await FitnessActivity.find()
+  .populate("slots.staffId", "fullName role")
+  .sort({ name: 1 });
     res.json({ success: true, count: activities.length, data: activities });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -1494,7 +1497,9 @@ exports.getActivityById = async (req, res) => {
     if (!mongoose.Types.ObjectId.isValid(id))
       return res.status(400).json({ success: false, message: 'Invalid ID' });
 
-    const activity = await FitnessActivity.findById(id);
+    // const activity = await FitnessActivity.findById(id);
+    const activity = await FitnessActivity.findById(id)
+  .populate("slots.staffId", "fullName role");
     if (!activity)
       return res.status(404).json({ success: false, message: 'Not found' });
 
