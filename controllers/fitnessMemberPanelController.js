@@ -1548,13 +1548,57 @@ exports.getMemberDashboard = async (req, res) => {
     // TODAY'S SCHEDULE
     // Only today's confirmed bookings
     // ======================================
-    const todayBookings = await FitnessBooking.find({
-      memberId: member._id,
-      date: today,
-      bookingStatus: "Confirmed"
-    })
-      .populate("activityId")
-      .lean();
+    const startOfDay = new Date();
+startOfDay.setHours(0, 0, 0, 0);
+
+const endOfDay = new Date();
+endOfDay.setHours(23, 59, 59, 999);
+
+const todayBookings = await FitnessBooking.find({
+  memberId: member._id,
+  bookingStatus: "Confirmed",
+  date: { $regex: `^${today}` } 
+})
+  .populate("activityId")
+  .lean();
+
+// ======================================
+// MEMBERSHIP → TODAY SCHEDULE (OFFLINE)
+// ======================================
+const membershipSchedule = (member.activityFees || [])
+  .filter(item =>
+    item.membershipStatus === "Active" &&
+    new Date(item.startDate) <= new Date() &&
+    new Date(item.endDate) >= new Date()
+  )
+  .map(item => {
+    const activity = item.activity || {};
+
+    // 🔥 GET FIRST SLOT (or default slot)
+    const slot = (activity.slots && activity.slots.length > 0)
+      ? activity.slots[0]
+      : {};
+
+    return {
+      bookingId: null,
+      activityName: activity.name || "Membership Activity",
+      startTime: slot.startTime || "",
+      endTime: slot.endTime || "",
+      // instructorName: slot.staffName || "Trainer"
+    };
+  });
+
+
+      // ======================================
+// ACTIVE BOOKINGS (for Hourly/Daily display)
+// ======================================
+const activeBookings = await FitnessBooking.find({
+  memberId: member._id,
+  bookingStatus: "Confirmed",
+  date: { $gte: today }
+})
+  .populate("activityId")
+  .lean();
 
     // ======================================
     // BUILD TODAY SCHEDULE
@@ -1571,8 +1615,8 @@ exports.getMemberDashboard = async (req, res) => {
         activityName: activity.name || "N/A",
         startTime: slot.startTime || "",
         endTime: slot.endTime || "",
-        place: activity.location || "Hall A",
-        instructorName: slot.staffName || "Trainer"
+        // place: activity.location || "Hall A",
+        // instructorName: slot.staffName || "Trainer"
       };
     });
 
@@ -1650,7 +1694,28 @@ exports.getMemberDashboard = async (req, res) => {
         // ======================================
         // TODAY'S SCHEDULE
         // ======================================
-        todaySchedule,
+        // todaySchedule,
+        todaySchedule: [...todaySchedule, ...membershipSchedule],
+
+        // ======================================
+// CURRENT BOOKINGS (Hourly/Daily)
+// ======================================
+currentBookings: activeBookings.map(item => {
+  const activity = item.activityId || {};
+  const slot =
+    (activity.slots || []).find(
+      s => String(s._id) === String(item.slotId)
+    ) || {};
+
+  return {
+    bookingId: item._id,
+    activityName: activity.name || "N/A",
+    date: item.date,
+    startTime: slot.startTime || "",
+    endTime: slot.endTime || "",
+    paymentStatus: item.paymentStatus
+  };
+}),
 
         // ======================================
         // RECENT PAYMENTS
@@ -2442,6 +2507,298 @@ console.log("OrderId:", order.id);
 // VERIFY MEMBERSHIP PAYMENT
 // POST /api/fitness/member-panel/verify-membership-payment
 // ============================================
+// exports.verifyMembershipPayment = async (req, res) => {
+//   try {
+//     const {
+//       razorpay_order_id,
+//       razorpay_payment_id,
+//       razorpay_signature,
+//       activityId,
+//       slotId,
+//       date,
+//       plan
+//     } = req.body;
+// const bookingDate = new Date(date).toISOString().split("T")[0];
+//     if (
+//       !razorpay_order_id ||
+//       !razorpay_payment_id ||
+//       !razorpay_signature ||
+//       !activityId ||
+//       !slotId ||
+//       !date ||
+//       !plan
+//     ) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Missing required payment verification fields"
+//       });
+//     }
+
+//     const member = await findLoggedInMember(req);
+
+//     if (!member) {
+//       return res.status(404).json({
+//         success: false,
+//         message: "Member not found"
+//       });
+//     }
+
+//     // ======================================
+//     // VERIFY RAZORPAY SIGNATURE
+//     // ======================================
+
+//     // TEMPORARY DEV TEST ONLY
+//     // console.log("Razorpay verification bypassed for local testing");
+
+//     const generatedSignature = crypto
+//       .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
+//       .update(`${razorpay_order_id}|${razorpay_payment_id}`)
+//       .digest("hex");
+
+//     if (generatedSignature !== razorpay_signature) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Payment verification failed"
+//       });
+//     }
+    
+
+//     // ======================================
+//     // FIND ACTIVITY
+//     // ======================================
+//     const activity = await FitnessActivity.findById(activityId);
+
+//     if (!activity) {
+//       return res.status(404).json({
+//         success: false,
+//         message: "Activity not found"
+//       });
+//     }
+
+//     // ======================================
+//     // CHECK SLOT EXISTS
+//     // ======================================
+//     const slotExists = (activity.slots || []).find(
+//       slot => String(slot._id) === String(slotId)
+//     );
+
+//     if (!slotExists) {
+//       return res.status(404).json({
+//         success: false,
+//         message: "Selected slot not found"
+//       });
+//     }
+
+//     // ======================================
+//     // DUPLICATE MEMBERSHIP CHECK
+//     // ======================================
+//     const alreadyExists = (member.activityFees || []).some(item =>
+//       item.activity &&
+//       String(item.activity._id || item.activity) === String(activityId) &&
+//       item.membershipStatus === "Active"
+//     );
+
+//     if (alreadyExists) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "You already have active membership for this activity"
+//       });
+//     }
+
+//     // ======================================
+//     // FIND FEE TYPE
+//     // ======================================
+//     const feeType = await FitnessFeeType.findOne({
+//       description: activity.name,
+//       organizationId: req.organizationId
+//     });
+
+//     if (!feeType) {
+//       return res.status(404).json({
+//         success: false,
+//         message: "Fee structure not found"
+//       });
+//     }
+
+//     // ======================================
+//     // PLAN → AMOUNT
+//     // ======================================
+//     const amountMap = {
+//       Hourly: feeType.hourly || 0,
+//       Daily: feeType.daily || 0,
+//       Weekly: feeType.weekly || 0,
+//       Monthly: feeType.monthly || 0,
+//       quarterly: feeType.quarterly || 0,
+//       halfYearly: feeType.halfYearly || 0,
+//       Annual: feeType.annual || 0
+//     };
+
+//     const amount = amountMap[plan];
+
+//     if (!amount || amount <= 0) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Invalid plan selected"
+//       });
+//     }
+
+//     // ======================================
+//     // SLOT CAPACITY CHECK AGAIN
+//     // (important after payment)
+//     // ======================================
+//     const bookedCount = await FitnessBooking.countDocuments({
+//       activityId,
+//       slotId,
+//       date,
+//       bookingStatus: "Confirmed"
+//     });
+
+//     if (bookedCount >= (activity.capacity || 0)) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Slot became full. Please contact admin."
+//       });
+//     }
+
+//     // ======================================
+//     // CREATE FEE ALLOTMENT
+//     // (for fees table + revenue)
+//     // ======================================
+//     const allotment = await FitnessFeeAllotment.create({
+//       memberId: member._id,
+//       feeTypeId: feeType._id,
+//       description: `Member App Purchase - ${activity.name}`,
+//       feePlan: plan,
+//       amount,
+//       dueDate: new Date(),
+//       status: "Paid",
+//       organizationId: req.organizationId
+//     });
+
+//     // ======================================
+//     // CREATE PAYMENT ENTRY
+//     // (for revenue + reports)
+//     // ======================================
+//     await FitnessFeePayment.create({
+//       memberId: member._id,
+//       allotmentId: allotment._id,
+//       customerName: member.name,
+//       description: `Member App (Razorpay) - ${activity.name}`,
+//       feePlan: plan,
+//       amount,
+//       paymentMode: "Bank Transfer",
+//       paymentSource: "Member App Razorpay",
+//       transactionId: razorpay_payment_id,
+//       paymentDate: new Date(),
+//       remarks: `Razorpay Order: ${razorpay_order_id}`,
+//       organizationId: req.organizationId
+//     });
+
+//     // ======================================
+//     // START DATE / END DATE
+//     // ======================================
+//     const startDate = new Date();
+//     const endDate = new Date(startDate);
+
+//     if (plan === "Monthly") endDate.setMonth(endDate.getMonth() + 1);
+//     if (plan === "quarterly") endDate.setMonth(endDate.getMonth() + 3);
+//     if (plan === "halfYearly") endDate.setMonth(endDate.getMonth() + 6);
+//     if (plan === "Annual") endDate.setFullYear(endDate.getFullYear() + 1);
+//     if (plan === "Weekly") endDate.setDate(endDate.getDate() + 7);
+//     if (plan === "Daily") endDate.setDate(endDate.getDate() + 1);
+//     if (plan === "Hourly") endDate.setHours(endDate.getHours() + 1);
+
+//     // ======================================
+//     // CREATE MEMBER ACTIVITY FEES ENTRY
+//     // ======================================
+//     // await FitnessMember.findByIdAndUpdate(
+//     //   member._id,
+//     //   {
+//     //     $push: {
+//     //       activityFees: {
+//     //         activity: activity._id,
+//     //         feeType: feeType._id,
+//     //         plan,
+//     //         planFee: amount,
+//     //         finalAmount: amount,
+//     //         paymentStatus: "Paid",
+//     //         paymentMode: "Online",
+//     //         paymentDate: new Date(),
+//     //         startDate,
+//     //         endDate,
+//     //         membershipStatus: "Active",
+//     //         allotmentId: allotment._id
+//     //       }
+//     //     },
+//     //     membershipStatus: "Active"
+//     //   }
+//     // );
+
+//     // STEP: Check if plan is membership-based
+// const isMembershipPlan = !["Hourly", "Daily"].includes(plan);
+
+// if (isMembershipPlan) {
+//   await FitnessMember.findByIdAndUpdate(
+//     member._id,
+//     {
+//       $push: {
+//         activityFees: {
+//           activity: activity._id,
+//           feeType: feeType._id,
+//           plan,
+//           planFee: amount,
+//           finalAmount: amount,
+//           paymentStatus: "Paid",
+//           paymentMode: "Bank Transfer",
+//           paymentDate: new Date(),
+//           startDate,
+//           endDate,
+//           membershipStatus: "Active",
+//           allotmentId: allotment._id
+//         }
+//       },
+//       membershipStatus: "Active"
+//     }
+//   );
+// }
+
+//     // ======================================
+//     // AUTO CREATE BOOKING
+//     // (slot reserved automatically)
+//     // ======================================
+//     const bookingDate = new Date(date).toISOString().split("T")[0];
+
+// await FitnessBooking.create({
+//   activityId,
+//   slotId,
+//   date: bookingDate,   // ✅ FIXED
+//   memberId: member._id,
+//   customerName: member.name,
+//   phone: member.mobile,
+//   bookingStatus: "Confirmed",
+//   paymentStatus: "Paid",
+//   paymentSource: "Member App Razorpay",
+//   isRecurring: !["Hourly", "Daily"].includes(plan),
+//   isException: false
+// });
+
+
+//     return res.status(200).json({
+//       success: true,
+//       message:
+//         "Payment verified, membership activated and slot booked successfully"
+//     });
+
+//   } catch (error) {
+//     console.error("verifyMembershipPayment error:", error);
+
+//     return res.status(500).json({
+//       success: false,
+//       message: "Payment verification failed"
+//     });
+//   }
+// };
+
 exports.verifyMembershipPayment = async (req, res) => {
   try {
     const {
@@ -2479,12 +2836,13 @@ exports.verifyMembershipPayment = async (req, res) => {
     }
 
     // ======================================
-    // VERIFY RAZORPAY SIGNATURE
+    // NORMALIZE DATE (🔥 FIX)
     // ======================================
+    const bookingDate = new Date(date).toISOString().split("T")[0];
 
-    // TEMPORARY DEV TEST ONLY
-    // console.log("Razorpay verification bypassed for local testing");
-
+    // ======================================
+    // VERIFY SIGNATURE
+    // ======================================
     const generatedSignature = crypto
       .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
       .update(`${razorpay_order_id}|${razorpay_payment_id}`)
@@ -2496,13 +2854,11 @@ exports.verifyMembershipPayment = async (req, res) => {
         message: "Payment verification failed"
       });
     }
-    
 
     // ======================================
     // FIND ACTIVITY
     // ======================================
     const activity = await FitnessActivity.findById(activityId);
-
     if (!activity) {
       return res.status(404).json({
         success: false,
@@ -2511,7 +2867,7 @@ exports.verifyMembershipPayment = async (req, res) => {
     }
 
     // ======================================
-    // CHECK SLOT EXISTS
+    // CHECK SLOT
     // ======================================
     const slotExists = (activity.slots || []).find(
       slot => String(slot._id) === String(slotId)
@@ -2527,13 +2883,15 @@ exports.verifyMembershipPayment = async (req, res) => {
     // ======================================
     // DUPLICATE MEMBERSHIP CHECK
     // ======================================
+    const isMembershipPlan = !["Hourly", "Daily"].includes(plan);
+
     const alreadyExists = (member.activityFees || []).some(item =>
       item.activity &&
       String(item.activity._id || item.activity) === String(activityId) &&
       item.membershipStatus === "Active"
     );
 
-    if (alreadyExists) {
+    if (alreadyExists && isMembershipPlan) {
       return res.status(400).json({
         success: false,
         message: "You already have active membership for this activity"
@@ -2556,6 +2914,12 @@ exports.verifyMembershipPayment = async (req, res) => {
     }
 
     // ======================================
+    // NORMALIZE PLAN (🔥 IMPORTANT)
+    // ======================================
+    const normalizedPlan =
+      plan.charAt(0).toUpperCase() + plan.slice(1);
+
+    // ======================================
     // PLAN → AMOUNT
     // ======================================
     const amountMap = {
@@ -2563,12 +2927,12 @@ exports.verifyMembershipPayment = async (req, res) => {
       Daily: feeType.daily || 0,
       Weekly: feeType.weekly || 0,
       Monthly: feeType.monthly || 0,
-      quarterly: feeType.quarterly || 0,
-      halfYearly: feeType.halfYearly || 0,
+      Quarterly: feeType.quarterly || 0,
+      HalfYearly: feeType.halfYearly || 0,
       Annual: feeType.annual || 0
     };
 
-    const amount = amountMap[plan];
+    const amount = amountMap[normalizedPlan];
 
     if (!amount || amount <= 0) {
       return res.status(400).json({
@@ -2578,32 +2942,30 @@ exports.verifyMembershipPayment = async (req, res) => {
     }
 
     // ======================================
-    // SLOT CAPACITY CHECK AGAIN
-    // (important after payment)
+    // SLOT CAPACITY CHECK (🔥 FIXED)
     // ======================================
     const bookedCount = await FitnessBooking.countDocuments({
       activityId,
       slotId,
-      date,
+      date: bookingDate,
       bookingStatus: "Confirmed"
     });
 
     if (bookedCount >= (activity.capacity || 0)) {
       return res.status(400).json({
         success: false,
-        message: "Slot became full. Please contact admin."
+        message: "Slot became full"
       });
     }
 
     // ======================================
-    // CREATE FEE ALLOTMENT
-    // (for fees table + revenue)
+    // CREATE ALLOTMENT
     // ======================================
     const allotment = await FitnessFeeAllotment.create({
       memberId: member._id,
       feeTypeId: feeType._id,
       description: `Member App Purchase - ${activity.name}`,
-      feePlan: plan,
+      feePlan: normalizedPlan,
       amount,
       dueDate: new Date(),
       status: "Paid",
@@ -2611,15 +2973,14 @@ exports.verifyMembershipPayment = async (req, res) => {
     });
 
     // ======================================
-    // CREATE PAYMENT ENTRY
-    // (for revenue + reports)
+    // PAYMENT ENTRY
     // ======================================
     await FitnessFeePayment.create({
       memberId: member._id,
       allotmentId: allotment._id,
       customerName: member.name,
       description: `Member App (Razorpay) - ${activity.name}`,
-      feePlan: plan,
+      feePlan: normalizedPlan,
       amount,
       paymentMode: "Bank Transfer",
       paymentSource: "Member App Razorpay",
@@ -2630,106 +2991,68 @@ exports.verifyMembershipPayment = async (req, res) => {
     });
 
     // ======================================
-    // START DATE / END DATE
+    // DATES
     // ======================================
     const startDate = new Date();
     const endDate = new Date(startDate);
 
-    if (plan === "Monthly") endDate.setMonth(endDate.getMonth() + 1);
-    if (plan === "quarterly") endDate.setMonth(endDate.getMonth() + 3);
-    if (plan === "halfYearly") endDate.setMonth(endDate.getMonth() + 6);
-    if (plan === "Annual") endDate.setFullYear(endDate.getFullYear() + 1);
-    if (plan === "Weekly") endDate.setDate(endDate.getDate() + 7);
-    if (plan === "Daily") endDate.setDate(endDate.getDate() + 1);
-    if (plan === "Hourly") endDate.setHours(endDate.getHours() + 1);
+    if (normalizedPlan === "Monthly") endDate.setMonth(endDate.getMonth() + 1);
+    if (normalizedPlan === "Quarterly") endDate.setMonth(endDate.getMonth() + 3);
+    if (normalizedPlan === "HalfYearly") endDate.setMonth(endDate.getMonth() + 6);
+    if (normalizedPlan === "Annual") endDate.setFullYear(endDate.getFullYear() + 1);
+    if (normalizedPlan === "Weekly") endDate.setDate(endDate.getDate() + 7);
+    if (normalizedPlan === "Daily") endDate.setDate(endDate.getDate() + 1);
+    if (normalizedPlan === "Hourly") endDate.setHours(endDate.getHours() + 1);
 
     // ======================================
-    // CREATE MEMBER ACTIVITY FEES ENTRY
+    // SAVE MEMBERSHIP
     // ======================================
-    // await FitnessMember.findByIdAndUpdate(
-    //   member._id,
-    //   {
-    //     $push: {
-    //       activityFees: {
-    //         activity: activity._id,
-    //         feeType: feeType._id,
-    //         plan,
-    //         planFee: amount,
-    //         finalAmount: amount,
-    //         paymentStatus: "Paid",
-    //         paymentMode: "Online",
-    //         paymentDate: new Date(),
-    //         startDate,
-    //         endDate,
-    //         membershipStatus: "Active",
-    //         allotmentId: allotment._id
-    //       }
-    //     },
-    //     membershipStatus: "Active"
-    //   }
-    // );
-
-    // STEP: Check if plan is membership-based
-const isMembershipPlan = !["Hourly", "Daily"].includes(plan);
-
-if (isMembershipPlan) {
-  await FitnessMember.findByIdAndUpdate(
-    member._id,
-    {
-      $push: {
-        activityFees: {
-          activity: activity._id,
-          feeType: feeType._id,
-          plan,
-          planFee: amount,
-          finalAmount: amount,
-          paymentStatus: "Paid",
-          paymentMode: "Bank Transfer",
-          paymentDate: new Date(),
-          startDate,
-          endDate,
-          membershipStatus: "Active",
-          allotmentId: allotment._id
-        }
-      },
-      membershipStatus: "Active"
+    if (isMembershipPlan) {
+      await FitnessMember.findByIdAndUpdate(member._id, {
+        $push: {
+          activityFees: {
+            activity: activity._id,
+            feeType: feeType._id,
+            plan: normalizedPlan,
+            planFee: amount,
+            finalAmount: amount,
+            paymentStatus: "Paid",
+            paymentMode: "Bank Transfer",
+            paymentDate: new Date(),
+            startDate,
+            endDate,
+            membershipStatus: "Active",
+            allotmentId: allotment._id
+          }
+        },
+        membershipStatus: "Active"
+      });
     }
-  );
-}
 
     // ======================================
-    // AUTO CREATE BOOKING
-    // (slot reserved automatically)
+    // CREATE BOOKING
     // ======================================
     await FitnessBooking.create({
       activityId,
       slotId,
-      date,
+      date: bookingDate,
       memberId: member._id,
       customerName: member.name,
       phone: member.mobile,
       bookingStatus: "Confirmed",
       paymentStatus: "Paid",
       paymentSource: "Member App Razorpay",
-      isRecurring: !["Hourly", "Daily"].includes(plan),
+      isRecurring: isMembershipPlan,
       isException: false
     });
 
-    console.log("VERIFY PAYMENT:");
-console.log("OrderId:", razorpay_order_id);
-console.log("PaymentId:", razorpay_payment_id);
-console.log("Signature:", razorpay_signature);
-console.log("Plan:", plan);
-
     return res.status(200).json({
       success: true,
-      message:
-        "Payment verified, membership activated and slot booked successfully"
+      message: "Payment verified, membership activated and slot booked successfully"
     });
 
   } catch (error) {
     console.error("verifyMembershipPayment error:", error);
-
     return res.status(500).json({
       success: false,
       message: "Payment verification failed"
@@ -3176,6 +3499,20 @@ exports.getMemberProfile = async (req, res) => {
         paymentStatus: item.paymentStatus || "Pending"
       }));
 
+
+      // ======================================
+// ACTIVE BOOKINGS (Hourly/Daily)
+// ======================================
+const todayStr = new Date().toISOString().split("T")[0];
+
+const activeBookings = await FitnessBooking.find({
+  memberId: member._id,
+  bookingStatus: "Confirmed",
+  date: { $gte: todayStr }
+})
+  .populate("activityId")
+  .lean();
+
     return res.status(200).json({
       success: true,
       message: "Member profile fetched successfully",
@@ -3213,7 +3550,17 @@ exports.getMemberProfile = async (req, res) => {
         // ======================================
         // STAFF SCANNER SUPPORT
         // ======================================
-        activeActivities
+        activeActivities,
+
+        // ======================================
+// ACTIVE BOOKINGS (Hourly/Daily)
+// ======================================
+bookingActivities: activeBookings.map(item => ({
+  activityId: item.activityId?._id,
+  activityName: item.activityId?.name || "N/A",
+  date: item.date,
+  bookingStatus: item.bookingStatus
+}))
       }
     });
 
