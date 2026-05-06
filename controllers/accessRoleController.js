@@ -1,4 +1,6 @@
 const AccessRole = require('../models/AccessRole');
+const User = require("../models/User");
+const buildFinalPermissions = require("../utils/buildFinalPermissions");
 
 const PROTECTED_ROLES = [
   'ADMIN',
@@ -100,6 +102,16 @@ exports.updateRole = async (req, res) => {
     role.permissions = permissions ?? role.permissions;
 
     await role.save();
+    const users = await User.find({
+      accessRoleId: role._id
+    });
+
+    for (const user of users) {
+      user.finalPermissions =
+        await buildFinalPermissions(user);
+
+      await user.save();
+    }
 
     res.json({ success: true, data: role });
 

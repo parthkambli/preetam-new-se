@@ -389,6 +389,7 @@ const AccessRole = require("../models/AccessRole");
 
 // ─── Helper Functions ─────────────────────────────────────────────────────
 const buildPhotoPath = (filename) => `/uploads/fitness/staff/${filename}`;
+const buildFinalPermissions = require("../utils/buildFinalPermissions");
 
 const deleteFile = (filePath) => {
   if (!filePath) return;
@@ -556,23 +557,30 @@ const accessRole = await AccessRole.findOne({
   organizationId: 'fitness'
 }).lean();
 
-    await User.create({
-      userId: staffUserId,
-      password: hashedPassword,
-      fullName: value.fullName,
-      mobile: value.mobileNumber,
+  const createdUser = await User.create({
+    userId: staffUserId,
+    password: hashedPassword,
+    fullName: value.fullName,
+    mobile: value.mobileNumber,
 
-        ...(value.emailId?.trim() && {
-    email: value.emailId.trim(),
-  }),
-      role: "FitnessStaff",
-      userType: "fitness",
-      organizationId: "fitness",
-      staffId: savedStaff._id,
-      linkedId: savedStaff._id,
-      accessRoleId: accessRole?._id || null, // ✅ ADD THIS
-      isActive: "Yes",
-    });
+    ...(value.emailId?.trim() && {
+      email: value.emailId.trim(),
+    }),
+
+    role: "FitnessStaff",
+    userType: "fitness",
+    organizationId: "fitness",
+    staffId: savedStaff._id,
+    linkedId: savedStaff._id,
+    accessRoleId: accessRole?._id || null,
+    isActive: "Yes",
+  });
+
+  // 🔥 BUILD FINAL PERMISSIONS
+  createdUser.finalPermissions =
+    await buildFinalPermissions(createdUser);
+
+  await createdUser.save();
 
     return respond(res, 201, true, "Staff member created successfully with login credentials", {
       staff: savedStaff,

@@ -1044,7 +1044,7 @@ exports.getStaffProfile = async (req, res) => {
           email: "",
           role: "",
           assignedActivities: [],
-          profileImage: ""
+          profileImage: "",
         }
       });
     }
@@ -1056,6 +1056,24 @@ exports.getStaffProfile = async (req, res) => {
       .select("name")
       .lean();
 
+    // return res.json({
+    //   success: true,
+    //   data: {
+    //     name: staff.fullName || "Staff",
+    //     mobile: staff.mobileNumber || "",
+    //     email: staff.emailId || "",
+    //     role: staff.role || "",
+
+    //     permissions: user.finalPermissions || [],
+
+    //     assignedActivities: activities.map(a => a.name),
+
+    //     profileImage: staff.profilePhoto
+    //       ? `${req.protocol}://${req.get("host")}${staff.profilePhoto}`
+    //       : ""
+    //   }
+    // });
+
     return res.json({
       success: true,
       data: {
@@ -1063,12 +1081,19 @@ exports.getStaffProfile = async (req, res) => {
         mobile: staff.mobileNumber || "",
         email: staff.emailId || "",
         role: staff.role || "",
-        assignedActivities: activities.map(a => a.name),
+
+        finalPermissions:
+          user.finalPermissions || [],
+
+        assignedActivities:
+          activities.map(a => a.name),
+
         profileImage: staff.profilePhoto
           ? `${req.protocol}://${req.get("host")}${staff.profilePhoto}`
           : ""
       }
     });
+
 
   } catch (error) {
     console.error("getStaffProfile error:", error);

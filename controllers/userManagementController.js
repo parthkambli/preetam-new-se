@@ -2,6 +2,8 @@ const User = require('../models/User');
 const AccessRole = require('../models/AccessRole');
 const bcrypt = require('bcryptjs');
 
+const buildFinalPermissions = require('../utils/buildFinalPermissions');
+
 // ================= CREATE USER =================
 // exports.createUser = async (req, res) => {
 //   try {
@@ -245,18 +247,25 @@ exports.assignRole = async (req, res) => {
 };
 
 // ================= UPDATE USER PERMISSIONS =================
+
+
 // exports.updateUserPermissions = async (req, res) => {
 //   try {
 //     const { userId, customPermissions, removedPermissions } = req.body;
 
-//     const user = await User.findByIdAndUpdate(
-//       userId,
-//       {
-//         customPermissions: customPermissions || [],
-//         removedPermissions: removedPermissions || []
-//       },
-//       { new: true }
-//     );
+//     const user = await User.findById(userId);
+
+//     // 🔥 ADD THIS BLOCK HERE
+//     if (user.role === 'Participant') {
+//       return res.status(403).json({
+//         message: 'Participant permissions cannot be modified'
+//       });
+//     }
+
+//     user.customPermissions = customPermissions || [];
+//     user.removedPermissions = removedPermissions || [];
+
+//     await user.save();
 
 //     res.json({
 //       success: true,
@@ -269,21 +278,41 @@ exports.assignRole = async (req, res) => {
 //   }
 // };
 
+
 exports.updateUserPermissions = async (req, res) => {
   try {
-    const { userId, customPermissions, removedPermissions } = req.body;
+    const {
+      userId,
+      customPermissions,
+      removedPermissions
+    } = req.body;
 
     const user = await User.findById(userId);
 
-    // 🔥 ADD THIS BLOCK HERE
-    if (user.role === 'Participant') {
-      return res.status(403).json({
-        message: 'Participant permissions cannot be modified'
+    if (!user) {
+      return res.status(404).json({
+        message: 'User not found'
       });
     }
 
-    user.customPermissions = customPermissions || [];
-    user.removedPermissions = removedPermissions || [];
+    // 🔒 Prevent participant modification
+    if (user.role === 'Participant') {
+      return res.status(403).json({
+        message:
+          'Participant permissions cannot be modified'
+      });
+    }
+
+    // ✅ Update overrides
+    user.customPermissions =
+      customPermissions || [];
+
+    user.removedPermissions =
+      removedPermissions || [];
+
+    // 🔥 REBUILD FINAL PERMISSIONS
+    user.finalPermissions =
+      await buildFinalPermissions(user);
 
     await user.save();
 
@@ -293,7 +322,13 @@ exports.updateUserPermissions = async (req, res) => {
     });
 
   } catch (err) {
-    console.error('updateUserPermissions error:', err.message);
-    res.status(500).json({ message: 'Failed to update permissions' });
+    console.error(
+      'updateUserPermissions error:',
+      err.message
+    );
+
+    res.status(500).json({
+      message: 'Failed to update permissions'
+    });
   }
 };

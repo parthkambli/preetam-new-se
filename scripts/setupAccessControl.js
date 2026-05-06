@@ -153,6 +153,7 @@ const User = require('../models/User');
 const AccessRole = require('../models/AccessRole');
 const FitnessStaffRole = require('../models/FitnessStaffRole');
 const FitnessStaff = require('../models/FitnessStaff'); // ✅ NEW
+const buildFinalPermissions = require('../utils/buildFinalPermissions');
 
 dotenv.config();
 
@@ -317,13 +318,17 @@ const run = async () => {
         continue;
       }
 
-      user.accessRoleId = roleId;
+        user.accessRoleId = roleId;
 
-      // 🔥 reset overrides (unchanged logic)
-      user.customPermissions = [];
-      user.removedPermissions = [];
+        // 🔥 reset overrides
+        user.customPermissions = [];
+        user.removedPermissions = [];
 
-      await user.save();
+        // 🔥 BUILD FINAL PERMISSIONS
+        user.finalPermissions =
+          await buildFinalPermissions(user);
+
+        await user.save();
 
       updated++;
     }
