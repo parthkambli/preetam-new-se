@@ -7,7 +7,7 @@ router.post('/', controller.createActivity);
 router.get('/', controller.getActivities);
 
 // ================= BOOKING =================
-router.get('/availability', controller.getAvailability);
+router.get('/availability', controller.getAvailability); 
 router.post('/book', controller.bookSlot);
 router.get('/bookings', controller.getBookings);
 router.get('/dashboard', controller.getDashboardByDate);  // For Bookings  dashboard only...

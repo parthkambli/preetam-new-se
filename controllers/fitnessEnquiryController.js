@@ -453,63 +453,6 @@ const FitnessStaff = require('../models/FitnessStaff');
  * @route   GET /api/fitness/enquiry
  * @access  Private
  */
-// exports.getAllEnquiries = async (req, res) => {
-//   try {
-//     const { status, source, search, date, interestedActivity } = req.query;
-
-//     const query = { organizationId: req.organizationId };
-
-//     if (status) query.status = status;
-//     if (source) query.source = source;
-
-//     if (search) {
-//       query.$or = [
-//         { fullName: { $regex: search, $options: 'i' } },
-//         { mobile: { $regex: search, $options: 'i' } }
-//       ];
-//     }
-
-//     if (date) {
-//       const start = new Date(date);
-//       const end = new Date(date);
-//       end.setDate(end.getDate() + 1);
-//       query.enquiryDate = { $gte: start, $lt: end };
-//     }
-
-//     if (interestedActivity) {
-//       if (mongoose.Types.ObjectId.isValid(interestedActivity)) {
-//         query.interestedActivity = interestedActivity;
-//       } else {
-//         query.interestedActivity = interestedActivity;
-//       }
-//     }
-
-//     const enquiries = await FitnessEnquiry.find(query)
-//       .populate('interestedActivity', 'name activityName')
-//       .populate('responsibleStaff', 'fullName name')
-//       .sort({ createdAt: -1 });
-
-//     const formattedEnquiries = enquiries.map((enq) => ({
-//       ...enq.toObject(),
-//       interestedActivity:
-//         typeof enq.interestedActivity === 'object' && enq.interestedActivity !== null
-//           ? enq.interestedActivity.name || enq.interestedActivity.activityName || '-'
-//           : enq.interestedActivity || '-',
-//       responsibleStaff:
-//         typeof enq.responsibleStaff === 'object' && enq.responsibleStaff !== null
-//           ? enq.responsibleStaff.fullName || enq.responsibleStaff.name || '-'
-//           : enq.responsibleStaff || '-',
-//     }));
-
-//     res.json(formattedEnquiries);
-//   } catch (err) {
-//     console.error('Error fetching fitness enquiries:', err);
-//     res.status(500).json({
-//       message: 'Server error while fetching enquiries',
-//       error: err.message
-//     });
-//   }
-// };
 
   exports.getAllEnquiries = async (req, res) => {
   try {

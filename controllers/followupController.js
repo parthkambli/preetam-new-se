@@ -9,36 +9,6 @@ const FitnessEnquiry = require('../models/FitnessEnquiry');
  * @query   { status, date, search, enquiryType }
  * @returns Array of followups
  */
-// exports.getAllFollowups = async (req, res) => {
-//   try {
-//     const { status, date, search, enquiryType } = req.query;
-
-//     let query = { organizationId: req.organizationId };
-
-//     if (status) {
-//       query.newStatus = status;
-//     }
-//     if (date) {
-//       query.followupDate = { $gte: new Date(date), $lt: new Date(new Date(date).setDate(new Date(date).getDate() + 1)) };
-//     }
-//     if (search) {
-//       query.$or = [
-//         { personName: { $regex: search, $options: 'i' } },
-//         { mobile: { $regex: search, $options: 'i' } }
-//       ];
-//     }
-//     if (enquiryType) {
-//       query.enquiryType = enquiryType;
-//     }
-
-//     const followups = await Followup.find(query).sort({ createdAt: -1 });
-//     res.json(followups);
-//   } catch (err) {
-//     console.error('Error fetching followups:', err.message);
-//     res.status(500).json({ message: 'Server error while fetching followups' });
-//   }
-// };
-
 
 exports.getAllFollowups = async (req, res) => {
   try {
