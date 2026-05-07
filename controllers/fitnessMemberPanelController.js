@@ -3465,8 +3465,8 @@ exports.createRenewalOrder = async (req, res) => {
     const amountMap = {
       Weekly: feeType.weekly || 0,
       Monthly: feeType.monthly || 0,
-      Quarterly: feeType.quarterly || 0,
-      HalfYearly: feeType.halfYearly || 0,
+      quarterly: feeType.quarterly || 0,
+      halfYearly: feeType.halfYearly || 0,
       Annual: feeType.annual || 0
     };
 
@@ -3897,8 +3897,8 @@ exports.verifyRenewalPayment = async (req, res) => {
     const amountMap = {
       Weekly: feeType.weekly || 0,
       Monthly: feeType.monthly || 0,
-      Quarterly: feeType.quarterly || 0,
-      HalfYearly: feeType.halfYearly || 0,
+      quarterly: feeType.quarterly || 0,
+      halfYearly: feeType.halfYearly || 0,
       Annual: feeType.annual || 0
     };
 
@@ -3935,13 +3935,13 @@ exports.verifyRenewalPayment = async (req, res) => {
         );
         break;
 
-      case "Quarterly":
+      case "quarterly":
         endDate.setMonth(
           endDate.getMonth() + 3
         );
         break;
 
-      case "HalfYearly":
+      case "halfYearly":
         endDate.setMonth(
           endDate.getMonth() + 6
         );
