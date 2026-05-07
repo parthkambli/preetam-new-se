@@ -815,10 +815,6 @@ exports.getAvailableActivities = async (req, res) => {
 
 //     const selectedDate = req.query.date || getTodayDateString();
 
-//     const selectedDateStr = new Date(selectedDate)
-//   .toISOString()
-//   .split("T")[0];
-
 //     const activities = await FitnessActivity.find({
 //       "slots.staffId": staffObjectId,
 //     }).lean();
@@ -827,53 +823,84 @@ exports.getAvailableActivities = async (req, res) => {
 
 //     for (const activity of activities) {
 //       for (const slot of activity.slots || []) {
-
 //         if (String(slot.staffId) !== String(staffObjectId)) continue;
 
-//         // ✅ 1. GET BOOKINGS (PRIMARY)
+//         // 1. Get bookings
 //         const bookings = await FitnessBooking.find({
 //           activityId: activity._id,
 //           slotId: slot._id,
 //           date: selectedDate,
 //         })
-//         .populate("memberId", "name")
-//         .lean();
+//           .populate("memberId", "name")
+//           .lean();
 
-//         // ✅ 2. GET ATTENDANCE (SECONDARY)
+//         // 2. Get attendance records
 //         const attendanceRecords = await FitnessAttendance.find({
 //           activity: activity._id,
 //           attendanceDate: new Date(selectedDate).setHours(0, 0, 0, 0),
-//           organizationId: req.organizationId
+//           organizationId: req.organizationId,
 //         }).lean();
 
-//         // ✅ 3. MAP ATTENDANCE
+//         // 3. Create attendance map
 //         const attendanceMap = {};
-//         attendanceRecords.forEach(a => {
+//         attendanceRecords.forEach((a) => {
 //           attendanceMap[a.member.toString()] = a.status;
 //         });
 
-//         // ✅ 4. MERGE DATA
-//         const participants = bookings.map(b => {
+//         const now = new Date();
+
+//         const slotStartTime = new Date(
+//           `${selectedDate}T${slot.startTime}:00`
+//         );
+
+//         const slotEndTime = new Date(
+//           `${selectedDate}T${slot.endTime}:00`
+//         );
+
+//         // ✅ allow 10 min before start
+//         const allowedStartTime = new Date(
+//           slotStartTime.getTime() - 10 * 60 * 1000
+//         );
+
+//         // ✅ can mark logic
+//         const canMarkAttendance =
+//           now >= allowedStartTime && now <= slotEndTime;
+
+//         // 4. Merge participant data
+//         const participants = bookings.map((b) => {
 //           const memberId = b.memberId?._id?.toString();
+
+//           let finalStatus = "Not Marked";
+
+//           // If attendance manually marked
+//           if (memberId && attendanceMap[memberId]) {
+//             finalStatus = attendanceMap[memberId];
+//           }
+
+//           // If slot completed and still not marked → auto absent
+//           else if (now > slotEndTime) {
+//             finalStatus = "Absent";
+//           }
 
 //           return {
 //             name: b.memberId?.name || b.customerName || "Participant",
-//             status: memberId && attendanceMap[memberId]
-//               ? attendanceMap[memberId]
-//               : "Not Marked"
+//             status: finalStatus,
 //           };
 //         });
 
-//         // ✅ 5. COUNTS
+//         // 5. Counts
 //         const total = participants.length;
-//         const present = participants.filter(p => p.status === "Present").length;
-//         const absent = participants.filter(p => p.status === "Absent").length;
+//         const present = participants.filter(
+//           (p) => p.status === "Present"
+//         ).length;
 
-//         // ✅ 6. STATUS (TIME BASED)
-//         const now = new Date();
-//         const endTime = new Date(`${selectedDate}T${slot.endTime}`);
+//         const absent = participants.filter(
+//           (p) => p.status === "Absent"
+//         ).length;
 
-//         const status = now >= endTime ? "Completed" : "Pending";
+//         // 6. Slot status
+//         const status =
+//           now >= slotEndTime ? "Completed" : "Pending";
 
 //         data.push({
 //           activityId: activity._id,
@@ -885,6 +912,7 @@ exports.getAvailableActivities = async (req, res) => {
 //           present,
 //           absent,
 //           status,
+//           canMarkAttendance,
 //           participants,
 //         });
 //       }
@@ -895,146 +923,15 @@ exports.getAvailableActivities = async (req, res) => {
 //       count: data.length,
 //       data,
 //     });
-
 //   } catch (error) {
 //     console.error("getAttendanceByDate error:", error);
+
 //     return res.status(500).json({
 //       success: false,
 //       message: "Failed to fetch attendance",
 //     });
 //   }
 // };
-
-exports.getAttendanceByDate = async (req, res) => {
-  try {
-    const staffObjectId = await resolveLoggedInStaffObjectId(req);
-
-    if (!staffObjectId) {
-      return res.status(404).json({
-        success: false,
-        message: "Staff not found",
-      });
-    }
-
-    const selectedDate = req.query.date || getTodayDateString();
-
-    const activities = await FitnessActivity.find({
-      "slots.staffId": staffObjectId,
-    }).lean();
-
-    const data = [];
-
-    for (const activity of activities) {
-      for (const slot of activity.slots || []) {
-        if (String(slot.staffId) !== String(staffObjectId)) continue;
-
-        // 1. Get bookings
-        const bookings = await FitnessBooking.find({
-          activityId: activity._id,
-          slotId: slot._id,
-          date: selectedDate,
-        })
-          .populate("memberId", "name")
-          .lean();
-
-        // 2. Get attendance records
-        const attendanceRecords = await FitnessAttendance.find({
-          activity: activity._id,
-          attendanceDate: new Date(selectedDate).setHours(0, 0, 0, 0),
-          organizationId: req.organizationId,
-        }).lean();
-
-        // 3. Create attendance map
-        const attendanceMap = {};
-        attendanceRecords.forEach((a) => {
-          attendanceMap[a.member.toString()] = a.status;
-        });
-
-        const now = new Date();
-
-        const slotStartTime = new Date(
-          `${selectedDate}T${slot.startTime}:00`
-        );
-
-        const slotEndTime = new Date(
-          `${selectedDate}T${slot.endTime}:00`
-        );
-
-        // ✅ allow 10 min before start
-        const allowedStartTime = new Date(
-          slotStartTime.getTime() - 10 * 60 * 1000
-        );
-
-        // ✅ can mark logic
-        const canMarkAttendance =
-          now >= allowedStartTime && now <= slotEndTime;
-
-        // 4. Merge participant data
-        const participants = bookings.map((b) => {
-          const memberId = b.memberId?._id?.toString();
-
-          let finalStatus = "Not Marked";
-
-          // If attendance manually marked
-          if (memberId && attendanceMap[memberId]) {
-            finalStatus = attendanceMap[memberId];
-          }
-
-          // If slot completed and still not marked → auto absent
-          else if (now > slotEndTime) {
-            finalStatus = "Absent";
-          }
-
-          return {
-            name: b.memberId?.name || b.customerName || "Participant",
-            status: finalStatus,
-          };
-        });
-
-        // 5. Counts
-        const total = participants.length;
-        const present = participants.filter(
-          (p) => p.status === "Present"
-        ).length;
-
-        const absent = participants.filter(
-          (p) => p.status === "Absent"
-        ).length;
-
-        // 6. Slot status
-        const status =
-          now >= slotEndTime ? "Completed" : "Pending";
-
-        data.push({
-          activityId: activity._id,
-          activityName: activity.name,
-          slotId: slot._id,
-          startTime: slot.startTime,
-          endTime: slot.endTime,
-          total,
-          present,
-          absent,
-          status,
-          canMarkAttendance,
-          participants,
-        });
-      }
-    }
-
-    return res.json({
-      success: true,
-      count: data.length,
-      data,
-    });
-  } catch (error) {
-    console.error("getAttendanceByDate error:", error);
-
-    return res.status(500).json({
-      success: false,
-      message: "Failed to fetch attendance",
-    });
-  }
-};
 
 
 
@@ -1087,6 +984,195 @@ exports.getAttendanceByDate = async (req, res) => {
 //     });
 //   }
 // //};
+
+exports.getAttendanceByDate = async (req, res) => {
+  try {
+    const staffObjectId = await resolveLoggedInStaffObjectId(req);
+
+    if (!staffObjectId) {
+      return res.status(404).json({
+        success: false,
+        message: "Staff not found",
+      });
+    }
+
+    const selectedDate = req.query.date || getTodayDateString();
+
+    const attendanceDate = new Date(selectedDate);
+    attendanceDate.setHours(0, 0, 0, 0);
+
+    const activities = await FitnessActivity.find({
+      "slots.staffId": staffObjectId,
+    }).lean();
+
+    const data = [];
+
+    for (const activity of activities) {
+      for (const slot of activity.slots || []) {
+        if (String(slot.staffId) !== String(staffObjectId)) continue;
+
+        // 1. Get bookings
+        const bookings = await FitnessBooking.find({
+          activityId: activity._id,
+          slotId: slot._id,
+          date: selectedDate,
+        })
+          .populate("memberId", "name")
+          .lean();
+
+        const now = new Date();
+
+        const slotStartTime = new Date(
+          `${selectedDate}T${slot.startTime}:00`
+        );
+
+        const slotEndTime = new Date(
+          `${selectedDate}T${slot.endTime}:00`
+        );
+
+        // ✅ allow 10 min before start
+        const allowedStartTime = new Date(
+          slotStartTime.getTime() - 10 * 60 * 1000
+        );
+
+        // ✅ can mark logic
+        const canMarkAttendance =
+          now >= allowedStartTime && now <= slotEndTime;
+
+        // ======================================================
+        // ✅ AUTO MARK ABSENT IN DB AFTER SLOT ENDS
+        // ======================================================
+        if (now > slotEndTime) {
+          for (const booking of bookings) {
+
+            // Skip walk-in bookings
+            if (!booking.memberId?._id) continue;
+
+            const existingAttendance =
+            await FitnessAttendance.findOne({
+              member: booking.memberId._id,
+              activity: activity._id,
+              attendanceDate,
+              organizationId: req.organizationId,
+            });
+
+            if (!existingAttendance) {
+
+              // Get member full document
+              const member = await FitnessMember.findById(
+                booking.memberId._id
+              );
+
+              if (!member) continue;
+
+              // Find matching activity fee
+              const activityFee = member.activityFees.find(
+                (af) =>
+                  String(af.activity) === String(activity._id)
+              );
+
+              // Skip if no activity fee found
+              if (!activityFee) continue;
+
+              // Get logged-in user
+              const user = await User.findOne({
+                userId: req.user.userId,
+                organizationId: req.organizationId,
+              });
+
+              if (!user) continue;
+
+              await FitnessAttendance.create({
+                member: booking.memberId._id,
+                activity: activity._id,
+                activityFeeId: activityFee._id,
+                attendanceDate,
+                status: "Absent",
+                markedBy: user._id,
+                organizationId: req.organizationId,
+              });
+            }
+
+          }
+        }
+
+        // 2. Get attendance records
+        const attendanceRecords = await FitnessAttendance.find({
+          activity: activity._id,
+          attendanceDate,
+          organizationId: req.organizationId,
+        }).lean();
+
+        // 3. Create attendance map
+        const attendanceMap = {};
+
+        attendanceRecords.forEach((a) => {
+          attendanceMap[a.member.toString()] = a.status;
+        });
+
+        // 4. Merge participant data
+        const participants = bookings.map((b) => {
+          const memberId = b.memberId?._id?.toString();
+
+          let finalStatus = "Not Marked";
+
+          // If attendance manually marked OR auto absent inserted
+          if (memberId && attendanceMap[memberId]) {
+            finalStatus = attendanceMap[memberId];
+          }
+
+          return {
+            name: b.memberId?.name || b.customerName || "Participant",
+            status: finalStatus,
+          };
+        });
+
+        // 5. Counts
+        const total = participants.length;
+
+        const present = participants.filter(
+          (p) => p.status === "Present"
+        ).length;
+
+        const absent = participants.filter(
+          (p) => p.status === "Absent"
+        ).length;
+
+        // 6. Slot status
+        const status =
+          now >= slotEndTime ? "Completed" : "Pending";
+
+        data.push({
+          activityId: activity._id,
+          activityName: activity.name,
+          slotId: slot._id,
+          startTime: slot.startTime,
+          endTime: slot.endTime,
+          total,
+          present,
+          absent,
+          status,
+          canMarkAttendance,
+          participants,
+        });
+      }
+    }
+
+    return res.json({
+      success: true,
+      count: data.length,
+      data,
+    });
+
+  } catch (error) {
+    console.error("getAttendanceByDate error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch attendance",
+    });
+  }
+};
 
 exports.getStaffProfile = async (req, res) => {
   try {
