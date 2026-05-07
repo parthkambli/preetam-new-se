@@ -3,6 +3,8 @@ const FitnessMember = require('../models/FitnessMember');
 const FitnessAttendance = require('../models/FitnessAttendance');
 const mongoose = require('mongoose');
 
+const { getTodayIST } = require("../utils/date");
+
 const isValidObjectId = (id) => mongoose.Types.ObjectId.isValid(id);
 
 const getTodayStart = () => {
@@ -112,7 +114,8 @@ exports.markAttendance = async (req, res) => {
       const slot = activity.slots[0];
 
       const now = new Date();
-      const todayStr = new Date().toISOString().split("T")[0];
+      // const todayStr = new Date().toISOString().split("T")[0];
+      const todayStr = getTodayIST();
 
       const slotStartTime = new Date(`${todayStr}T${slot.startTime}:00`);
       const slotEndTime = new Date(`${todayStr}T${slot.endTime}:00`);

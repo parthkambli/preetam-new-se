@@ -418,9 +418,11 @@ const FitnessAttendance = require("../models/FitnessAttendance");
 const FitnessMember = require("../models/FitnessMember");
 
 const FitnessEvent = require("../models/FitnessEvent");
+const { getTodayIST } = require("../utils/date");
 
 function getTodayDateString() {
-  return new Date().toISOString().split("T")[0];
+  // return new Date().toISOString().split("T")[0];
+  return getTodayIST()
 }
 
 // async function resolveLoggedInStaffObjectId(req) {

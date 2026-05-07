@@ -181,6 +181,8 @@ const fitnessMemberPanelRoutes = require("./routes/fitnessMemberPanelRoutes");
 
 const path = require('path');
 
+process.env.TZ = "Asia/Kolkata";
+
 dotenv.config();
 connectDB();
 
