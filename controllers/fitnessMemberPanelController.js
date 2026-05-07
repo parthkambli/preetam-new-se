@@ -1943,6 +1943,9 @@ exports.getMemberMembershipSummary = async (req, res) => {
 
 exports.getAvailableActivities = async (req, res) => {
   try {
+    // ======================================
+    // FIND LOGGED-IN MEMBER
+    // ======================================
     const member = await findLoggedInMember(req);
 
     if (!member) {
@@ -1952,84 +1955,140 @@ exports.getAvailableActivities = async (req, res) => {
       });
     }
 
- // Get already purchased active activity IDs
-const purchasedActivityIds = (member.activityFees || [])
-  .filter(item =>
-    item.activity &&
-    item.membershipStatus === "Active"
-  )
-  .map(item => String(item.activity._id || item.activity));
-
-// Fetch only activities NOT already purchased
-const activities = await FitnessActivity.find({
-  _id: { $nin: purchasedActivityIds }
-})
-  .populate("slots.staffId", "fullName")
-  .lean();
-
-    // const today = new Date().toISOString().split("T")[0];
     // ======================================
-// SELECTED DATE FROM FLUTTER
-// ======================================
-const selectedDate =
-  req.query.date ||
-  new Date().toISOString().split("T")[0];
+    // SELECTED DATE FROM FLUTTER
+    // ======================================
+    const selectedDate =
+      req.query.date ||
+      new Date().toISOString().split("T")[0];
 
+    // ======================================
+    // GET ACTIVE PURCHASED ACTIVITIES
+    // ======================================
+    const purchasedActivityIds = (member.activityFees || [])
+      .filter(item =>
+        item.activity &&
+        item.membershipStatus === "Active"
+      )
+      .map(item => String(item.activity._id || item.activity));
+
+    // ======================================
+    // FETCH ALL ACTIVITIES
+    // DO NOT FILTER PURCHASED ACTIVITIES
+    // ======================================
+    const activities = await FitnessActivity.find()
+      .populate("slots.staffId", "fullName")
+      .lean();
 
     const formattedActivities = [];
 
+    // ======================================
+    // LOOP ACTIVITIES
+    // ======================================
     for (const activity of activities) {
+
       const formattedSlots = [];
 
-      for (const slot of activity.slots || []) {
-        const bookedCount = await FitnessBooking.countDocuments({
-  activityId: activity._id,
-  slotId: slot._id,
-  date: selectedDate,
-  bookingStatus: {
-    $in: ["Confirmed", "Pending Approval"]
-  }
-});
+      // ======================================
+      // CHECK IF MEMBER ALREADY PURCHASED
+      // ======================================
+      const alreadyPurchased = purchasedActivityIds.includes(
+        String(activity._id)
+      );
 
+      // ======================================
+      // LOOP SLOTS
+      // ======================================
+      for (const slot of activity.slots || []) {
+
+        // ======================================
+        // COUNT VALID BOOKINGS ONLY
+        // ======================================
+        const bookedCount = await FitnessBooking.countDocuments({
+          activityId: activity._id,
+          slotId: slot._id,
+          date: selectedDate,
+
+          // IMPORTANT:
+          // COUNT ONLY VALID BOOKINGS
+          bookingStatus: {
+            $in: ["Confirmed", "Pending Approval"]
+          }
+        });
+
+        // ======================================
+        // CALCULATE REMAINING SEATS
+        // ======================================
         const availableSeats = Math.max(
           (activity.capacity || 0) - bookedCount,
           0
         );
 
+        // ======================================
+        // SLOT DATA
+        // ======================================
         formattedSlots.push({
           slotId: slot._id,
+
           startTime: slot.startTime,
           endTime: slot.endTime,
 
-          // FIX:
-          // use fullName
-          trainerName: slot.staffId?.fullName || "N/A",
+          trainerName:
+            slot.staffId?.fullName || "N/A",
 
           totalCapacity: activity.capacity || 0,
+
           bookedCount,
+
           availableSeats,
-          isAvailable: availableSeats > 0
+
+          isAvailable: availableSeats > 0,
+
+          isFull: availableSeats <= 0
         });
       }
 
+      // ======================================
+      // ACTIVITY DATA
+      // ======================================
       formattedActivities.push({
         activityId: activity._id,
+
         activityName: activity.name,
+
+        alreadyPurchased,
+
         isPassMember: !!member.membershipPass,
-        paymentRequired: true,
-        canBook: true,
+
+        // IF ALREADY PURCHASED:
+        // no payment required
+        paymentRequired: !alreadyPurchased,
+
+        // prevent duplicate booking/purchase
+        canBook: !alreadyPurchased,
+
         slots: formattedSlots
       });
     }
 
+    // ======================================
+    // RESPONSE
+    // ======================================
     return res.status(200).json({
       success: true,
       message: "Available activities fetched successfully",
+
+      selectedDate,
+
       data: formattedActivities
     });
 
   } catch (error) {
-    console.error("getAvailableActivities error:", error.message);
+
+    console.error(
+      "getAvailableActivities error:",
+      error
+    );
 
     return res.status(500).json({
       success: false,
@@ -2037,7 +2096,6 @@ const selectedDate =
     });
   }
 };
-
 // ============================================
 // CREATE MEMBER BOOKING
 // POST /api/fitness/member-panel/book-slot
@@ -3001,8 +3059,8 @@ exports.verifyMembershipPayment = async (req, res) => {
       Daily: feeType.daily || 0,
       Weekly: feeType.weekly || 0,
       Monthly: feeType.monthly || 0,
-      Quarterly: feeType.quarterly || 0,
-      HalfYearly: feeType.halfYearly || 0,
+      quarterly: feeType.quarterly || 0,
+      halfYearly: feeType.halfYearly || 0,
       Annual: feeType.annual || 0
     };
 
@@ -3071,8 +3129,8 @@ exports.verifyMembershipPayment = async (req, res) => {
     const endDate = new Date(startDate);
 
     if (normalizedPlan === "Monthly") endDate.setMonth(endDate.getMonth() + 1);
-    if (normalizedPlan === "Quarterly") endDate.setMonth(endDate.getMonth() + 3);
-    if (normalizedPlan === "HalfYearly") endDate.setMonth(endDate.getMonth() + 6);
+    if (normalizedPlan === "quarterly") endDate.setMonth(endDate.getMonth() + 3);
+    if (normalizedPlan === "halfYearly") endDate.setMonth(endDate.getMonth() + 6);
     if (normalizedPlan === "Annual") endDate.setFullYear(endDate.getFullYear() + 1);
     if (normalizedPlan === "Weekly") endDate.setDate(endDate.getDate() + 7);
     if (normalizedPlan === "Daily") endDate.setDate(endDate.getDate() + 1);
@@ -3144,6 +3202,9 @@ exports.createRenewalOrder = async (req, res) => {
   try {
     const { activityFeeId, plan } = req.body;
 
+    // =========================================
+    // VALIDATION
+    // =========================================
     if (!activityFeeId || !plan) {
       return res.status(400).json({
         success: false,
@@ -3151,6 +3212,19 @@ exports.createRenewalOrder = async (req, res) => {
       });
     }
 
+    // =========================================
+    // BLOCK INVALID RENEWALS
+    // =========================================
+    if (["Hourly", "Daily"].includes(plan)) {
+      return res.status(400).json({
+        success: false,
+        message: "Hourly and Daily plans cannot be renewed"
+      });
+    }
+
+    // =========================================
+    // FIND LOGGED-IN MEMBER
+    // =========================================
     const member = await findLoggedInMember(req);
 
     if (!member) {
@@ -3160,7 +3234,14 @@ exports.createRenewalOrder = async (req, res) => {
       });
     }
 
-    const existingMembership = member.activityFees.id(activityFeeId);
+    // =========================================
+    // FIND EXISTING MEMBERSHIP
+    // IMPORTANT:
+    // .id() WILL FAIL because member is lean/plain object
+    // =========================================
+    const existingMembership = (member.activityFees || []).find(
+      item => String(item._id) === String(activityFeeId)
+    );
 
     if (!existingMembership) {
       return res.status(404).json({
@@ -3169,9 +3250,24 @@ exports.createRenewalOrder = async (req, res) => {
       });
     }
 
-    const activity = await FitnessActivity.findById(
-      existingMembership.activity
-    ).lean();
+    // =========================================
+    // CHECK MEMBERSHIP STATUS
+    // =========================================
+    // if (existingMembership.membershipStatus !== "Active") {
+    //   return res.status(400).json({
+    //     success: false,
+    //     message: "Only active memberships can be renewed"
+    //   });
+    // }
+
+    // =========================================
+    // FIND ACTIVITY
+    // =========================================
+    const activityId =
+      existingMembership.activity?._id ||
+      existingMembership.activity;
+
+    const activity = await FitnessActivity.findById(activityId).lean();
 
     if (!activity) {
       return res.status(404).json({
@@ -3180,6 +3276,9 @@ exports.createRenewalOrder = async (req, res) => {
       });
     }
 
+    // =========================================
+    // FIND FEE STRUCTURE
+    // =========================================
     const feeType = await FitnessFeeType.findOne({
       description: activity.name,
       organizationId: req.organizationId
@@ -3192,13 +3291,15 @@ exports.createRenewalOrder = async (req, res) => {
       });
     }
 
+    // =========================================
+    // PLAN → AMOUNT MAP
+    // KEEP CASING CONSISTENT EVERYWHERE
+    // =========================================
     const amountMap = {
-      Hourly: feeType.hourly || 0,
-      Daily: feeType.daily || 0,
       Weekly: feeType.weekly || 0,
       Monthly: feeType.monthly || 0,
       quarterly: feeType.quarterly || 0,
-      HalfYearly: feeType.halfYearly || 0,
+      halfYearly: feeType.halfYearly || 0,
       Annual: feeType.annual || 0
     };
 
@@ -3211,12 +3312,18 @@ exports.createRenewalOrder = async (req, res) => {
       });
     }
 
+    // =========================================
+    // CREATE RAZORPAY ORDER
+    // =========================================
     const order = await razorpay.orders.create({
       amount: amount * 100,
       currency: "INR",
-      receipt: `ren_${Date.now()}`
+      receipt: `renewal_${Date.now()}`
     });
 
+    // =========================================
+    // SUCCESS RESPONSE
+    // =========================================
     return res.status(200).json({
       success: true,
       message: "Renewal order created successfully",
@@ -3225,7 +3332,11 @@ exports.createRenewalOrder = async (req, res) => {
         amount,
         currency: order.currency,
         key: process.env.RAZORPAY_KEY_ID,
+
+        // Important for verify API
         activityFeeId,
+
+        activityId: activity._id,
         activityName: activity.name,
         plan
       }
@@ -3277,7 +3388,17 @@ exports.verifyRenewalPayment = async (req, res) => {
       });
     }
 
-    const oldMembership = member.activityFees.id(activityFeeId);
+    // const oldMembership = member.activityFees.id(activityFeeId);
+    const oldMembership = (member.activityFees || []).find(
+  item => String(item._id) === String(activityFeeId)
+);
+
+if (!oldMembership) {
+  return res.status(404).json({
+    success: false,
+    message: "Membership record not found"
+  });
+}
 
     if (!oldMembership) {
       return res.status(404).json({
