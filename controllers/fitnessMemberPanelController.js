@@ -1479,6 +1479,8 @@ const razorpay = require("../config/razorpay");
 const crypto = require("crypto");
 const FitnessFeeAllotment = require("../models/FitnessFeeAllotment");
 
+const { getTodayIST } = require("../utils/date");
+
 // =====================================================
 // COMMON MEMBER FINDER
 // Because login may come from User collection OR FitnessMember
@@ -1524,7 +1526,8 @@ exports.getMemberDashboard = async (req, res) => {
     // ======================================
     // TODAY DATE
     // ======================================
-    const today = new Date().toISOString().split("T")[0];
+    // const today = new Date().toISOString().split("T")[0];
+    const today = getTodayIST();
 
     // ======================================
     // ACTIVE MEMBERSHIPS
@@ -1960,7 +1963,8 @@ exports.getAvailableActivities = async (req, res) => {
     // ======================================
     const selectedDate =
       req.query.date ||
-      new Date().toISOString().split("T")[0];
+      // new Date().toISOString().split("T")[0];
+      getTodayIST();
 
     // ======================================
     // GET ACTIVE PURCHASED ACTIVITIES
@@ -3698,7 +3702,8 @@ exports.getMemberProfile = async (req, res) => {
       // ======================================
 // ACTIVE BOOKINGS (Hourly/Daily)
 // ======================================
-const todayStr = new Date().toISOString().split("T")[0];
+// const todayStr = new Date().toISOString().split("T")[0];
+const todayStr = getTodayIST();
 
 const activeBookings = await FitnessBooking.find({
   memberId: member._id,
