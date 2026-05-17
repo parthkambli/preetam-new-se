@@ -1475,11 +1475,59 @@ const FitnessFeePayment = require("../models/FitnessFeePayment");
 const FitnessActivity = require("../models/FitnessActivity");
 const FitnessFeeType = require("../models/FitnessFeeType");
 const razorpay = require("../config/razorpay");
+const FitnessAttendance = require("../models/FitnessAttendance");
+const FitnessStaff = require("../models/FitnessStaff");
 
 const crypto = require("crypto");
 const FitnessFeeAllotment = require("../models/FitnessFeeAllotment");
 
 const { getTodayIST } = require("../utils/date");
+
+const calculateEndDate = (startDate, plan) => {
+  const d = new Date(startDate);
+
+  switch (plan) {
+
+    case "Annual":
+      d.setFullYear(d.getFullYear() + 1);
+      d.setDate(d.getDate() - 1);
+      break;
+
+    case "halfYearly":
+      d.setMonth(d.getMonth() + 6);
+      d.setDate(d.getDate() - 1);
+      break;
+
+    case "quarterly":
+      d.setMonth(d.getMonth() + 3);
+      d.setDate(d.getDate() - 1);
+      break;
+
+    case "Monthly":
+      d.setMonth(d.getMonth() + 1);
+      d.setDate(d.getDate() - 1);
+      break;
+
+    case "Weekly":
+      d.setDate(d.getDate() + 6);
+      break;
+
+    case "Daily":
+      break;
+
+    case "Hourly":
+      break;
+
+    default:
+      d.setMonth(d.getMonth() + 1);
+      d.setDate(d.getDate() - 1);
+  }
+
+  return d;
+};
+
+
+
 
 // =====================================================
 // COMMON MEMBER FINDER
@@ -1749,51 +1797,6 @@ currentBookings: activeBookings.map(item => {
 // MEMBERSHIP SUMMARY
 // GET /api/fitness/member-panel/membership
 // ============================================
-// exports.getMemberMembershipSummary = async (req, res) => {
-//   try {
-//     const member = await findLoggedInMember(req);
-
-//     if (!member) {
-//       return res.status(404).json({
-//         success: false,
-//         message: "Member not found"
-//       });
-//     }
-
-//     return res.status(200).json({
-//       success: true,
-//       message: "Membership summary fetched successfully",
-//       data: {
-//         memberId: member.memberId,
-//         isPassMember: !!member.membershipPass,
-//         numberOfPersons: member.numberOfPersons || 1,
-//         membershipStatus: member.membershipStatus,
-//         memberships: (member.activityFees || []).map(item => ({
-//           activityName: item.activity?.name || "Membership Pass",
-//           plan: item.plan,
-//           planFee: item.planFee,
-//           discount: item.discount,
-//           finalAmount: item.finalAmount,
-//           paymentStatus: item.paymentStatus,
-//           paymentMode: item.paymentMode,
-//           paymentDate: item.paymentDate,
-//           startDate: item.startDate,
-//           endDate: item.endDate,
-//           membershipStatus: item.membershipStatus,
-//           notes: item.planNotes || ""
-//         }))
-//       }
-//     });
-
-//   } catch (error) {
-//     console.error("getMemberMembershipSummary error:", error.message);
-
-//     return res.status(500).json({
-//       success: false,
-//       message: "Failed to fetch membership summary"
-//     });
-//   }
-// };
 
 exports.getMemberMembershipSummary = async (req, res) => {
   try {
@@ -1865,84 +1868,6 @@ exports.getMemberMembershipSummary = async (req, res) => {
 // AVAILABLE ACTIVITIES + SLOT AVAILABILITY
 // GET /api/fitness/member-panel/available-activities
 // ============================================
-// exports.getAvailableActivities = async (req, res) => {
-//   try {
-//     const member = await findLoggedInMember(req);
-
-//     if (!member) {
-//       return res.status(404).json({
-//         success: false,
-//         message: "Member not found"
-//       });
-//     }
-
-//     // FIX:
-//     // populate fullName instead of name
-//     const activities = await FitnessActivity.find({})
-//       .populate("slots.staffId", "fullName")
-//       .lean();
-
-//     const today = new Date().toISOString().split("T")[0];
-
-//     const formattedActivities = [];
-
-//     for (const activity of activities) {
-//       const formattedSlots = [];
-
-//       for (const slot of activity.slots || []) {
-//         const bookedCount = await FitnessBooking.countDocuments({
-//           activityId: activity._id,
-//           slotId: slot._id,
-//           date: today,
-//           bookingStatus: "Confirmed"
-//         });
-
-//         const availableSeats = Math.max(
-//           (activity.capacity || 0) - bookedCount,
-//           0
-//         );
-
-//         formattedSlots.push({
-//           slotId: slot._id,
-//           startTime: slot.startTime,
-//           endTime: slot.endTime,
-
-//           // FIX:
-//           // use fullName
-//           trainerName: slot.staffId?.fullName || "N/A",
-
-//           totalCapacity: activity.capacity || 0,
-//           bookedCount,
-//           availableSeats,
-//           isAvailable: availableSeats > 0
-//         });
-//       }
-
-//       formattedActivities.push({
-//         activityId: activity._id,
-//         activityName: activity.name,
-//         isPassMember: !!member.membershipPass,
-//         paymentRequired: true,
-//         canBook: true,
-//         slots: formattedSlots
-//       });
-//     }
-
-//     return res.status(200).json({
-//       success: true,
-//       message: "Available activities fetched successfully",
-//       data: formattedActivities
-//     });
-
-//   } catch (error) {
-//     console.error("getAvailableActivities error:", error.message);
-
-//     return res.status(500).json({
-//       success: false,
-//       message: "Failed to fetch available activities"
-//     });
-//   }
-// };
 
 exports.getAvailableActivities = async (req, res) => {
   try {
@@ -2377,10 +2302,10 @@ exports.getActivityFeePlans = async (req, res) => {
     // FIND FEE TYPE USING DESCRIPTION
     // description = activity name
     // ======================================
-const feeType = await FitnessFeeType.findOne({
-  organizationId: req.organizationId,
-  description: activity.name
-}).lean();
+    const feeType = await FitnessFeeType.findOne({
+      _id: activity.feeTypeId,
+      organizationId: req.organizationId
+    }).lean();
 
 if (!feeType) {
   return res.status(404).json({
@@ -2472,13 +2397,19 @@ if (!feeType) {
 exports.createMembershipOrder = async (req, res) => {
   try {
     const {
-      activityId,
-      slotId,
-      date,
-      plan
-    } = req.body;
+  activityId,
+  slotId,
+  date,
+  startDate,
+  plan
+} = req.body;
 
-    if (!activityId || !slotId || !date || !plan) {
+    if (
+  !activityId ||
+  !slotId ||
+  !date ||
+  !plan
+) {
       return res.status(400).json({
         success: false,
         message: "activityId, slotId, date and plan are required"
@@ -2540,7 +2471,7 @@ exports.createMembershipOrder = async (req, res) => {
     // FIND FEE TYPE
     // ======================================
     const feeType = await FitnessFeeType.findOne({
-      description: activity.name,
+      _id: activity.feeTypeId,
       organizationId: req.organizationId
     }).lean();
 
@@ -2616,7 +2547,8 @@ console.log("OrderId:", order.id);
         slotId,
         date,
         activityName: activity.name,
-        plan
+        plan,
+        startDate
       }
     });
 
@@ -2634,298 +2566,6 @@ console.log("OrderId:", order.id);
 // VERIFY MEMBERSHIP PAYMENT
 // POST /api/fitness/member-panel/verify-membership-payment
 // ============================================
-// exports.verifyMembershipPayment = async (req, res) => {
-//   try {
-//     const {
-//       razorpay_order_id,
-//       razorpay_payment_id,
-//       razorpay_signature,
-//       activityId,
-//       slotId,
-//       date,
-//       plan
-//     } = req.body;
-// const bookingDate = new Date(date).toISOString().split("T")[0];
-//     if (
-//       !razorpay_order_id ||
-//       !razorpay_payment_id ||
-//       !razorpay_signature ||
-//       !activityId ||
-//       !slotId ||
-//       !date ||
-//       !plan
-//     ) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "Missing required payment verification fields"
-//       });
-//     }
-
-//     const member = await findLoggedInMember(req);
-
-//     if (!member) {
-//       return res.status(404).json({
-//         success: false,
-//         message: "Member not found"
-//       });
-//     }
-
-//     // ======================================
-//     // VERIFY RAZORPAY SIGNATURE
-//     // ======================================
-
-//     // TEMPORARY DEV TEST ONLY
-//     // console.log("Razorpay verification bypassed for local testing");
-
-//     const generatedSignature = crypto
-//       .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
-//       .update(`${razorpay_order_id}|${razorpay_payment_id}`)
-//       .digest("hex");
-
-//     if (generatedSignature !== razorpay_signature) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "Payment verification failed"
-//       });
-//     }
-    
-
-//     // ======================================
-//     // FIND ACTIVITY
-//     // ======================================
-//     const activity = await FitnessActivity.findById(activityId);
-
-//     if (!activity) {
-//       return res.status(404).json({
-//         success: false,
-//         message: "Activity not found"
-//       });
-//     }
-
-//     // ======================================
-//     // CHECK SLOT EXISTS
-//     // ======================================
-//     const slotExists = (activity.slots || []).find(
-//       slot => String(slot._id) === String(slotId)
-//     );
-
-//     if (!slotExists) {
-//       return res.status(404).json({
-//         success: false,
-//         message: "Selected slot not found"
-//       });
-//     }
-
-//     // ======================================
-//     // DUPLICATE MEMBERSHIP CHECK
-//     // ======================================
-//     const alreadyExists = (member.activityFees || []).some(item =>
-//       item.activity &&
-//       String(item.activity._id || item.activity) === String(activityId) &&
-//       item.membershipStatus === "Active"
-//     );
-
-//     if (alreadyExists) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "You already have active membership for this activity"
-//       });
-//     }
-
-//     // ======================================
-//     // FIND FEE TYPE
-//     // ======================================
-//     const feeType = await FitnessFeeType.findOne({
-//       description: activity.name,
-//       organizationId: req.organizationId
-//     });
-
-//     if (!feeType) {
-//       return res.status(404).json({
-//         success: false,
-//         message: "Fee structure not found"
-//       });
-//     }
-
-//     // ======================================
-//     // PLAN → AMOUNT
-//     // ======================================
-//     const amountMap = {
-//       Hourly: feeType.hourly || 0,
-//       Daily: feeType.daily || 0,
-//       Weekly: feeType.weekly || 0,
-//       Monthly: feeType.monthly || 0,
-//       quarterly: feeType.quarterly || 0,
-//       halfYearly: feeType.halfYearly || 0,
-//       Annual: feeType.annual || 0
-//     };
-
-//     const amount = amountMap[plan];
-
-//     if (!amount || amount <= 0) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "Invalid plan selected"
-//       });
-//     }
-
-//     // ======================================
-//     // SLOT CAPACITY CHECK AGAIN
-//     // (important after payment)
-//     // ======================================
-//     const bookedCount = await FitnessBooking.countDocuments({
-//       activityId,
-//       slotId,
-//       date,
-//       bookingStatus: "Confirmed"
-//     });
-
-//     if (bookedCount >= (activity.capacity || 0)) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "Slot became full. Please contact admin."
-//       });
-//     }
-
-//     // ======================================
-//     // CREATE FEE ALLOTMENT
-//     // (for fees table + revenue)
-//     // ======================================
-//     const allotment = await FitnessFeeAllotment.create({
-//       memberId: member._id,
-//       feeTypeId: feeType._id,
-//       description: `Member App Purchase - ${activity.name}`,
-//       feePlan: plan,
-//       amount,
-//       dueDate: new Date(),
-//       status: "Paid",
-//       organizationId: req.organizationId
-//     });
-
-//     // ======================================
-//     // CREATE PAYMENT ENTRY
-//     // (for revenue + reports)
-//     // ======================================
-//     await FitnessFeePayment.create({
-//       memberId: member._id,
-//       allotmentId: allotment._id,
-//       customerName: member.name,
-//       description: `Member App (Razorpay) - ${activity.name}`,
-//       feePlan: plan,
-//       amount,
-//       paymentMode: "Bank Transfer",
-//       paymentSource: "Member App Razorpay",
-//       transactionId: razorpay_payment_id,
-//       paymentDate: new Date(),
-//       remarks: `Razorpay Order: ${razorpay_order_id}`,
-//       organizationId: req.organizationId
-//     });
-
-//     // ======================================
-//     // START DATE / END DATE
-//     // ======================================
-//     const startDate = new Date();
-//     const endDate = new Date(startDate);
-
-//     if (plan === "Monthly") endDate.setMonth(endDate.getMonth() + 1);
-//     if (plan === "quarterly") endDate.setMonth(endDate.getMonth() + 3);
-//     if (plan === "halfYearly") endDate.setMonth(endDate.getMonth() + 6);
-//     if (plan === "Annual") endDate.setFullYear(endDate.getFullYear() + 1);
-//     if (plan === "Weekly") endDate.setDate(endDate.getDate() + 7);
-//     if (plan === "Daily") endDate.setDate(endDate.getDate() + 1);
-//     if (plan === "Hourly") endDate.setHours(endDate.getHours() + 1);
-
-//     // ======================================
-//     // CREATE MEMBER ACTIVITY FEES ENTRY
-//     // ======================================
-//     // await FitnessMember.findByIdAndUpdate(
-//     //   member._id,
-//     //   {
-//     //     $push: {
-//     //       activityFees: {
-//     //         activity: activity._id,
-//     //         feeType: feeType._id,
-//     //         plan,
-//     //         planFee: amount,
-//     //         finalAmount: amount,
-//     //         paymentStatus: "Paid",
-//     //         paymentMode: "Online",
-//     //         paymentDate: new Date(),
-//     //         startDate,
-//     //         endDate,
-//     //         membershipStatus: "Active",
-//     //         allotmentId: allotment._id
-//     //       }
-//     //     },
-//     //     membershipStatus: "Active"
-//     //   }
-//     // );
-
-//     // STEP: Check if plan is membership-based
-// const isMembershipPlan = !["Hourly", "Daily"].includes(plan);
-
-// if (isMembershipPlan) {
-//   await FitnessMember.findByIdAndUpdate(
-//     member._id,
-//     {
-//       $push: {
-//         activityFees: {
-//           activity: activity._id,
-//           feeType: feeType._id,
-//           plan,
-//           planFee: amount,
-//           finalAmount: amount,
-//           paymentStatus: "Paid",
-//           paymentMode: "Bank Transfer",
-//           paymentDate: new Date(),
-//           startDate,
-//           endDate,
-//           membershipStatus: "Active",
-//           allotmentId: allotment._id
-//         }
-//       },
-//       membershipStatus: "Active"
-//     }
-//   );
-// }
-
-//     // ======================================
-//     // AUTO CREATE BOOKING
-//     // (slot reserved automatically)
-//     // ======================================
-//     const bookingDate = new Date(date).toISOString().split("T")[0];
-
-// await FitnessBooking.create({
-//   activityId,
-//   slotId,
-//   date: bookingDate,   // ✅ FIXED
-//   memberId: member._id,
-//   customerName: member.name,
-//   phone: member.mobile,
-//   bookingStatus: "Confirmed",
-//   paymentStatus: "Paid",
-//   paymentSource: "Member App Razorpay",
-//   isRecurring: !["Hourly", "Daily"].includes(plan),
-//   isException: false
-// });
-
-
-//     return res.status(200).json({
-//       success: true,
-//       message:
-//         "Payment verified, membership activated and slot booked successfully"
-//     });
-
-//   } catch (error) {
-//     console.error("verifyMembershipPayment error:", error);
-
-//     return res.status(500).json({
-//       success: false,
-//       message: "Payment verification failed"
-//     });
-//   }
-// };
-
 exports.verifyMembershipPayment = async (req, res) => {
   try {
     const {
@@ -2935,6 +2575,7 @@ exports.verifyMembershipPayment = async (req, res) => {
       activityId,
       slotId,
       date,
+      startDate,
       plan
     } = req.body;
 
@@ -2970,17 +2611,20 @@ exports.verifyMembershipPayment = async (req, res) => {
     // ======================================
     // VERIFY SIGNATURE
     // ======================================
-    const generatedSignature = crypto
-      .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
-      .update(`${razorpay_order_id}|${razorpay_payment_id}`)
-      .digest("hex");
 
-    if (generatedSignature !== razorpay_signature) {
-      return res.status(400).json({
-        success: false,
-        message: "Payment verification failed"
-      });
-    }
+// uncomment after postman testing...
+
+    // const generatedSignature = crypto
+    //   .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
+    //   .update(`${razorpay_order_id}|${razorpay_payment_id}`)
+    //   .digest("hex");
+
+    // if (generatedSignature !== razorpay_signature) {
+    //   return res.status(400).json({
+    //     success: false,
+    //     message: "Payment verification failed"
+    //   });
+    // }
 
     // ======================================
     // FIND ACTIVITY
@@ -3029,7 +2673,7 @@ exports.verifyMembershipPayment = async (req, res) => {
     // FIND FEE TYPE
     // ======================================
     const feeType = await FitnessFeeType.findOne({
-      description: activity.name,
+      _id: activity.feeTypeId,
       organizationId: req.organizationId
     });
 
@@ -3120,16 +2764,19 @@ exports.verifyMembershipPayment = async (req, res) => {
     // ======================================
     // DATES
     // ======================================
-    const startDate = new Date();
-    const endDate = new Date(startDate);
+    // const startDate = new Date();
+   const membershipStartDate =
+  startDate
+    ? new Date(startDate)
+    : new Date();
 
-    if (normalizedPlan === "Monthly") endDate.setMonth(endDate.getMonth() + 1);
-    if (normalizedPlan === "quarterly") endDate.setMonth(endDate.getMonth() + 3);
-    if (normalizedPlan === "halfYearly") endDate.setMonth(endDate.getMonth() + 6);
-    if (normalizedPlan === "Annual") endDate.setFullYear(endDate.getFullYear() + 1);
-    if (normalizedPlan === "Weekly") endDate.setDate(endDate.getDate() + 7);
-    if (normalizedPlan === "Daily") endDate.setDate(endDate.getDate() + 1);
-    if (normalizedPlan === "Hourly") endDate.setHours(endDate.getHours() + 1);
+    // const endDate = new Date(startDate);
+
+    const endDate =
+  calculateEndDate(
+    membershipStartDate,
+    plan
+  );
 
     // ======================================
     // SAVE MEMBERSHIP
@@ -3146,32 +2793,137 @@ exports.verifyMembershipPayment = async (req, res) => {
             paymentStatus: "Paid",
             paymentMode: "Bank Transfer",
             paymentDate: new Date(),
-            startDate,
+            startDate: membershipStartDate,
             endDate,
-            membershipStatus: "Active",
+            membershipStatus:
+               membershipStartDate > new Date()
+                ? "Inactive"
+                : "Active",
             allotmentId: allotment._id
           }
         },
-        membershipStatus: "Active"
+        membershipStatus:
+  membershipStartDate > new Date()
+    ? "Inactive"
+    : "Active"
       });
     }
 
     // ======================================
     // CREATE BOOKING
     // ======================================
-    await FitnessBooking.create({
+    // await FitnessBooking.create({
+    //   activityId,
+    //   slotId,
+    //   date: bookingDate,
+    //   memberId: member._id,
+    //   customerName: member.name,
+    //   phone: member.mobile,
+    //   bookingStatus: "Confirmed",
+    //   paymentStatus: "Paid",
+    //   paymentSource: "Member App Razorpay",
+    //   isRecurring: isMembershipPlan,
+    //   isException: false
+    // });
+
+      // ======================================
+// CREATE BOOKINGS
+// ======================================
+
+if (!isMembershipPlan) {
+
+  // ======================================
+  // SINGLE BOOKING
+  // ======================================
+
+  await FitnessBooking.create({
+
+    activityId,
+
+    slotId,
+
+    date: bookingDate,
+
+    memberId: member._id,
+
+    customerName: member.name,
+
+    phone: member.mobile,
+
+    bookingStatus: "Confirmed",
+
+    paymentStatus: "Paid",
+
+    paymentSource: "Member App Razorpay",
+
+    isRecurring: false,
+
+    isException: false
+  });
+
+} else {
+
+  // ======================================
+  // RECURRING MEMBERSHIP BOOKINGS
+  // ======================================
+
+  const bookings = [];
+
+  const current =
+    new Date(membershipStartDate);
+
+  const lastDate =
+    new Date(endDate);
+
+  while (current <= lastDate) {
+
+    bookings.push({
+
       activityId,
+
       slotId,
-      date: bookingDate,
+
+      date:
+        new Intl.DateTimeFormat(
+          "en-CA",
+          {
+            timeZone: "Asia/Kolkata"
+          }
+        ).format(current),
+
       memberId: member._id,
+
       customerName: member.name,
+
       phone: member.mobile,
+
       bookingStatus: "Confirmed",
+
       paymentStatus: "Paid",
-      paymentSource: "Member App Razorpay",
-      isRecurring: isMembershipPlan,
+
+      paymentSource:
+        "Member App Razorpay",
+
+      isRecurring: true,
+
       isException: false
     });
+
+    // NEXT DAY
+    current.setDate(
+      current.getDate() + 1
+    );
+  }
+
+  // ======================================
+  // BULK INSERT
+  // ======================================
+
+  await FitnessBooking.insertMany(
+    bookings
+  );
+}
+
 
     return res.status(200).json({
       success: true,
@@ -3193,159 +2945,6 @@ exports.verifyMembershipPayment = async (req, res) => {
 // CREATE RENEWAL ORDER
 // POST /api/fitness/member-panel/create-renewal-order
 // ============================================
-// exports.createRenewalOrder = async (req, res) => {
-//   try {
-//     const { activityFeeId, plan } = req.body;
-
-//     // =========================================
-//     // VALIDATION
-//     // =========================================
-//     if (!activityFeeId || !plan) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "activityFeeId and plan are required"
-//       });
-//     }
-
-//     // =========================================
-//     // BLOCK INVALID RENEWALS
-//     // =========================================
-//     if (["Hourly", "Daily"].includes(plan)) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "Hourly and Daily plans cannot be renewed"
-//       });
-//     }
-
-//     // =========================================
-//     // FIND LOGGED-IN MEMBER
-//     // =========================================
-//     const member = await findLoggedInMember(req);
-
-//     if (!member) {
-//       return res.status(404).json({
-//         success: false,
-//         message: "Member not found"
-//       });
-//     }
-
-//     // =========================================
-//     // FIND EXISTING MEMBERSHIP
-//     // IMPORTANT:
-//     // .id() WILL FAIL because member is lean/plain object
-//     // =========================================
-//     const existingMembership = (member.activityFees || []).find(
-//       item => String(item._id) === String(activityFeeId)
-//     );
-
-//     if (!existingMembership) {
-//       return res.status(404).json({
-//         success: false,
-//         message: "Membership record not found"
-//       });
-//     }
-
-//     // =========================================
-//     // CHECK MEMBERSHIP STATUS
-//     // =========================================
-//     // if (existingMembership.membershipStatus !== "Active") {
-//     //   return res.status(400).json({
-//     //     success: false,
-//     //     message: "Only active memberships can be renewed"
-//     //   });
-//     // }
-
-//     // =========================================
-//     // FIND ACTIVITY
-//     // =========================================
-//     const activityId =
-//       existingMembership.activity?._id ||
-//       existingMembership.activity;
-
-//     const activity = await FitnessActivity.findById(activityId).lean();
-
-//     if (!activity) {
-//       return res.status(404).json({
-//         success: false,
-//         message: "Activity not found"
-//       });
-//     }
-
-//     // =========================================
-//     // FIND FEE STRUCTURE
-//     // =========================================
-//     const feeType = await FitnessFeeType.findOne({
-//       description: activity.name,
-//       organizationId: req.organizationId
-//     }).lean();
-
-//     if (!feeType) {
-//       return res.status(404).json({
-//         success: false,
-//         message: "Fee structure not found"
-//       });
-//     }
-
-//     // =========================================
-//     // PLAN → AMOUNT MAP
-//     // KEEP CASING CONSISTENT EVERYWHERE
-//     // =========================================
-//     const amountMap = {
-//       Weekly: feeType.weekly || 0,
-//       Monthly: feeType.monthly || 0,
-//       quarterly: feeType.quarterly || 0,
-//       halfYearly: feeType.halfYearly || 0,
-//       Annual: feeType.annual || 0
-//     };
-
-//     const amount = amountMap[plan];
-
-//     if (!amount || amount <= 0) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "Invalid renewal plan selected"
-//       });
-//     }
-
-//     // =========================================
-//     // CREATE RAZORPAY ORDER
-//     // =========================================
-//     const order = await razorpay.orders.create({
-//       amount: amount * 100,
-//       currency: "INR",
-//       receipt: `renewal_${Date.now()}`
-//     });
-
-//     // =========================================
-//     // SUCCESS RESPONSE
-//     // =========================================
-//     return res.status(200).json({
-//       success: true,
-//       message: "Renewal order created successfully",
-//       data: {
-//         orderId: order.id,
-//         amount,
-//         currency: order.currency,
-//         key: process.env.RAZORPAY_KEY_ID,
-
-//         // Important for verify API
-//         activityFeeId,
-
-//         activityId: activity._id,
-//         activityName: activity.name,
-//         plan
-//       }
-//     });
-
-//   } catch (error) {
-//     console.error("createRenewalOrder error:", error);
-
-//     return res.status(500).json({
-//       success: false,
-//       message: "Failed to create renewal order"
-//     });
-//   }
-// };
 
 exports.createRenewalOrder = async (req, res) => {
   try {
@@ -3362,7 +2961,8 @@ exports.createRenewalOrder = async (req, res) => {
     // =========================================
     // VALIDATION
     // =========================================
-    if (!activityFeeId || !slotId || !plan) {
+    //if (!activityFeeId || !slotId || !plan)
+    if (!activityFeeId || !plan){
       return res.status(400).json({
         success: false,
         message:
@@ -3410,45 +3010,106 @@ exports.createRenewalOrder = async (req, res) => {
       });
     }
 
-    // =========================================
-    // FIND ACTIVITY
-    // =========================================
-    const activityId =
-      existingMembership.activity?._id ||
-      existingMembership.activity;
+    // // =========================================
+    // // FIND ACTIVITY
+    // // =========================================
+    // const activityId =
+    //   existingMembership.activity?._id ||
+    //   existingMembership.activity;
 
-    const activity =
-      await FitnessActivity.findById(activityId)
-        .populate("slots.staffId", "fullName")
-        .lean();
+    // const activity =
+    //   await FitnessActivity.findById(activityId)
+    //     .populate("slots.staffId", "fullName")
+    //     .lean();
 
-    if (!activity) {
-      return res.status(404).json({
-        success: false,
-        message: "Activity not found"
-      });
-    }
+    // if (!activity) {
+    //   return res.status(404).json({
+    //     success: false,
+    //     message: "Activity not found"
+    //   });
+    // }
 
-    // =========================================
-    // VALIDATE SLOT
-    // =========================================
-    const selectedSlot = (activity.slots || []).find(
-      slot => String(slot._id) === String(slotId)
+    // // =========================================
+    // // VALIDATE SLOT
+    // // =========================================
+    // const selectedSlot = (activity.slots || []).find(
+    //   slot => String(slot._id) === String(slotId)
+    // );
+
+    // if (!selectedSlot) {
+    //   return res.status(404).json({
+    //     success: false,
+    //     message: "Selected slot not found"
+    //   });
+    // }
+
+      let activity = null;
+
+let selectedSlot = null;
+
+const isMembershipPass =
+  !existingMembership.activity;
+
+// =========================================
+// NORMAL ACTIVITY MEMBERSHIP
+// =========================================
+
+if (!isMembershipPass) {
+
+  const activityId =
+    existingMembership.activity?._id ||
+    existingMembership.activity;
+
+  activity =
+    await FitnessActivity.findById(activityId)
+      .populate("slots.staffId", "fullName")
+      .lean();
+
+  if (!activity) {
+
+    return res.status(404).json({
+      success: false,
+      message: "Activity not found"
+    });
+  }
+
+  // SLOT REQUIRED ONLY FOR NORMAL MEMBERSHIP
+
+  if (!slotId) {
+
+    return res.status(400).json({
+      success: false,
+      message: "slotId is required"
+    });
+  }
+
+  selectedSlot =
+    (activity.slots || []).find(
+      slot =>
+        String(slot._id) ===
+        String(slotId)
     );
 
-    if (!selectedSlot) {
-      return res.status(404).json({
-        success: false,
-        message: "Selected slot not found"
-      });
-    }
+  if (!selectedSlot) {
+
+    return res.status(404).json({
+      success: false,
+      message: "Selected slot not found"
+    });
+  }
+}
+
 
     // =========================================
     // FIND FEE STRUCTURE
     // =========================================
     const feeType =
       await FitnessFeeType.findOne({
-        description: activity.name,
+          // _id: activity.feeTypeId,
+          _id:
+  isMembershipPass
+    ? existingMembership.feeType
+    : activity.feeTypeId,
         organizationId: req.organizationId
       }).lean();
 
@@ -3507,21 +3168,28 @@ exports.createRenewalOrder = async (req, res) => {
 
         activityFeeId,
 
-        activityId: activity._id,
+        // activityId: activity._id,
 
-        activityName: activity.name,
+        // activityName: activity.name,
+        activityId:
+  activity?._id || null,
 
-        slotId: selectedSlot._id,
+activityName:
+  activity?.name ||
+  "Membership Pass",
+
+        slotId:
+  selectedSlot?._id || null,
 
         slotStartTime:
-          selectedSlot.startTime,
+  selectedSlot?.startTime || null,
 
-        slotEndTime:
-          selectedSlot.endTime,
+       slotEndTime:
+  selectedSlot?.endTime || null,
 
         trainerName:
-          selectedSlot.staffId?.fullName ||
-          "Trainer",
+  selectedSlot?.staffId?.fullName ||
+  null,
 
         plan
       }
@@ -3546,215 +3214,6 @@ exports.createRenewalOrder = async (req, res) => {
 // VERIFY RENEWAL PAYMENT
 // POST /api/fitness/member-panel/verify-renewal-payment
 // ============================================
-// exports.verifyRenewalPayment = async (req, res) => {
-//   try {
-//     const {
-//       razorpay_order_id,
-//       razorpay_payment_id,
-//       razorpay_signature,
-//       activityFeeId,
-//       plan
-//     } = req.body;
-
-//     if (
-//       !razorpay_order_id ||
-//       !razorpay_payment_id ||
-//       !razorpay_signature ||
-//       !activityFeeId ||
-//       !plan
-//     ) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "Missing required renewal verification fields"
-//       });
-//     }
-
-//     const member = await findLoggedInMember(req);
-
-//     if (!member) {
-//       return res.status(404).json({
-//         success: false,
-//         message: "Member not found"
-//       });
-//     }
-
-//     // const oldMembership = member.activityFees.id(activityFeeId);
-//     const oldMembership = (member.activityFees || []).find(
-//   item => String(item._id) === String(activityFeeId)
-// );
-
-// if (!oldMembership) {
-//   return res.status(404).json({
-//     success: false,
-//     message: "Membership record not found"
-//   });
-// }
-
-//     if (!oldMembership) {
-//       return res.status(404).json({
-//         success: false,
-//         message: "Existing membership record not found"
-//       });
-//     }
-
-//     // ======================================
-//     // VERIFY SIGNATURE
-//     // ======================================
-//     const generatedSignature = crypto
-//       .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
-//       .update(`${razorpay_order_id}|${razorpay_payment_id}`)
-//       .digest("hex");
-
-//     if (generatedSignature !== razorpay_signature) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "Renewal payment verification failed"
-//       });
-//     }
-
-//     const activity = await FitnessActivity.findById(
-//       oldMembership.activity
-//     );
-
-//     if (!activity) {
-//       return res.status(404).json({
-//         success: false,
-//         message: "Activity not found"
-//       });
-//     }
-
-//     const feeType = await FitnessFeeType.findOne({
-//       description: activity.name,
-//       organizationId: req.organizationId
-//     });
-
-//     if (!feeType) {
-//       return res.status(404).json({
-//         success: false,
-//         message: "Fee structure not found"
-//       });
-//     }
-
-//     const amountMap = {
-//       Hourly: feeType.hourly || 0,
-//       Daily: feeType.daily || 0,
-//       Weekly: feeType.weekly || 0,
-//       Monthly: feeType.monthly || 0,
-//       quarterly: feeType.quarterly || 0,
-//       halfYearly: feeType.halfYearly || 0,
-//       Annual: feeType.annual || 0
-//     };
-
-//     const amount = amountMap[plan];
-
-//     if (!amount || amount <= 0) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "Invalid renewal plan"
-//       });
-//     }
-
-//     // ======================================
-//     // START DATE LOGIC
-//     // ======================================
-//     const today = new Date();
-//     let startDate;
-
-//     if (
-//       oldMembership.endDate &&
-//       new Date(oldMembership.endDate) > today
-//     ) {
-//       // active → extend from old end date
-//       startDate = new Date(oldMembership.endDate);
-//     } else {
-//       // expired → start today
-//       startDate = new Date();
-//     }
-
-//     const endDate = new Date(startDate);
-
-//     if (plan === "Monthly") endDate.setMonth(endDate.getMonth() + 1);
-//     if (plan === "quarterly") endDate.setMonth(endDate.getMonth() + 3);
-//     if (plan === "halfYearly") endDate.setMonth(endDate.getMonth() + 6);
-//     if (plan === "Annual") endDate.setFullYear(endDate.getFullYear() + 1);
-//     if (plan === "Weekly") endDate.setDate(endDate.getDate() + 7);
-//     if (plan === "Daily") endDate.setDate(endDate.getDate() + 1);
-//     if (plan === "Hourly") endDate.setHours(endDate.getHours() + 1);
-
-//     // ======================================
-//     // CREATE FEE ALLOTMENT
-//     // ======================================
-//     const allotment = await FitnessFeeAllotment.create({
-//       memberId: member._id,
-//       feeTypeId: feeType._id,
-//       description: `Renewal - ${activity.name}`,
-//       feePlan: plan,
-//       amount,
-//       dueDate: new Date(),
-//       status: "Paid",
-//       organizationId: req.organizationId
-//     });
-
-//     // ======================================
-//     // CREATE PAYMENT ENTRY
-//     // ======================================
-//     await FitnessFeePayment.create({
-//       memberId: member._id,
-//       allotmentId: allotment._id,
-//       customerName: member.name,
-//       description: `Renewal Payment - ${activity.name}`,
-//       feePlan: plan,
-//       amount,
-//       paymentMode: "Bank Transfer",
-//       paymentSource: "Member App Renewal Razorpay",
-//       transactionId: razorpay_payment_id,
-//       paymentDate: new Date(),
-//       remarks: `Renewal | Razorpay Order: ${razorpay_order_id}`,
-//       organizationId: req.organizationId
-//     });
-
-//     // ======================================
-//     // CREATE NEW activityFees ENTRY
-//     // ======================================
-//     await FitnessMember.findByIdAndUpdate(
-//       member._id,
-//       {
-//         $push: {
-//           activityFees: {
-//             activity: activity._id,
-//             feeType: feeType._id,
-//             plan,
-//             planFee: amount,
-//             finalAmount: amount,
-//             paymentStatus: "Paid",
-//             paymentMode: "Bank Transfer",
-//             paymentDate: new Date(),
-//             startDate,
-//             endDate,
-//             membershipStatus: "Active",
-//             allotmentId: allotment._id
-//           }
-//         },
-//         membershipStatus: "Active"
-//       }
-//     );
-
-//     return res.status(200).json({
-//       success: true,
-//       message: "Membership renewed successfully"
-//     });
-
-//   } catch (error) {
-//     console.error("verifyRenewalPayment error:", error);
-
-//     return res.status(500).json({
-//       success: false,
-//       message: "Renewal verification failed"
-//     });
-//   }
-// };
-
-
 exports.verifyRenewalPayment = async (req, res) => {
   try {
 
@@ -3768,20 +3227,29 @@ exports.verifyRenewalPayment = async (req, res) => {
 
       activityFeeId,
       slotId,
+      startDate,
       plan
     } = req.body;
 
     // =========================================
     // VALIDATION
     // =========================================
+    // if (
+    //   !razorpay_order_id ||
+    //   !razorpay_payment_id ||
+    //   !razorpay_signature ||
+    //   !activityFeeId ||
+    //   !slotId ||
+    //   !plan
+    // ) 
     if (
-      !razorpay_order_id ||
-      !razorpay_payment_id ||
-      !razorpay_signature ||
-      !activityFeeId ||
-      !slotId ||
-      !plan
-    ) {
+  !razorpay_order_id ||
+  !razorpay_payment_id ||
+  !razorpay_signature ||
+  !activityFeeId ||
+  !plan
+)
+    {
       return res.status(400).json({
         success: false,
         message: "Missing required fields"
@@ -3791,24 +3259,27 @@ exports.verifyRenewalPayment = async (req, res) => {
     // =========================================
     // VERIFY SIGNATURE
     // =========================================
-    const generatedSignature = crypto
-      .createHmac(
-        "sha256",
-        process.env.RAZORPAY_KEY_SECRET
-      )
-      .update(
-        razorpay_order_id +
-        "|" +
-        razorpay_payment_id
-      )
-      .digest("hex");
 
-    if (generatedSignature !== razorpay_signature) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid payment signature"
-      });
-    }
+    // uncomment after postman testing
+
+    // const generatedSignature = crypto
+    //   .createHmac(
+    //     "sha256",
+    //     process.env.RAZORPAY_KEY_SECRET
+    //   )
+    //   .update(
+    //     razorpay_order_id +
+    //     "|" +
+    //     razorpay_payment_id
+    //   )
+    //   .digest("hex");
+
+    // if (generatedSignature !== razorpay_signature) {
+    //   return res.status(400).json({
+    //     success: false,
+    //     message: "Invalid payment signature"
+    //   });
+    // }
 
     // =========================================
     // FIND MEMBER
@@ -3839,48 +3310,107 @@ exports.verifyRenewalPayment = async (req, res) => {
       });
     }
 
-    // =========================================
-    // FIND ACTIVITY
-    // =========================================
-    const activityId =
-      oldMembership.activity?._id ||
-      oldMembership.activity;
+    // // =========================================
+    // // FIND ACTIVITY
+    // // =========================================
+    // const activityId =
+    //   oldMembership.activity?._id ||
+    //   oldMembership.activity;
 
-    const activity =
-      await FitnessActivity.findById(activityId)
-        .populate("slots.staffId", "fullName")
-        .lean();
+    // const activity =
+    //   await FitnessActivity.findById(activityId)
+    //     .populate("slots.staffId", "fullName")
+    //     .lean();
 
-    if (!activity) {
-      return res.status(404).json({
-        success: false,
-        message: "Activity not found"
-      });
-    }
+    // if (!activity) {
+    //   return res.status(404).json({
+    //     success: false,
+    //     message: "Activity not found"
+    //   });
+    // }
 
-    // =========================================
-    // VALIDATE SLOT
-    // =========================================
-    const selectedSlot =
-      (activity.slots || []).find(
-        slot =>
-          String(slot._id) ===
-          String(slotId)
-      );
+    // // =========================================
+    // // VALIDATE SLOT
+    // // =========================================
+    // const selectedSlot =
+    //   (activity.slots || []).find(
+    //     slot =>
+    //       String(slot._id) ===
+    //       String(slotId)
+    //   );
 
-    if (!selectedSlot) {
-      return res.status(404).json({
-        success: false,
-        message: "Selected slot not found"
-      });
-    }
+    // if (!selectedSlot) {
+    //   return res.status(404).json({
+    //     success: false,
+    //     message: "Selected slot not found"
+    //   });
+    // }
+
+    let activity = null;
+
+let selectedSlot = null;
+
+const isMembershipPass =
+  !oldMembership.activity;
+
+// =========================================
+// NORMAL MEMBERSHIP
+// =========================================
+
+if (!isMembershipPass) {
+
+  const activityId =
+    oldMembership.activity?._id ||
+    oldMembership.activity;
+
+  activity =
+    await FitnessActivity.findById(activityId)
+      .populate("slots.staffId", "fullName")
+      .lean();
+
+  if (!activity) {
+
+    return res.status(404).json({
+      success: false,
+      message: "Activity not found"
+    });
+  }
+
+  if (!slotId) {
+
+    return res.status(400).json({
+      success: false,
+      message: "slotId is required"
+    });
+  }
+
+  selectedSlot =
+    (activity.slots || []).find(
+      slot =>
+        String(slot._id) ===
+        String(slotId)
+    );
+
+  if (!selectedSlot) {
+
+    return res.status(404).json({
+      success: false,
+      message: "Selected slot not found"
+    });
+  }
+}
+
+
 
     // =========================================
     // FIND FEE STRUCTURE
     // =========================================
     const feeType =
       await FitnessFeeType.findOne({
-        description: activity.name,
+          _id:
+  isMembershipPass
+    ? oldMembership.feeType
+    : activity.feeTypeId,
         organizationId: req.organizationId
       }).lean();
 
@@ -3914,120 +3444,233 @@ exports.verifyRenewalPayment = async (req, res) => {
     // =========================================
     // START DATE
     // =========================================
-    const startDate = new Date();
+    const membershipStartDate =
+  startDate
+    ? new Date(startDate)
+    : new Date();
 
     // =========================================
     // END DATE CALCULATION
     // =========================================
-    const endDate = new Date(startDate);
-
-    switch (plan) {
-
-      case "Weekly":
-        endDate.setDate(
-          endDate.getDate() + 7
-        );
-        break;
-
-      case "Monthly":
-        endDate.setMonth(
-          endDate.getMonth() + 1
-        );
-        break;
-
-      case "quarterly":
-        endDate.setMonth(
-          endDate.getMonth() + 3
-        );
-        break;
-
-      case "halfYearly":
-        endDate.setMonth(
-          endDate.getMonth() + 6
-        );
-        break;
-
-      case "Annual":
-        endDate.setFullYear(
-          endDate.getFullYear() + 1
-        );
-        break;
-    }
+const endDate =
+  calculateEndDate(
+    membershipStartDate,
+    plan
+  );
 
     // =========================================
     // CREATE NEW MEMBERSHIP ENTRY
     // =========================================
-    member.activityFees.push({
+  //   member.activityFees.push({
 
-      activity: activity._id,
+  //     activity: activity._id,
 
-      slotId: slotId,
+  //     slotId: slotId,
 
-      plan,
+  //     plan,
 
-      planFee: amount,
+  //     planFee: amount,
 
-      discount: 0,
+  //     discount: 0,
 
-      finalAmount: amount,
+  //     finalAmount: amount,
 
-      paymentStatus: "Paid",
+  //     paymentStatus: "Paid",
 
-      paymentMode: "Bank Transfer",
+  //     paymentMode: "Bank Transfer",
 
-      paymentDate: new Date(),
+  //     paymentDate: new Date(),
 
-      startDate,
+  //     startDate: membershipStartDate,
 
-      endDate,
+  //     endDate,
 
-      membershipStatus: "Active",
+  //     membershipStatus:
+  // membershipStartDate > new Date()
+  //   ? "Inactive"
+  //   : "Active",
 
-      planNotes:
+  //     planNotes:
+  //       `Renewed via Razorpay (${plan})`
+  //   });
+
+
+
+// =========================================
+// UPDATE EXISTING MEMBERSHIP
+// =========================================
+
+await FitnessMember.updateOne(
+
+  {
+    _id: member._id,
+    "activityFees._id": activityFeeId
+  },
+
+  {
+    $set: {
+
+      "activityFees.$.plan":
+        plan,
+
+      "activityFees.$.planFee":
+        amount,
+
+      "activityFees.$.discount":
+        0,
+
+      "activityFees.$.finalAmount":
+        amount,
+
+      "activityFees.$.paymentStatus":
+        "Paid",
+
+      "activityFees.$.paymentMode":
+        "Bank Transfer",
+
+      "activityFees.$.paymentDate":
+        new Date(),
+
+      "activityFees.$.startDate":
+        membershipStartDate,
+
+      "activityFees.$.endDate":
+        endDate,
+
+      "activityFees.$.membershipStatus":
+        membershipStartDate >
+        new Date()
+          ? "Inactive"
+          : "Active",
+
+      "activityFees.$.planNotes":
         `Renewed via Razorpay (${plan})`
-    });
-
-    // =========================================
-    // SAVE MEMBER
-    // =========================================
-    await FitnessMember.findByIdAndUpdate(
-      member._id,
-      {
-        $push: {
-          activityFees:
-            member.activityFees[
-              member.activityFees.length - 1
-            ]
-        }
-      }
-    );
+    }
+  }
+);
 
     // =========================================
     // CREATE BOOKING
     // =========================================
-    await FitnessBooking.create({
+//     if (!isMembershipPass) {
+//     await FitnessBooking.create({
+
+//       activityId: activity._id,
+
+//       slotId: slotId,
+
+//       memberId: member._id,
+
+//       customerName:
+//   member.name || "Member",
+
+// phone:
+//   member.mobile || "",
+
+//       date:
+//   membershipStartDate
+//     .toISOString()
+//     .split("T")[0],
+
+//       bookingStatus: "Confirmed",
+
+//       paymentStatus: "Paid",
+
+//       paymentSource:
+//         "Member App Razorpay"
+//     });
+//   }
+
+// =========================================
+// CREATE RECURRING BOOKINGS
+// =========================================
+
+if (!isMembershipPass) {
+
+  const bookings = [];
+
+  const current =
+    new Date(membershipStartDate);
+
+  const lastDate =
+    new Date(endDate);
+
+  while (current <= lastDate) {
+
+    bookings.push({
 
       activityId: activity._id,
 
-      slotId: slotId,
+      slotId,
 
       memberId: member._id,
 
       customerName:
-        member.fullName || "Member",
+        member.name || "Member",
 
       phone:
-        member.mobileNumber || "",
+        member.mobile || "",
 
-      date: getTodayIST(),
+      date:
+        new Intl.DateTimeFormat(
+          "en-CA",
+          {
+            timeZone: "Asia/Kolkata"
+          }
+        ).format(current),
 
       bookingStatus: "Confirmed",
 
       paymentStatus: "Paid",
 
       paymentSource:
-        "Member App Razorpay"
+        "Member App Razorpay",
+
+      isRecurring: true,
+
+      isException: false
     });
+
+    current.setDate(
+      current.getDate() + 1
+    );
+  }
+
+  await FitnessBooking.insertMany(
+    bookings
+  );
+}
+
+
+// =========================================
+// CREATE FEE ALLOTMENT
+// =========================================
+
+const allotment =
+  await FitnessFeeAllotment.create({
+
+    memberId: member._id,
+
+    feeTypeId: feeType._id,
+
+    description:
+      isMembershipPass
+        ? `Membership Pass Renewal`
+        : `Membership Renewal (${plan}) - ${activity.name}`,
+
+    feePlan: plan,
+
+    amount,
+
+    dueDate: new Date(),
+
+    status: "Paid",
+
+    organizationId:
+      req.organizationId
+  });
+
+
 
     // =========================================
     // CREATE PAYMENT RECORD
@@ -4043,35 +3686,19 @@ exports.verifyRenewalPayment = async (req, res) => {
       paymentDate: new Date(),
 
       description:
-        `Membership Renewal (${plan}) - ${activity.name}`,
+  isMembershipPass
+    ? `Membership Pass Renewal (${plan})`
+    : `Membership Renewal (${plan}) - ${activity.name}`,
 
       paymentType: "Membership Renewal",
 
       paymentStatus: "Paid",
 
-      organizationId: req.organizationId
-    });
-
-    // =========================================
-    // CREATE FEE ALLOTMENT
-    // =========================================
-    await FitnessFeeAllotment.create({
-
-      memberId: member._id,
-
-      feeTypeId: feeType._id,
-
-      description:
-        `Membership Renewal - ${activity.name}`,
-
-      feePlan: plan,
-
-      amount,
-
-      status: "Paid",
+      allotmentId: allotment._id,
 
       organizationId: req.organizationId
     });
+
 
     // =========================================
     // SUCCESS RESPONSE
@@ -4082,19 +3709,20 @@ exports.verifyRenewalPayment = async (req, res) => {
         "Membership renewed successfully",
 
       data: {
-        activityName: activity.name,
+        activityName: activity?.name || "Membership Pass",
         plan,
         amount,
 
         slot: {
-          slotId: selectedSlot._id,
+          slotId:
+  selectedSlot?._id || null,
           startTime:
-            selectedSlot.startTime,
+  selectedSlot?.startTime || null,
           endTime:
-            selectedSlot.endTime,
+  selectedSlot?.endTime || null,
           trainerName:
-            selectedSlot.staffId?.fullName ||
-            "Trainer"
+  selectedSlot?.staffId?.fullName ||
+  null
         },
 
         startDate,
@@ -4136,9 +3764,14 @@ exports.getMemberMemberships = async (req, res) => {
 
     const memberships = await Promise.all(
       (member.activityFees || []).map(async (item) => {
-        const activity = await FitnessActivity.findById(
-          item.activity
-        ).select("name").lean();
+        const activity =
+  item.activity
+    ? await FitnessActivity.findById(
+        item.activity
+      )
+        .select("name")
+        .lean()
+    : null;
 
         const endDate = item.endDate ? new Date(item.endDate) : null;
         const startDate = item.startDate ? new Date(item.startDate) : null;
@@ -4147,17 +3780,31 @@ exports.getMemberMemberships = async (req, res) => {
         let daysRemaining = 0;
         let canRenew = true;
 
-        if (endDate && endDate >= today) {
-          currentStatus = "Active";
+        if (
+  startDate &&
+  endDate &&
+  startDate <= today &&
+  endDate >= today
+) {
+  currentStatus = "Active";
 
-          const diffTime = endDate - today;
-          daysRemaining = Math.ceil(
-            diffTime / (1000 * 60 * 60 * 24)
-          );
-        } else {
-          currentStatus = "Expired";
-          daysRemaining = 0;
-        }
+  const diffTime = endDate - today;
+
+  daysRemaining = Math.ceil(
+    diffTime / (1000 * 60 * 60 * 24)
+  );
+} else if (
+  endDate &&
+  endDate < today
+) {
+  currentStatus = "Expired";
+
+  daysRemaining = 0;
+} else {
+  currentStatus = "Inactive";
+
+  daysRemaining = 0;
+}
 
         // expiring soon logic
         const isExpiringSoon =
@@ -4166,7 +3813,8 @@ exports.getMemberMemberships = async (req, res) => {
         return {
           activityFeeId: item._id,
           activityId: item.activity,
-          activityName: activity?.name || "N/A",
+          activityName: activity?.name ||
+          "Membership Pass",
           plan: item.plan,
           amount: item.finalAmount || 0,
           paymentStatus: item.paymentStatus || "Pending",
@@ -4318,6 +3966,860 @@ bookingActivities: activeBookings.map(item => ({
     return res.status(500).json({
       success: false,
       message: "Failed to fetch member profile"
+    });
+  }
+};
+
+
+
+// ============================================
+// MEMBER ATTENDANCE CALENDAR
+// GET /api/fitness/member-panel/attendance
+// ============================================
+
+exports.getMemberAttendance = async (req, res) => {
+  try {
+
+    const member = await findLoggedInMember(req);
+
+    if (!member) {
+      return res.status(404).json({
+        success: false,
+        message: "Member not found"
+      });
+    }
+
+    const month =
+      parseInt(req.query.month);
+
+    const year =
+      parseInt(req.query.year);
+
+    if (!month || !year) {
+      return res.status(400).json({
+        success: false,
+        message: "month and year are required"
+      });
+    }
+
+    // ======================================
+    // MONTH RANGE
+    // ======================================
+
+    const startDate =
+      new Date(year, month - 1, 1);
+
+    const endDate =
+      new Date(year, month, 0);
+
+    endDate.setHours(23, 59, 59, 999);
+
+    // ======================================
+    // GET PRESENT ATTENDANCE
+    // ======================================
+
+    const attendanceRecords =
+      await FitnessAttendance.find({
+        member: member._id,
+        attendanceDate: {
+          $gte: startDate,
+          $lte: endDate
+        },
+        organizationId: req.organizationId
+      })
+      .populate("activity", "name")
+      .populate("markedBy", "fullName name")
+      .lean();
+
+    // ======================================
+    // ATTENDANCE MAP
+    // ======================================
+
+    const attendanceMap = {};
+
+    attendanceRecords.forEach(record => {
+
+      const activityId =
+  record.activity?._id
+    ? String(record.activity._id)
+    : "membership-pass";
+
+      const dateKey =
+  new Intl.DateTimeFormat(
+    "en-CA",
+    {
+      timeZone: "Asia/Kolkata"
+    }
+  ).format(
+    new Date(record.attendanceDate)
+  );
+
+      if (!attendanceMap[activityId]) {
+        attendanceMap[activityId] = {};
+      }
+
+      attendanceMap[activityId][dateKey] = {
+        status: record.status,
+
+        markedAt: record.createdAt,
+
+        markedTime:
+          new Date(record.createdAt)
+            .toLocaleTimeString(
+              "en-IN",
+              {
+                hour: "2-digit",
+                minute: "2-digit",
+                hour12: true
+              }
+            ),
+
+        markedBy:
+          record.markedBy?.fullName ||
+          record.markedBy?.name ||
+          "Staff"
+      };
+    });
+
+    // ======================================
+    // BUILD RESPONSE
+    // ======================================
+
+    const responseData = [];
+
+    // ======================================
+// MEMBERSHIP PASS MEMBER
+// ======================================
+
+if (member.membershipPass) {
+
+  const attendance = [];
+
+  const totalDays =
+    new Date(year, month, 0).getDate();
+
+  for (
+    let day = 1;
+    day <= totalDays;
+    day++
+  ) {
+
+    const currentDate =
+      new Date(year, month - 1, day);
+
+    const dateKey =
+      new Intl.DateTimeFormat(
+        "en-CA",
+        {
+          timeZone: "Asia/Kolkata"
+        }
+      ).format(currentDate);
+
+    const existing =
+  attendanceMap?.["membership-pass"]?.[dateKey];
+
+    const today =
+      new Intl.DateTimeFormat(
+        "en-CA",
+        {
+          timeZone: "Asia/Kolkata"
+        }
+      ).format(new Date());
+
+    let status = "Pending";
+
+    if (existing?.status) {
+
+      status = existing.status;
+
+    }
+    else if (dateKey > today) {
+
+      status = "Upcoming";
+
+    }
+    else if (dateKey < today) {
+
+      status = "Absent";
+
+    }
+
+    attendance.push({
+
+      date: dateKey,
+
+      status,
+
+      markedTime:
+        status === "Present"
+          ? existing?.markedTime
+          : null,
+
+      markedBy:
+        status === "Present"
+          ? existing?.markedBy
+          : null,
+
+      markedAt:
+        status === "Present"
+          ? existing?.markedAt
+          : null
+    });
+  }
+
+  responseData.push({
+
+    activityId: null,
+
+    activityName: "Membership Pass",
+
+    attendance
+  });
+
+  return res.status(200).json({
+
+    success: true,
+
+    month,
+
+    year,
+
+    data: responseData
+  });
+}
+
+    const totalDays =
+      new Date(year, month, 0).getDate();
+
+    for (const item of member.activityFees || []) {
+
+      // ONLY ACTIVE MEMBERSHIPS
+      if (
+        !["Active", "Inactive"]
+    .includes(item.membershipStatus)
+      ) {
+        continue;
+      }
+
+      // IGNORE HOURLY / DAILY
+      if (
+        ["Hourly", "Daily"]
+          .includes(item.plan)
+      ) {
+        continue;
+      }
+
+      const activityId =
+        String(item.activity?._id || item.activity);
+
+      const activityName =
+        item.activity?.name || "Activity";
+
+      const attendance = [];
+
+      for (
+        let day = 1;
+        day <= totalDays;
+        day++
+      ) {
+
+        const currentDate =
+          new Date(year, month - 1, day);
+
+        const dateKey =
+  new Intl.DateTimeFormat(
+    "en-CA",
+    {
+      timeZone: "Asia/Kolkata"
+    }
+  ).format(currentDate);
+
+        const existing =
+          attendanceMap?.[activityId]?.[dateKey];
+
+        const today = new Date();
+
+const membershipStart =
+  item.startDate
+    ? new Date(item.startDate)
+    : null;
+
+const membershipEnd =
+  item.endDate
+    ? new Date(item.endDate)
+    : null;
+
+let status = "Pending";
+
+if (existing?.status) {
+
+  status = existing.status;
+
+}
+else if (
+  membershipStart &&
+  currentDate < membershipStart
+) {
+
+  status = "Not Applicable";
+
+}
+else if (
+  membershipEnd &&
+  currentDate > membershipEnd
+) {
+
+  status = "Expired";
+
+}
+else if (currentDate > today) {
+
+  status = "Upcoming";
+
+}
+else if (currentDate < today) {
+
+  status = "Absent";
+
+}
+else {
+
+  status = "Pending";
+}
+
+attendance.push({
+
+  date: dateKey,
+
+  status,
+
+  markedTime:
+    status === "Present"
+      ? existing?.markedTime
+      : null,
+
+  markedBy:
+    status === "Present"
+      ? existing?.markedBy
+      : null,
+
+  markedAt:
+    status === "Present"
+      ? existing?.markedAt
+      : null
+});
+      }
+
+      responseData.push({
+        activityId,
+        activityName,
+        attendance
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      month,
+      year,
+      data: responseData
+    });
+
+  } catch (error) {
+
+    console.error(
+      "getMemberAttendance error:",
+      error
+    );
+
+    return res.status(500).json({
+      success: false,
+      message:
+        "Failed to fetch attendance"
+    });
+  }
+};
+
+
+
+exports.createMembershipPassOrder = async (req, res) => {
+
+  try {
+
+    const {
+      feeTypeId,
+      plan
+    } = req.body;
+
+    if (!feeTypeId || !plan) {
+
+      return res.status(400).json({
+        success: false,
+        message: "feeTypeId and plan are required"
+      });
+    }
+
+    const member =
+      await findLoggedInMember(req);
+
+    if (!member) {
+
+      return res.status(404).json({
+        success: false,
+        message: "Member not found"
+      });
+    }
+
+    // ======================================
+    // FIND MEMBERSHIP PASS
+    // ======================================
+
+    const feeType =
+      await FitnessFeeType.findOne({
+
+        _id: feeTypeId,
+
+        type: "Membership Pass",
+
+        organizationId:
+          req.organizationId
+
+      }).lean();
+
+    if (!feeType) {
+
+      return res.status(404).json({
+        success: false,
+        message:
+          "Membership pass not found"
+      });
+    }
+
+    // ======================================
+    // CHECK ALREADY ACTIVE
+    // ======================================
+
+    const alreadyActive =
+      (member.activityFees || []).some(
+        item =>
+          !item.activity &&
+          item.feeType &&
+          String(item.feeType) ===
+            String(feeType._id) &&
+          item.membershipStatus ===
+            "Active"
+      );
+
+    if (alreadyActive) {
+
+      return res.status(400).json({
+        success: false,
+        message:
+          "Membership pass already active"
+      });
+    }
+
+    // ======================================
+    // PLAN → AMOUNT
+    // ======================================
+
+    const amountMap = {
+
+      Weekly:
+        feeType.weekly || 0,
+
+      Monthly:
+        feeType.monthly || 0,
+
+      quarterly:
+        feeType.quarterly || 0,
+
+      halfYearly:
+        feeType.halfYearly || 0,
+
+      Annual:
+        feeType.annual || 0
+    };
+
+    const amount =
+      amountMap[plan];
+
+    if (!amount || amount <= 0) {
+
+      return res.status(400).json({
+        success: false,
+        message:
+          "Invalid plan selected"
+      });
+    }
+
+    // ======================================
+    // CREATE RAZORPAY ORDER
+    // ======================================
+
+    const order =
+      await razorpay.orders.create({
+
+        amount: amount * 100,
+
+        currency: "INR",
+
+        receipt:
+          `mp_${member._id
+            .toString()
+            .slice(-6)}_${Date.now()}`
+      });
+
+    return res.status(200).json({
+
+      success: true,
+
+      message:
+        "Membership pass order created",
+
+      data: {
+
+        orderId: order.id,
+
+        amount,
+
+        currency:
+          order.currency,
+
+        key:
+          process.env
+            .RAZORPAY_KEY_ID,
+
+        feeTypeId,
+
+        numberOfPersons:
+          feeType.numberOfPersons,
+
+        description:
+          feeType.description,
+
+        plan
+      }
+    });
+
+  } catch (error) {
+
+    console.error(
+      "createMembershipPassOrder error:",
+      error
+    );
+
+    return res.status(500).json({
+
+      success: false,
+
+      message:
+        "Failed to create membership pass order"
+    });
+  }
+};
+
+exports.verifyMembershipPassPayment = async (req, res) => {
+
+  try {
+
+    const {
+
+      razorpay_order_id,
+
+      razorpay_payment_id,
+
+      razorpay_signature,
+
+      feeTypeId,
+
+      plan,
+
+      startDate
+
+    } = req.body;
+
+    if (
+      !razorpay_order_id ||
+      !razorpay_payment_id ||
+      !razorpay_signature ||
+      !feeTypeId ||
+      !plan
+    ) {
+
+      return res.status(400).json({
+
+        success: false,
+
+        message:
+          "Missing required fields"
+      });
+    }
+
+    const member =
+      await findLoggedInMember(req);
+
+    if (!member) {
+
+      return res.status(404).json({
+        success: false,
+        message: "Member not found"
+      });
+    }
+
+    // ======================================
+    // VERIFY SIGNATURE
+    // ======================================
+
+    const generatedSignature =
+      crypto
+        .createHmac(
+          "sha256",
+          process.env
+            .RAZORPAY_KEY_SECRET
+        )
+        .update(
+          `${razorpay_order_id}|${razorpay_payment_id}`
+        )
+        .digest("hex");
+
+    if (
+      generatedSignature !==
+      razorpay_signature
+    ) {
+
+      return res.status(400).json({
+
+        success: false,
+
+        message:
+          "Payment verification failed"
+      });
+    }
+
+    // ======================================
+    // FIND MEMBERSHIP PASS
+    // ======================================
+
+    const feeType =
+      await FitnessFeeType.findOne({
+
+        _id: feeTypeId,
+
+        type: "Membership Pass",
+
+        organizationId:
+          req.organizationId
+      });
+
+    if (!feeType) {
+
+      return res.status(404).json({
+
+        success: false,
+
+        message:
+          "Membership pass not found"
+      });
+    }
+
+    // ======================================
+    // PLAN → AMOUNT
+    // ======================================
+
+    const amountMap = {
+
+      Weekly:
+        feeType.weekly || 0,
+
+      Monthly:
+        feeType.monthly || 0,
+
+      quarterly:
+        feeType.quarterly || 0,
+
+      halfYearly:
+        feeType.halfYearly || 0,
+
+      Annual:
+        feeType.annual || 0
+    };
+
+    const amount =
+      amountMap[plan];
+
+    if (!amount || amount <= 0) {
+
+      return res.status(400).json({
+
+        success: false,
+
+        message:
+          "Invalid plan selected"
+      });
+    }
+
+    // ======================================
+    // CREATE ALLOTMENT
+    // ======================================
+
+    const allotment =
+      await FitnessFeeAllotment.create({
+
+        memberId: member._id,
+
+        feeTypeId: feeType._id,
+
+        description:
+          `Membership Pass Purchase`,
+
+        feePlan: plan,
+
+        amount,
+
+        dueDate: new Date(),
+
+        status: "Paid",
+
+        organizationId:
+          req.organizationId
+      });
+
+    // ======================================
+    // PAYMENT ENTRY
+    // ======================================
+
+    await FitnessFeePayment.create({
+
+      memberId: member._id,
+
+      allotmentId:
+        allotment._id,
+
+      customerName:
+        member.name,
+
+      description:
+        `Membership Pass (Razorpay)`,
+
+      feePlan: plan,
+
+      amount,
+
+      paymentMode:
+        "Bank Transfer",
+
+      paymentSource:
+        "Member App Razorpay",
+
+      transactionId:
+        razorpay_payment_id,
+
+      paymentDate:
+        new Date(),
+
+      remarks:
+        `Razorpay Order: ${razorpay_order_id}`,
+
+      organizationId:
+        req.organizationId
+    });
+
+    // ======================================
+    // DATES
+    // ======================================
+
+    const membershipStartDate =
+      startDate
+        ? new Date(startDate)
+        : new Date();
+
+    const endDate =
+      calculateEndDate(
+        membershipStartDate,
+        plan
+      );
+
+    // ======================================
+    // SAVE MEMBERSHIP PASS
+    // ======================================
+
+    await FitnessMember.findByIdAndUpdate(
+
+      member._id,
+
+      {
+
+        membershipPass:
+          feeType._id,
+
+        numberOfPersons:
+          feeType.numberOfPersons,
+
+        $push: {
+
+          activityFees: {
+
+            activity: null,
+
+            feeType:
+              feeType._id,
+
+            plan,
+
+            planFee:
+              amount,
+
+            finalAmount:
+              amount,
+
+            paymentStatus:
+              "Paid",
+
+            paymentMode:
+              "Bank Transfer",
+
+            paymentDate:
+              new Date(),
+
+            startDate:
+              membershipStartDate,
+
+            endDate,
+
+            membershipStatus:
+              membershipStartDate >
+              new Date()
+                ? "Inactive"
+                : "Active",
+
+            allotmentId:
+              allotment._id
+          }
+        }
+      }
+    );
+
+    return res.status(200).json({
+
+      success: true,
+
+      message:
+        "Membership pass activated successfully"
+    });
+
+  } catch (error) {
+
+    console.error(
+      "verifyMembershipPassPayment error:",
+      error
+    );
+
+    return res.status(500).json({
+
+      success: false,
+
+      message:
+        "Payment verification failed"
     });
   }
 };

@@ -8,18 +8,30 @@ const fitnessAttendanceSchema = new mongoose.Schema({
     index: true
   },
 
+  // activity: {
+  //   type: mongoose.Schema.Types.ObjectId,
+  //   ref: 'FitnessActivity',
+  //   required: true
+  // },
+
   activity: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'FitnessActivity',
-    required: true
-  },
+  type: mongoose.Schema.Types.ObjectId,
+  ref: 'FitnessActivity',
+  default: null
+},
 
   // Critical: Link to exact activityFee entry inside member.activityFees[]
+  // activityFeeId: {
+  //   type: mongoose.Schema.Types.ObjectId,
+  //   required: true,
+  //   index: true
+  // },
+
   activityFeeId: {
-    type: mongoose.Schema.Types.ObjectId,
-    required: true,
-    index: true
-  },
+  type: mongoose.Schema.Types.ObjectId,
+  default: null,
+  index: true
+},
 
   attendanceDate: {
     type: Date,
@@ -31,11 +43,11 @@ const fitnessAttendanceSchema = new mongoose.Schema({
     }
   },
 
-  markedBy: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'FitnessStaff',
-    required: true
-  },
+ markedBy: {
+  type: mongoose.Schema.Types.ObjectId,
+  ref: 'FitnessStaff',
+  default: null
+},
 
   status: {
     type: String,

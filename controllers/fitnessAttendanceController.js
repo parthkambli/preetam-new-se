@@ -101,61 +101,93 @@ exports.markAttendance = async (req, res) => {
 
     const activityFee = member.activityFees.id(activityFeeId);
     if (!activityFee || activityFee.membershipStatus !== 'Active') {
-      // 🔥 TIME VALIDATION (CRITICAL)
-      const FitnessActivity = require('../models/FitnessActivity');
+      
+      // // 🔥 TIME VALIDATION (CRITICAL)
+      // const FitnessActivity = require('../models/FitnessActivity');
 
-      const activity = await FitnessActivity.findById(activityId).lean();
+      // const activity = await FitnessActivity.findById(activityId).lean();
 
-      if (!activity || !activity.slots || activity.slots.length === 0) {
-        return res.status(400).json({ error: "No slots found for activity" });
-      }
+      // if (!activity || !activity.slots || activity.slots.length === 0) {
+      //   return res.status(400).json({ error: "No slots found for activity" });
+      // }
 
-      // ⚠️ ASSUMPTION: first slot (since your current system doesn't store slotId)
-      const slot = activity.slots[0];
+      // // ⚠️ ASSUMPTION: first slot (since your current system doesn't store slotId)
+      // const slot = activity.slots[0];
 
-      const now = new Date();
-      // const todayStr = new Date().toISOString().split("T")[0];
-      const todayStr = getTodayIST();
+      // const now = new Date();
+      // // const todayStr = new Date().toISOString().split("T")[0];
+      // const todayStr = getTodayIST();
 
-      const slotStartTime = new Date(`${todayStr}T${slot.startTime}:00`);
-      const slotEndTime = new Date(`${todayStr}T${slot.endTime}:00`);
+      // const slotStartTime = new Date(`${todayStr}T${slot.startTime}:00`);
+      // const slotEndTime = new Date(`${todayStr}T${slot.endTime}:00`);
 
-      const allowedStartTime = new Date(
-        slotStartTime.getTime() - 10 * 60 * 1000
-      );
+      // const allowedStartTime = new Date(
+      //   slotStartTime.getTime() - 10 * 60 * 1000
+      // );
 
-      // ❌ TOO EARLY
-      if (now < allowedStartTime) {
-        return res.status(400).json({
-          error: "Attendance not started yet"
-        });
-      }
+      // // ❌ TOO EARLY
+      // if (now < allowedStartTime) {
+      //   return res.status(400).json({
+      //     error: "Attendance not started yet"
+      //   });
+      // }
 
-      // ❌ TOO LATE
-      if (now > slotEndTime) {
-        return res.status(400).json({
-          error: "Attendance window closed"
-        });
-      }
+      // // ❌ TOO LATE
+      // if (now > slotEndTime) {
+      //   return res.status(400).json({
+      //     error: "Attendance window closed"
+      //   });
+      // }
       return res.status(400).json({ error: 'This activity is not active for the member today' });
     }
 
     const today = getTodayStart();
 
-    const attendance = await FitnessAttendance.findOneAndUpdate(
-      { member: member._id, activity: activityId, activityFeeId, attendanceDate: today },
-      { 
-        member: member._id, 
-        activity: activityId, 
-        activityFeeId, 
-        attendanceDate: today, 
-        markedBy, 
-        status, 
-        notes: notes || '', 
-        organizationId 
-      },
-      { upsert: true, new: true, runValidators: true }
-    );
+    // const attendance = await FitnessAttendance.findOneAndUpdate(
+    //   { member: member._id, activity: activityId, activityFeeId, attendanceDate: today },
+    //   { 
+    //     member: member._id, 
+    //     activity: activityId, 
+    //     activityFeeId, 
+    //     attendanceDate: today, 
+    //     markedBy, 
+    //     status, 
+    //     notes: notes || '', 
+    //     organizationId 
+    //   },
+    //   { upsert: true, new: true, runValidators: true }
+    // );
+
+    const existingAttendance =
+  await FitnessAttendance.findOne({
+    member: member._id,
+    activity: activityId,
+    attendanceDate: today,
+    organizationId
+  });
+
+if (existingAttendance) {
+  return res.status(200).json({
+    success: true,
+    alreadyMarked: true,
+    message: "Attendance already marked today",
+    attendance: existingAttendance
+  });
+}
+
+
+const attendance =
+  await FitnessAttendance.create({
+    member: member._id,
+    activity: activityId,
+    activityFeeId,
+    attendanceDate: today,
+    markedBy,
+    status,
+    notes: notes || '',
+    organizationId
+  });
+
 
     res.json({ success: true, attendance, message: `Marked as ${status}` });
 

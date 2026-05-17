@@ -18,7 +18,10 @@ const {
   verifyMembershipPayment,
   createRenewalOrder,
   verifyRenewalPayment,
-  getMemberMemberships
+  getMemberMemberships,
+  getMemberAttendance,
+  createMembershipPassOrder,
+  verifyMembershipPassPayment
 } = require("../controllers/fitnessMemberPanelController");
 
 // ===============================
@@ -182,3 +185,29 @@ router.get(
   getMemberProfile
 );
 module.exports = router;
+
+//===============================
+// Member Attendence routes
+// ===============================
+
+router.get(
+  "/attendance",
+  auth,
+  allowPermissions("VIEW_OWN_PROFILE"),
+  getMemberAttendance
+);
+
+
+router.post(
+  "/create-membership-pass-order",
+  auth,
+  allowPermissions("BOOK_ACTIVITY"),
+  createMembershipPassOrder
+);
+
+router.post(
+  "/verify-membership-pass-payment",
+  auth,
+  allowPermissions("BOOK_ACTIVITY"),
+  verifyMembershipPassPayment
+);
