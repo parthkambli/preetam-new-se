@@ -1421,7 +1421,7 @@ exports.generateRecurringBookings = async (memberId, activityFeeIndex, activityI
 ========================= */
 exports.createActivity = async (req, res) => {
   try {
-    const { name, capacity, slots } = req.body;
+    const { name, capacity, slots, feeTypeId } = req.body;
 
     if (!name?.trim())
       return res.status(400).json({ success: false, message: 'Name is required' });
@@ -1458,7 +1458,8 @@ exports.createActivity = async (req, res) => {
     const activity = await FitnessActivity.create({
       name: name.trim(),
       capacity: Number(capacity),
-      slots
+      slots,
+      feeTypeId
     });
 
     res.status(201).json({
@@ -1481,6 +1482,7 @@ exports.getActivities = async (req, res) => {
     // const activities = await FitnessActivity.find().sort({ name: 1 });
     const activities = await FitnessActivity.find()
   .populate("slots.staffId", "fullName role")
+  .populate("feeTypeId")
   .sort({ name: 1 });
     res.json({ success: true, count: activities.length, data: activities });
   } catch (err) {
@@ -1499,7 +1501,9 @@ exports.getActivityById = async (req, res) => {
 
     // const activity = await FitnessActivity.findById(id);
     const activity = await FitnessActivity.findById(id)
-  .populate("slots.staffId", "fullName role");
+    .populate("slots.staffId", "fullName role")
+    .populate("feeTypeId")
+
     if (!activity)
       return res.status(404).json({ success: false, message: 'Not found' });
 
@@ -1515,7 +1519,7 @@ exports.getActivityById = async (req, res) => {
 exports.updateActivity = async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, capacity, slots } = req.body;
+    const { name, capacity, slots, feeTypeId } = req.body;
 
     if (!mongoose.Types.ObjectId.isValid(id))
       return res.status(400).json({ success: false, message: 'Invalid Activity ID' });
@@ -1585,6 +1589,8 @@ exports.updateActivity = async (req, res) => {
     activity.capacity   = Number(capacity);
     activity.slots      = mergedSlots;
     activity.updatedAt  = Date.now();
+
+    activity.feeTypeId = feeTypeId;
 
     await activity.save();
 

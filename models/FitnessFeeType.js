@@ -19,6 +19,12 @@ const fitnessFeeTypeSchema = new mongoose.Schema({
   daily: { type: Number, default: 0 },
   hourly: { type: Number, default: 0 },   // Extra field needed for fitness
 
+
+  numberOfPersons: {
+  type: Number,
+  default: 1
+},
+
   organizationId: {
     type: String,
     required: true

@@ -424,76 +424,6 @@ function getTodayDateString() {
   // return new Date().toISOString().split("T")[0];
   return getTodayIST()
 }
-
-// async function resolveLoggedInStaffObjectId(req) {
-//   const tokenUserId = req.admin?.userId || null;
-//   const tokenId = req.admin?.id || null;
-
-//   console.log("REQ.ADMIN 👉", req.admin);
-//   console.log("TOKEN USER ID 👉", tokenUserId);
-//   console.log("TOKEN ID 👉", tokenId);
-//   console.log("FITNESS STAFF COLLECTION 👉", FitnessStaff.collection.name);
-
-//   // 1) Try direct mongo _id from token
-//   if (tokenId && mongoose.Types.ObjectId.isValid(tokenId)) {
-//     const byId = await FitnessStaff.findById(tokenId).lean();
-//     if (byId) {
-//       console.log("STAFF FOUND BY _id 👉", byId._id.toString());
-//       return byId._id;
-//     }
-//   }
-
-//   // 2) Try common login fields
-//   if (tokenUserId) {
-//     const byLoginField = await FitnessStaff.findOne({
-//       $or: [
-//         { userId: tokenUserId },
-//         { staffId: tokenUserId },
-//         { username: tokenUserId },
-//         { userName: tokenUserId },
-//         { employeeId: tokenUserId },
-//         { loginId: tokenUserId },
-//         { code: tokenUserId },
-//       ],
-//     }).lean();
-
-//     if (byLoginField) {
-//       console.log("STAFF FOUND BY LOGIN FIELD 👉", byLoginField._id.toString());
-//       return byLoginField._id;
-//     }
-//   }
-
-//   // 3) Debug: show sample docs so we can see actual fields
-//   const sampleDocs = await FitnessStaff.find({})
-//     .select("_id userId staffId username userName employeeId loginId code fullName name")
-//     .limit(5)
-//     .lean();
-
-//   console.log("FITNESS STAFF SAMPLE DOCS 👉", sampleDocs);
-
-//   return null;
-// }
-
-
-// const resolveLoggedInStaffObjectId = async (req) => {
-//   const userId = req.admin.userId;
-//   const organizationId = req.organizationId;
-
-//   const user = await User.findOne({
-//     userId,
-//     organizationId,
-//     role: "FitnessStaff",
-//   }).lean();
-
-//   if (!user || !user.linkedId) {
-//     return null;
-//   }
-
-//   return mongoose.Types.ObjectId.isValid(user.linkedId)
-//     ? new mongoose.Types.ObjectId(user.linkedId)
-//     : null;
-// };
-
 const resolveLoggedInStaffObjectId = async (req) => {
   try {
     // Support both admin & user tokens
@@ -529,137 +459,6 @@ const resolveLoggedInStaffObjectId = async (req) => {
   }
 };
 
-
-// exports.getMySchedule = async (req, res) => {
-//   try {
-//     const staffObjectId = await resolveLoggedInStaffObjectId(req);
-
-//     if (!staffObjectId) {
-//       return res.status(404).json({
-//         success: false,
-//         message: "Staff not found",
-//       });
-//     }
-
-//     const selectedDate = req.query.date || getTodayDateString();
-
-//     const activities = await FitnessActivity.find({
-//       "slots.staffId": staffObjectId,
-//     }).lean();
-
-//     const data = [];
-
-//     for (const activity of activities) {
-//       for (const slot of activity.slots || []) {
-//         if (String(slot.staffId) === String(staffObjectId)) {
-//           const bookings = await FitnessBooking.find({
-//             activityId: activity._id,
-//             slotId: slot._id,
-//             date: selectedDate,
-//           })
-//             .populate("memberId", "name")
-//             .lean();
-
-//           data.push({
-//             activityId: activity._id,
-//             activityName: activity.name,
-//             capacity: activity.capacity,
-//             startTime: slot.startTime,
-//             endTime: slot.endTime,
-//             slotId: slot._id,
-//             participants: bookings.map((b) => ({
-//               bookingId: b._id,
-//               name: b.memberId?.name || b.customerName || "Participant",
-//               customerName: b.customerName || "",
-//               phone: b.phone || "",
-//             })),
-//           });
-//         }
-//       }
-//     }
-
-//     return res.json({
-//       success: true,
-//       count: data.length,
-//       data,
-//     });
-//   } catch (error) {
-//     console.error("getMySchedule error:", error);
-//     return res.status(500).json({
-//       success: false,
-//       message: "Failed to fetch schedule",
-//     });
-//   }
-// };
-
-
-
-
-
-
-// exports.getMySchedule = async (req, res) => {
-//   try {
-//     // console.log("REQ USER:", req.staff || req.admin);
-//     const staffObjectId = await resolveLoggedInStaffObjectId(req);
-
-//     if (!staffObjectId) {
-//       return res.status(404).json({
-        
-//         success: false,
-//         message: "Staff not found",
-//       });
-//     }
-
-//     const selectedDate = req.query.date || getTodayDateString();
-
-//     const activities = await FitnessActivity.find({
-//       "slots.staffId": staffObjectId,
-//     }).lean();
-
-//     const data = [];
-
-//     for (const activity of activities) {
-//       for (const slot of activity.slots || []) {
-//         if (String(slot.staffId) === String(staffObjectId)) {
-//           const bookings = await FitnessBooking.find({
-//             activityId: activity._id,
-//             slotId: slot._id,
-//             date: selectedDate,
-//           })
-//             .populate("memberId", "name")
-//             .lean();
-
-//           data.push({
-//             activityId: activity._id,
-//             activityName: activity.name,
-//             capacity: activity.capacity,
-//             startTime: slot.startTime,
-//             endTime: slot.endTime,
-//             slotId: slot._id,
-//             participants: bookings.map((b) => ({
-//               bookingId: b._id,
-//               name: b.memberId?.name || b.customerName || "Participant",
-//               customerName: b.customerName || "",
-//               phone: b.phone || "",
-//             })),
-//           });
-//         }
-//       }
-//     }
-
-//     return res.json({
-//       success: true,
-//       count: data.length,
-//       data,
-//     });
-//   } catch (error) {
-//     console.error("getMySchedule error:", error);
-//     return res.status(500).json({
-//       success: false,
-//       message: "Failed to fetch schedule",
-//     });
-//   }
-// };
 
 exports.getMySchedule = async (req, res) => {
   try {
@@ -802,188 +601,6 @@ exports.getAvailableActivities = async (req, res) => {
 
 
 
-// exports.getAttendanceByDate = async (req, res) => {
-//   try {
-//     const staffObjectId = await resolveLoggedInStaffObjectId(req);
-
-//     if (!staffObjectId) {
-//       return res.status(404).json({
-//         success: false,
-//         message: "Staff not found",
-//       });
-//     }
-
-//     const selectedDate = req.query.date || getTodayDateString();
-
-//     const activities = await FitnessActivity.find({
-//       "slots.staffId": staffObjectId,
-//     }).lean();
-
-//     const data = [];
-
-//     for (const activity of activities) {
-//       for (const slot of activity.slots || []) {
-//         if (String(slot.staffId) !== String(staffObjectId)) continue;
-
-//         // 1. Get bookings
-//         const bookings = await FitnessBooking.find({
-//           activityId: activity._id,
-//           slotId: slot._id,
-//           date: selectedDate,
-//         })
-//           .populate("memberId", "name")
-//           .lean();
-
-//         // 2. Get attendance records
-//         const attendanceRecords = await FitnessAttendance.find({
-//           activity: activity._id,
-//           attendanceDate: new Date(selectedDate).setHours(0, 0, 0, 0),
-//           organizationId: req.organizationId,
-//         }).lean();
-
-//         // 3. Create attendance map
-//         const attendanceMap = {};
-//         attendanceRecords.forEach((a) => {
-//           attendanceMap[a.member.toString()] = a.status;
-//         });
-
-//         const now = new Date();
-
-//         const slotStartTime = new Date(
-//           `${selectedDate}T${slot.startTime}:00`
-//         );
-
-//         const slotEndTime = new Date(
-//           `${selectedDate}T${slot.endTime}:00`
-//         );
-
-//         // ✅ allow 10 min before start
-//         const allowedStartTime = new Date(
-//           slotStartTime.getTime() - 10 * 60 * 1000
-//         );
-
-//         // ✅ can mark logic
-//         const canMarkAttendance =
-//           now >= allowedStartTime && now <= slotEndTime;
-
-//         // 4. Merge participant data
-//         const participants = bookings.map((b) => {
-//           const memberId = b.memberId?._id?.toString();
-
-//           let finalStatus = "Not Marked";
-
-//           // If attendance manually marked
-//           if (memberId && attendanceMap[memberId]) {
-//             finalStatus = attendanceMap[memberId];
-//           }
-
-//           // If slot completed and still not marked → auto absent
-//           else if (now > slotEndTime) {
-//             finalStatus = "Absent";
-//           }
-
-//           return {
-//             name: b.memberId?.name || b.customerName || "Participant",
-//             status: finalStatus,
-//           };
-//         });
-
-//         // 5. Counts
-//         const total = participants.length;
-//         const present = participants.filter(
-//           (p) => p.status === "Present"
-//         ).length;
-
-//         const absent = participants.filter(
-//           (p) => p.status === "Absent"
-//         ).length;
-
-//         // 6. Slot status
-//         const status =
-//           now >= slotEndTime ? "Completed" : "Pending";
-
-//         data.push({
-//           activityId: activity._id,
-//           activityName: activity.name,
-//           slotId: slot._id,
-//           startTime: slot.startTime,
-//           endTime: slot.endTime,
-//           total,
-//           present,
-//           absent,
-//           status,
-//           canMarkAttendance,
-//           participants,
-//         });
-//       }
-//     }
-
-//     return res.json({
-//       success: true,
-//       count: data.length,
-//       data,
-//     });
-//   } catch (error) {
-//     console.error("getAttendanceByDate error:", error);
-
-//     return res.status(500).json({
-//       success: false,
-//       message: "Failed to fetch attendance",
-//     });
-//   }
-// };
-
-
-
-
-// exports.getStaffProfile = async (req, res) => {
-//   try {
-//     console.log("USER:", req.user);
-
-//     // Step 1: Find logged-in user
-//     // const user = await User.findOne({
-//     //   userId: req.user.userId
-//     // }).lean();
-//     const user = await User.findOne({
-//       userId: req.user.userId,
-//       organizationId: req.organizationId
-//     }).lean();
-
-
-//     if (!user || !user.staffId) {
-//       return res.json({
-//         success: true,
-//         data: {
-//           name: "Staff",
-//           profileImage: "",
-//         },
-//       });
-//     }
-
-//     // Step 2: Find staff using linked staffId
-//     const staff = await FitnessStaff.findById(user.staffId).lean();
-
-//     console.log("STAFF:", staff);
-
-//     // Step 3: Return proper full image URL
-//     return res.json({
-//       success: true,
-//       data: {
-//         name: staff?.fullName || "Staff",
-//         profileImage: staff?.profilePhoto
-//           ? `${req.protocol}://${req.get("host")}${staff.profilePhoto}`
-//           : "",
-//       },
-//     });
-
-//   } catch (error) {
-//     console.error("getStaffProfile error:", error);
-//     return res.status(500).json({
-//       success: false,
-//       message: "Failed to fetch profile",
-//     });
-//   }
-// //};
 
 exports.getAttendanceByDate = async (req, res) => {
   try {
@@ -998,8 +615,7 @@ exports.getAttendanceByDate = async (req, res) => {
 
     const selectedDate = req.query.date || getTodayDateString();
 
-    const attendanceDate = new Date(selectedDate);
-    attendanceDate.setHours(0, 0, 0, 0);
+ 
 
     const activities = await FitnessActivity.find({
       "slots.staffId": staffObjectId,
@@ -1012,96 +628,85 @@ exports.getAttendanceByDate = async (req, res) => {
         if (String(slot.staffId) !== String(staffObjectId)) continue;
 
         // 1. Get bookings
-        const bookings = await FitnessBooking.find({
-          activityId: activity._id,
-          slotId: slot._id,
-          date: selectedDate,
-        })
-          .populate("memberId", "name")
-          .lean();
+        const rawBookings =
+  await FitnessBooking.find({
+    activityId: activity._id,
+    slotId: slot._id,
+    date: selectedDate,
+  })
+  .populate({
+    path: "memberId",
+    select:
+      "name activityFees"
+  })
+  .lean();
+
+const bookings =
+  rawBookings.filter((booking) => {
+
+    const member =
+      booking.memberId;
+
+    if (!member) return true;
+
+    const activeMembership =
+      member.activityFees?.find((af) => {
+
+      const start =
+  af.startDate
+    ? new Date(af.startDate)
+        .toISOString()
+        .split("T")[0]
+    : null;
+
+const end =
+  af.endDate
+    ? new Date(af.endDate)
+        .toISOString()
+        .split("T")[0]
+    : null;
+
+const selected = selectedDate;
+
+        return (
+          String(af.activity) ===
+          String(activity._id) &&
+
+          start &&
+          end &&
+
+          selected >= start &&
+          selected <= end
+        );
+      });
+
+    return !!activeMembership;
+  });
 
         const now = new Date();
 
-        const slotStartTime = new Date(
-          `${selectedDate}T${slot.startTime}:00`
-        );
+        const todayIST = getTodayIST();
 
-        const slotEndTime = new Date(
-          `${selectedDate}T${slot.endTime}:00`
-        );
+// ✅ Can mark attendance ONLY for today
+const canMarkAttendance =
+  selectedDate === todayIST;
 
-        // ✅ allow 10 min before start
-        const allowedStartTime = new Date(
-          slotStartTime.getTime() - 10 * 60 * 1000
-        );
-
-        // ✅ can mark logic
-        const canMarkAttendance =
-          now >= allowedStartTime && now <= slotEndTime;
-
-        // ======================================================
-        // ✅ AUTO MARK ABSENT IN DB AFTER SLOT ENDS
-        // ======================================================
-        if (now > slotEndTime) {
-          for (const booking of bookings) {
-
-            // Skip walk-in bookings
-            if (!booking.memberId?._id) continue;
-
-            const existingAttendance =
-            await FitnessAttendance.findOne({
-              member: booking.memberId._id,
-              activity: activity._id,
-              attendanceDate,
-              organizationId: req.organizationId,
-            });
-
-            if (!existingAttendance) {
-
-              // Get member full document
-              const member = await FitnessMember.findById(
-                booking.memberId._id
-              );
-
-              if (!member) continue;
-
-              // Find matching activity fee
-              const activityFee = member.activityFees.find(
-                (af) =>
-                  String(af.activity) === String(activity._id)
-              );
-
-              // Skip if no activity fee found
-              if (!activityFee) continue;
-
-              // Get logged-in user
-              const user = await User.findOne({
-                userId: req.user.userId,
-                organizationId: req.organizationId,
-              });
-
-              if (!user) continue;
-
-              await FitnessAttendance.create({
-                member: booking.memberId._id,
-                activity: activity._id,
-                activityFeeId: activityFee._id,
-                attendanceDate,
-                status: "Absent",
-                markedBy: user._id,
-                organizationId: req.organizationId,
-              });
-            }
-
-          }
-        }
 
         // 2. Get attendance records
-        const attendanceRecords = await FitnessAttendance.find({
-          activity: activity._id,
-          attendanceDate,
-          organizationId: req.organizationId,
-        }).lean();
+       const attendanceRecords =
+  await FitnessAttendance.find({
+    activity: activity._id,
+    attendanceDate: {
+      $gte: new Date(
+        `${selectedDate}T00:00:00.000Z`
+      ),
+      $lt: new Date(
+        `${selectedDate}T23:59:59.999Z`
+      )
+    },
+    organizationId:
+      req.organizationId,
+  }).lean();
 
         // 3. Create attendance map
         const attendanceMap = {};
@@ -1113,13 +718,25 @@ exports.getAttendanceByDate = async (req, res) => {
         // 4. Merge participant data
         const participants = bookings.map((b) => {
           const memberId = b.memberId?._id?.toString();
+ 
 
           let finalStatus = "Not Marked";
 
-          // If attendance manually marked OR auto absent inserted
-          if (memberId && attendanceMap[memberId]) {
-            finalStatus = attendanceMap[memberId];
-          }
+// ✅ Present attendance exists
+if (memberId && attendanceMap[memberId]) {
+
+  finalStatus = attendanceMap[memberId];
+
+} else {
+
+  const todayIST = getTodayIST();
+
+  // ✅ Past dates without attendance
+  // become Absent dynamically
+  if (selectedDate < todayIST) {
+    finalStatus = "Absent";
+  }
+}
 
           return {
             name: b.memberId?.name || b.customerName || "Participant",
@@ -1139,8 +756,13 @@ exports.getAttendanceByDate = async (req, res) => {
         ).length;
 
         // 6. Slot status
-        const status =
-          now >= slotEndTime ? "Completed" : "Pending";
+
+const status =
+  selectedDate < todayIST
+    ? "Completed"
+    : selectedDate === todayIST
+      ? "Ongoing"
+      : "Upcoming";
 
         data.push({
           activityId: activity._id,
@@ -1224,23 +846,6 @@ exports.getStaffProfile = async (req, res) => {
       .select("name")
       .lean();
 
-    // return res.json({
-    //   success: true,
-    //   data: {
-    //     name: staff.fullName || "Staff",
-    //     mobile: staff.mobileNumber || "",
-    //     email: staff.emailId || "",
-    //     role: staff.role || "",
-
-    //     permissions: user.finalPermissions || [],
-
-    //     assignedActivities: activities.map(a => a.name),
-
-    //     profileImage: staff.profilePhoto
-    //       ? `${req.protocol}://${req.get("host")}${staff.profilePhoto}`
-    //       : ""
-    //   }
-    // });
 
     return res.json({
       success: true,
@@ -1274,57 +879,6 @@ exports.getStaffProfile = async (req, res) => {
 };
 
 
-// exports.getStaffProfile = async (req, res) => {
-//   try {
-//     const user = await User.findOne({
-//       userId: req.user.userId
-//     }).lean();
-
-//     if (!user || !user.staffId) {
-//       return res.json({
-//         success: true,
-//         data: null
-//       });
-//     }
-
-//     const staff = await FitnessStaff.findById(user.staffId).lean();
-
-//     if (!staff) {
-//       return res.json({
-//         success: true,
-//         data: null
-//       });
-//     }
-
-//     // Fetch assigned activities
-//     const activities = await FitnessActivity.find({
-//       "slots.staffId": staff._id
-//     })
-//       .select("name")
-//       .lean();
-
-//     return res.json({
-//       success: true,
-//       data: {
-//         name: staff.fullName || "",
-//         mobile: staff.mobileNumber || "",
-//         email: staff.emailId || "",
-//         role: staff.role || "",
-//         assignedActivities: activities.map(a => a.name),
-//         profileImage: staff.profilePhoto
-//           ? `${req.protocol}://${req.get("host")}${staff.profilePhoto}`
-//           : ""
-//       }
-//     });
-
-//   } catch (error) {
-//     console.error("getStaffProfile error:", error);
-//     return res.status(500).json({
-//       success: false,
-//       message: "Failed to fetch profile"
-//     });
-//   }
-// };
 
 
 exports.getStaffEvents = async (req, res) => {
@@ -1511,33 +1065,109 @@ exports.handleQRScan = async (req, res) => {
     }
 
     // 🔥 STEP 3: Get ONLY activities assigned to THIS staff
-    const allowedActivities = member.activityFees.filter((af) => {
-      if (af.membershipStatus !== "Active") return false;
+    // const allowedActivities = member.activityFees.filter((af) => {
+    //   if (af.membershipStatus !== "Active") return false;
 
-      const activity = af.activity;
+    //   const activity = af.activity;
 
-      if (!activity || !activity.slots) return false;
+    //   if (!activity || !activity.slots) return false;
 
-      // ✅ Check if this staff is assigned in any slot
-      return activity.slots.some(
-        (slot) => String(slot.staffId) === String(staffObjectId)
-      );
+    //   // ✅ Check if this staff is assigned in any slot
+    //   return activity.slots.some(
+    //     (slot) => String(slot.staffId) === String(staffObjectId)
+    //   );
+    // });
+
+   const allowedActivities =
+  member.activityFees.filter((af) => {
+
+    return (
+      af.membershipStatus ===
+        "Active" &&
+      af.activity
+    );
+}); 
+
+    // if (allowedActivities.length === 0) {
+    //   return res.status(403).json({
+    //     success: false,
+    //     message: "You are not assigned to this member's activity"
+    //   });
+    // }
+
+    // ======================================
+// MEMBERSHIP PASS MEMBER
+// ======================================
+
+if (member.membershipPass) {
+
+  const todayIST = getTodayIST();
+
+  const today =
+    new Date(
+      `${todayIST}T12:00:00.000Z`
+    );
+
+  const existing =
+    await FitnessAttendance.findOne({
+      member: member._id,
+      attendanceDate: today
     });
 
-    if (allowedActivities.length === 0) {
-      return res.status(403).json({
-        success: false,
-        message: "You are not assigned to this member's activity"
-      });
-    }
+  if (!existing) {
+
+    await FitnessAttendance.create({
+
+      member: member._id,
+
+      activity: null,
+
+      activityFeeId: null,
+
+      attendanceDate: today,
+
+      markedBy: staffObjectId,
+
+      status: "Present",
+
+      organizationId
+    });
+  }
+
+  return res.json({
+
+    success: true,
+
+    autoMarked: true,
+
+    isMembershipPass: true,
+
+    alreadyMarked: !!existing,
+
+    message: existing
+      ? "Attendance already marked"
+      : "Membership pass attendance marked",
+
+    member: {
+      name: member.name,
+      memberId: member.memberId
+    },
+
+    numberOfPersons:
+      member.numberOfPersons || 1
+  });
+}
 
     // 🔥 STEP 4: AUTO MARK if only one valid activity
     if (allowedActivities.length === 1) {
       const af = allowedActivities[0];
 
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
+const todayIST = getTodayIST();
 
+const today =
+  new Date(
+    `${todayIST}T12:00:00.000Z`
+  );
 
       // ✅ CHECK IF ALREADY MARKED (ADD THIS)
 const existing = await FitnessAttendance.findOne({
@@ -1560,7 +1190,7 @@ const existing = await FitnessAttendance.findOne({
           activity: af.activity._id,
           activityFeeId: af._id,
           attendanceDate: today,
-          markedBy: req.user?._id || req.admin?._id,
+          markedBy: staffObjectId,
           status: "Present",
           organizationId
         },
@@ -1722,39 +1352,6 @@ exports.getAllStaffForStaff = async (req, res) => {
     });
   }
 };
-
-// exports.getAllMembersForStaff = async (req, res) => {
-//   try {
-//     const staffObjectId = await resolveLoggedInStaffObjectId(req);
-
-//     if (!staffObjectId) {
-//       return res.status(403).json({
-//         success: false,
-//         message: "Unauthorized staff",
-//       });
-//     }
-
-//     // ✅ Fetch ALL members (not just bookings)
-//     const members = await FitnessMember.find({
-//       organizationId: req.organizationId
-//     })
-//       .select("name memberId mobile membershipStatus activityFees")
-//       .lean();
-
-//     return res.json({
-//       success: true,
-//       count: members.length,
-//       data: members,
-//     });
-
-//   } catch (err) {
-//     console.error("getAllMembersForStaff error:", err);
-//     return res.status(500).json({
-//       success: false,
-//       message: "Failed to fetch members",
-//     });
-//   }
-// };
 
 exports.getAllMembersForStaff = async (req, res) => {
   try {

@@ -1535,7 +1535,7 @@ exports.getFitnessFeeTypes = async (req, res) => {
 
 exports.createFitnessFeeType = async (req, res) => {
   try {
-    const { description, type, annual, halfYearly, quarterly, monthly, weekly, daily, hourly } = req.body;
+    const { description, type, annual, halfYearly, quarterly, monthly, weekly, daily, hourly, numberOfPersons } = req.body;
 
     if (!description || !description.trim()) {
       return res.status(400).json({ message: 'Description is required.' });
@@ -1577,6 +1577,10 @@ exports.createFitnessFeeType = async (req, res) => {
       weekly: Number(weekly) || 0,
       daily: Number(daily) || 0,
       hourly: Number(hourly) || 0,
+      numberOfPersons:
+      type === "Membership Pass"
+      ? Number(numberOfPersons) || 1
+      : 1,
       organizationId: req.organizationId,
     });
 
@@ -1616,7 +1620,7 @@ exports.updateFitnessFeeType = async (req, res) => {
       });
     }
 
-    const amounts = { annual, halfYearly, quarterly, monthly, weekly, daily, hourly };
+    const amounts = { annual, halfYearly, quarterly, monthly, weekly, daily, hourly, numberOfPersons, };
 
     for (const [key, val] of Object.entries(amounts)) {
       if (val !== undefined && val !== '' && Number(val) < 0) {
@@ -1652,7 +1656,11 @@ exports.updateFitnessFeeType = async (req, res) => {
         weekly: weekly !== undefined ? Number(weekly) || 0 : feeType.weekly,
         daily: daily !== undefined ? Number(daily) || 0 : feeType.daily,
         hourly: hourly !== undefined ? Number(hourly) || 0 : feeType.hourly,
-      },
+        numberOfPersons:
+        type === "Membership Pass"
+        ? Number(numberOfPersons) || 1
+        : 1,
+       },
       { new: true, runValidators: true }
     );
 

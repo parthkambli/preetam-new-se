@@ -30,6 +30,12 @@ const fitnessActivitySchema = new mongoose.Schema({
   },
   slots: [slotSchema],
 
+  feeTypeId: {
+  type: mongoose.Schema.Types.ObjectId,
+  ref: 'FitnessFeeType',
+  required: true
+},
+
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now }
 });
