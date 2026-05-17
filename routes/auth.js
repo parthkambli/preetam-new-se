@@ -1,5 +1,5 @@
     const express = require('express');
-    const { login, getMe } = require('../controllers/authController');
+    const { login, getMe, memberMobileLogin } = require('../controllers/authController');
     const auth = require('../middleware/auth');
 
     const router = express.Router();
@@ -8,6 +8,9 @@
     // @desc    Authenticate admin user and get JWT token
     // @access  Public
     router.post('/login', login);
+
+    // Member Mobile Login
+    router.post('/member-login', memberMobileLogin);
 
     // GET /api/auth/me
     // @desc    Get current admin info

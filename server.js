@@ -143,7 +143,7 @@ const dotenv = require('dotenv');
 const connectDB = require('./config/db');
 const { startMembershipCron } = require('./utils/updateMembershipStatuses');
 const { startBackupCron } = require('./scripts/dbBackup');
-
+require("./cron/generateAbsentAttendance");
 const auth = require('./middleware/auth');
 const { allowPermissions } = require('./middleware/permissions');
 
@@ -195,7 +195,7 @@ const app = express();
 app.use(cors({
   origin: (origin, callback) => callback(null, true),
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Organization-ID'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Organization-ID', 'x-platform'],
   credentials: true,
   optionsSuccessStatus: 200
 }));
@@ -221,8 +221,8 @@ app.use(
 
 // ===================== ADMIN (SCHOOL) =====================
 app.use('/api/school/dashboard', auth, allowPermissions('VIEW_DASHBOARD'), schoolDashboardRoutes);
-app.use('/api/school/enquiry', auth, allowPermissions('USER_MANAGE'), schoolEnquiryRoutes);
-app.use('/api/school/admission', auth, allowPermissions('USER_MANAGE'), schoolAdmissionRoutes);
+app.use('/api/school/enquiry', auth, schoolEnquiryRoutes);
+app.use('/api/school/admission', auth, schoolAdmissionRoutes);
 app.use('/api/followups', auth, followupRoutes);
 app.use('/api/students', auth, studentRoutes);
 app.use('/api/staff', auth, staffRoutes);
@@ -233,13 +233,13 @@ app.use('/api/events', auth, eventRoutes);
 
 // ===================== ADMIN (FITNESS) =====================
 app.use('/api/fitness/enquiry', auth, fitnessEnquiryRoutes);
-app.use('/api/fitness/member', auth, allowPermissions('USER_MANAGE'), fitnessMemberRoutes);
+app.use('/api/fitness/member', auth, fitnessMemberRoutes);
 app.use('/api/fitness/events', auth, fitnessEventRoutes);
 app.use('/api/fitness/fees', auth, fitnessFeeRoutes);
 
-app.use('/api/fitness/roles', auth, allowPermissions('USER_MANAGE'), fitnessStaffRoleRoutes);
-app.use('/api/fitness/types', auth, allowPermissions('USER_MANAGE'), fitnessEmpTypeRoutes);
-app.use('/api/fitness/staff', auth, allowPermissions('USER_MANAGE'), fitnessStaffRoutes);
+app.use('/api/fitness/roles', auth, fitnessStaffRoleRoutes);
+app.use('/api/fitness/types', auth, fitnessEmpTypeRoutes);
+app.use('/api/fitness/staff', auth, fitnessStaffRoutes);
 
 // Mixed routes (leave flexible — don’t over-restrict)
 app.use('/api/fitness/activities', auth, fitnessActivity);

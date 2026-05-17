@@ -247,6 +247,19 @@ const activityFeeSchema = new mongoose.Schema({
     ref: 'FitnessStaff',
     default: null,
   },
+
+  slot: {
+    slotId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'FitnessSlot',
+      default: null,
+    },
+    label: {
+      type: String,
+      default: '',
+    },
+  },
+
   // Reference to auto-created fee allotment (for Allot Fees / Add Payments sync)
   allotmentId: {
     type: mongoose.Schema.Types.ObjectId,
@@ -301,7 +314,7 @@ const fitnessMemberSchema = new mongoose.Schema({
 
   membershipPass: {
   type: mongoose.Schema.Types.ObjectId,
-  ref: 'MembershipPass',
+  ref: 'FitnessFeeType',
   default: null,
 },
 numberOfPersons: {

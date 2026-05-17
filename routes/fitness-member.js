@@ -91,17 +91,18 @@ const {
   deleteMember,
   renewMember,
 } = require('../controllers/fitnessMemberController');
+const { allowPermissions } = require("../middleware/permissions");
 
 // ── Write routes (need file upload) ──────────────────────────────────────────
 // handleUpload wraps upload.fitnessMember so multer errors become clean JSON
 // responses rather than unhandled exceptions.
-router.post('/',    auth, handleUpload(upload.fitnessMember), createMember);
-router.put('/:id',  auth, handleUpload(upload.fitnessMember), updateMember);
+router.post('/',    auth, allowPermissions("ADD_MEMBER"),  handleUpload(upload.fitnessMember), createMember);
+router.put('/:id',  auth, allowPermissions("EDIT_MEMBER"), handleUpload(upload.fitnessMember), updateMember);
 
 // ── Read / delete routes ──────────────────────────────────────────────────────
-router.get('/',         auth, getAllMembers);
-router.get('/:id',      auth, getMemberById);
-router.post('/:id/renew', auth, renewMember);
-router.delete('/:id',   auth, deleteMember);
+router.get('/',         auth, allowPermissions("VIEW_MEMBER"), getAllMembers);
+router.get('/:id',      auth, allowPermissions("VIEW_MEMBER"), getMemberById);
+router.post('/:id/renew', auth, allowPermissions("RENEW_MEMBER"), renewMember);
+router.delete('/:id',   auth, allowPermissions("DELETE_MEMBER"), deleteMember);
 
 module.exports = router;
