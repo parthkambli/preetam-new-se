@@ -138,68 +138,68 @@ exports.login = async (req, res) => {
     }
 
     // ── 3. FitnessMember direct check (fallback) ───────────────────────────
-    const FitnessMember = require('../models/FitnessMember');
+    // const FitnessMember = require('../models/FitnessMember');
 
-    const memberFilter = isMobile(userId)
-      ? { mobile: userId.trim() }
-      : { userId: userId.trim() };
+    // const memberFilter = isMobile(userId)
+    //   ? { mobile: userId.trim() }
+    //   : { userId: userId.trim() };
 
-    const member = await FitnessMember.findOne(memberFilter);
+    // const member = await FitnessMember.findOne(memberFilter);
 
-    if (member) {
+    // if (member) {
 
-      // Block member login from web
-      if (req.headers['x-platform'] === 'web') {
-        return res.status(401).json({
-          message: 'Invalid credentials'
-        });
-      }
+    //   // Block member login from web
+    //   if (req.headers['x-platform'] === 'web') {
+    //     return res.status(401).json({
+    //       message: 'Invalid credentials'
+    //     });
+    //   }
 
-      // Support both plain text (old) and bcrypt hashed (new) passwords
-      let match = false;
-      if (member.password.startsWith('$2')) {
-        match = await bcrypt.compare(password, member.password);
-      } else {
-        match = (password === member.password);
-      }
+    //   // Support both plain text (old) and bcrypt hashed (new) passwords
+    //   let match = false;
+    //   if (member.password.startsWith('$2')) {
+    //     match = await bcrypt.compare(password, member.password);
+    //   } else {
+    //     match = (password === member.password);
+    //   }
 
-      if (!match) {
-        return res.status(401).json({ message: 'Invalid credentials' });
-      }
+    //   if (!match) {
+    //     return res.status(401).json({ message: 'Invalid credentials' });
+    //   }
 
-      const organizations = [{
-        id: 'fitness',
-        name: 'Sport Fitness Club',
-        label: 'Sport Fitness Club'
-      }];
-      const defaultOrg = organizations[0];
+    //   const organizations = [{
+    //     id: 'fitness',
+    //     name: 'Sport Fitness Club',
+    //     label: 'Sport Fitness Club'
+    //   }];
+    //   const defaultOrg = organizations[0];
 
-      const token = jwt.sign(
-        {
-          id: member._id,
-          userId: member.userId || member.mobile,
-          role: 'Participant',
-          organizationId: 'fitness',
-          userType: 'member',
-        },
-        process.env.JWT_SECRET,
-        { expiresIn: '24h' }
-      );
+    //   const token = jwt.sign(
+    //     {
+    //       id: member._id,
+    //       userId: member.userId || member.mobile,
+    //       role: 'Participant',
+    //       organizationId: 'fitness',
+    //       userType: 'member',
+    //     },
+    //     process.env.JWT_SECRET,
+    //     { expiresIn: '24h' }
+    //   );
 
-      return res.json({
-        token,
-        organizations,
-        defaultOrg,
-        user: {
-          id: member._id,
-          userId: member.userId || member.mobile,
-          fullName: member.name,
-          role: 'Participant',
-          userType: 'member',
-          organizationId: 'fitness',
-        }
-      });
-    }
+    //   return res.json({
+    //     token,
+    //     organizations,
+    //     defaultOrg,
+    //     user: {
+    //       id: member._id,
+    //       userId: member.userId || member.mobile,
+    //       fullName: member.name,
+    //       role: 'Participant',
+    //       userType: 'member',
+    //       organizationId: 'fitness',
+    //     }
+    //   });
+    // }
 
     // ── 4. Nothing matched ─────────────────────────────────────────────────
     return res.status(401).json({ message: 'Invalid credentials' });
