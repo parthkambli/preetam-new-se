@@ -953,6 +953,7 @@ exports.renewMember = async (req, res) => {
         planFee,
         discount,
         finalAmount: planFee > 0 ? Math.max(0, planFee - discount) : 0,
+        noOfPersons: Number(r.noOfPersons) || 1,
         paymentStatus: r.paymentStatus || "Pending",
         paymentMode: r.paymentMode || "",
         paymentDate: r.paymentDate ? new Date(r.paymentDate) : null,

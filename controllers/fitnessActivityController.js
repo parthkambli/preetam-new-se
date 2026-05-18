@@ -1948,6 +1948,76 @@ exports.bookSlot = async (req, res) => {
 //   }
 // };
 
+// exports.getBookings = async (req, res) => {
+//   try {
+//     const {
+//       page = 1,
+//       limit = 10,
+//       search = '',
+//       activity = '',
+//       fromDate,
+//       toDate
+//     } = req.query;
+
+//     const query = {};
+
+//     // Member name search
+//     if (search) {
+//       query.customerName = { $regex: search, $options: 'i' };
+//     }
+
+//     // Date filter
+//     if (fromDate || toDate) {
+//       query.date = {};
+//       if (fromDate) query.date.$gte = new Date(fromDate);
+//       if (toDate) query.date.$lte = new Date(toDate);
+//     }
+
+//     const total = await FitnessBooking.countDocuments(query);
+
+//     const bookings = await FitnessBooking.find(query)
+//       .populate('activityId')
+//       .populate('staffId', 'fullName')
+//       .sort({ createdAt: -1 })
+//       .skip((page - 1) * limit)
+//       .limit(Number(limit));
+
+//     const formatted = bookings.map(b => {
+//       let activityName = 'N/A';
+//       let slotTime = 'N/A';
+
+//       if (b.activityId && b.activityId.slots) {
+//         activityName = b.activityId.name;
+//         const slot = b.activityId.slots.id(b.slotId);
+//         if (slot) slotTime = `${slot.startTime} - ${slot.endTime}`;
+//       }
+
+//       return {
+//         _id: b._id,
+//         customerName: b.customerName,
+//         activityName,
+//         slotTime,
+//         date: b.date
+//       };
+//     });
+
+//     res.json({
+//       success: true,
+//       data: formatted,
+//       pagination: {
+//         total,
+//         page: Number(page),
+//         limit: Number(limit),
+//         totalPages: Math.ceil(total / limit)
+//       }
+//     });
+
+//   } catch (err) {
+//     console.error("getBookings error:", err);
+//     res.status(500).json({ success: false, message: err.message });
+//   }
+// };
+
 exports.getBookings = async (req, res) => {
   try {
     const {
@@ -1961,35 +2031,86 @@ exports.getBookings = async (req, res) => {
 
     const query = {};
 
-    // Member name search
-    if (search) {
-      query.customerName = { $regex: search, $options: 'i' };
+    // =========================
+    // Member Name Search
+    // =========================
+    if (search?.trim()) {
+      query.customerName = {
+        $regex: search.trim(),
+        $options: 'i'
+      };
     }
 
-    // Date filter
+    // =========================
+    // Date Range Filter
+    // =========================
     if (fromDate || toDate) {
       query.date = {};
-      if (fromDate) query.date.$gte = new Date(fromDate);
-      if (toDate) query.date.$lte = new Date(toDate);
+
+      if (fromDate) {
+        query.date.$gte = new Date(fromDate);
+      }
+
+      if (toDate) {
+        const endDate = new Date(toDate);
+
+        // include full day till 23:59:59
+        endDate.setHours(23, 59, 59, 999);
+
+        query.date.$lte = endDate;
+      }
     }
 
+    // =========================
+    // Activity Filter
+    // =========================
+    let activityIds = [];
+
+    if (activity?.trim()) {
+      const matchedActivities = await FitnessActivity.find({
+        name: {
+          $regex: activity.trim(),
+          $options: 'i'
+        }
+      }).select('_id');
+
+      activityIds = matchedActivities.map(a => a._id);
+
+      query.activityId = { $in: activityIds };
+    }
+
+    // =========================
+    // Total Count
+    // =========================
     const total = await FitnessBooking.countDocuments(query);
 
+    // =========================
+    // Fetch Bookings
+    // =========================
     const bookings = await FitnessBooking.find(query)
       .populate('activityId')
       .populate('staffId', 'fullName')
       .sort({ createdAt: -1 })
-      .skip((page - 1) * limit)
+      .skip((Number(page) - 1) * Number(limit))
       .limit(Number(limit));
 
-    const formatted = bookings.map(b => {
+    // =========================
+    // Format Response
+    // =========================
+    const formatted = bookings.map((b) => {
       let activityName = 'N/A';
       let slotTime = 'N/A';
 
-      if (b.activityId && b.activityId.slots) {
+      if (b.activityId) {
         activityName = b.activityId.name;
-        const slot = b.activityId.slots.id(b.slotId);
-        if (slot) slotTime = `${slot.startTime} - ${slot.endTime}`;
+
+        if (b.activityId.slots) {
+          const slot = b.activityId.slots.id(b.slotId);
+
+          if (slot) {
+            slotTime = `${slot.startTime} - ${slot.endTime}`;
+          }
+        }
       }
 
       return {
@@ -2008,13 +2129,17 @@ exports.getBookings = async (req, res) => {
         total,
         page: Number(page),
         limit: Number(limit),
-        totalPages: Math.ceil(total / limit)
+        totalPages: Math.ceil(total / Number(limit))
       }
     });
 
   } catch (err) {
-    console.error("getBookings error:", err);
-    res.status(500).json({ success: false, message: err.message });
+    console.error('getBookings error:', err);
+
+    res.status(500).json({
+      success: false,
+      message: err.message
+    });
   }
 };
 // =========================
