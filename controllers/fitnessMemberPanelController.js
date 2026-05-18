@@ -2614,17 +2614,17 @@ exports.verifyMembershipPayment = async (req, res) => {
 
 // uncomment after postman testing...
 
-    // const generatedSignature = crypto
-    //   .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
-    //   .update(`${razorpay_order_id}|${razorpay_payment_id}`)
-    //   .digest("hex");
+    const generatedSignature = crypto
+      .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
+      .update(`${razorpay_order_id}|${razorpay_payment_id}`)
+      .digest("hex");
 
-    // if (generatedSignature !== razorpay_signature) {
-    //   return res.status(400).json({
-    //     success: false,
-    //     message: "Payment verification failed"
-    //   });
-    // }
+    if (generatedSignature !== razorpay_signature) {
+      return res.status(400).json({
+        success: false,
+        message: "Payment verification failed"
+      });
+    }
 
     // ======================================
     // FIND ACTIVITY
@@ -3262,24 +3262,24 @@ exports.verifyRenewalPayment = async (req, res) => {
 
     // uncomment after postman testing
 
-    // const generatedSignature = crypto
-    //   .createHmac(
-    //     "sha256",
-    //     process.env.RAZORPAY_KEY_SECRET
-    //   )
-    //   .update(
-    //     razorpay_order_id +
-    //     "|" +
-    //     razorpay_payment_id
-    //   )
-    //   .digest("hex");
+    const generatedSignature = crypto
+      .createHmac(
+        "sha256",
+        process.env.RAZORPAY_KEY_SECRET
+      )
+      .update(
+        razorpay_order_id +
+        "|" +
+        razorpay_payment_id
+      )
+      .digest("hex");
 
-    // if (generatedSignature !== razorpay_signature) {
-    //   return res.status(400).json({
-    //     success: false,
-    //     message: "Invalid payment signature"
-    //   });
-    // }
+    if (generatedSignature !== razorpay_signature) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid payment signature"
+      });
+    }
 
     // =========================================
     // FIND MEMBER
@@ -4361,6 +4361,32 @@ exports.createMembershipPassOrder = async (req, res) => {
     const member =
       await findLoggedInMember(req);
 
+      // ======================================
+// CHECK EXISTING ACTIVE PASS
+// ======================================
+
+const existingPass =
+  (member.activityFees || []).find(
+
+    item =>
+
+      !item.activity &&
+
+      item.membershipStatus ===
+        "Active"
+  );
+
+if (existingPass) {
+
+  return res.status(400).json({
+
+    success: false,
+
+    message:
+      "You already have an active Membership Pass"
+  });
+}
+
     if (!member) {
 
       return res.status(404).json({
@@ -4569,6 +4595,7 @@ exports.verifyMembershipPassPayment = async (req, res) => {
     // ======================================
     // VERIFY SIGNATURE
     // ======================================
+//uncomment before deployment.....
 
     const generatedSignature =
       crypto
@@ -4820,6 +4847,84 @@ exports.verifyMembershipPassPayment = async (req, res) => {
 
       message:
         "Payment verification failed"
+    });
+  }
+};
+
+
+exports.getMembershipPassPlans =
+  async (req, res) => {
+
+  try {
+
+    const feeTypes =
+      await FitnessFeeType.find({
+
+        type: "Membership Pass",
+
+        organizationId:
+          req.organizationId
+
+      })
+      .sort({
+        numberOfPersons: 1
+      })
+      .lean();
+
+    const formatted =
+      feeTypes.map(item => ({
+
+        feeTypeId:
+          item._id,
+
+        description:
+          item.description,
+
+        numberOfPersons:
+          item.numberOfPersons || 1,
+
+        plans: {
+
+          Daily:
+            item.daily || 0,
+
+          Weekly:
+            item.weekly || 0,
+
+          Monthly:
+            item.monthly || 0,
+
+          Quarterly:
+            item.quarterly || 0,
+
+          HalfYearly:
+            item.halfYearly || 0,
+
+          Annual:
+            item.annual || 0
+        }
+      }));
+
+    return res.status(200).json({
+
+      success: true,
+
+      data: formatted
+    });
+
+  } catch (error) {
+
+    console.error(
+      "getMembershipPassPlans error:",
+      error
+    );
+
+    return res.status(500).json({
+
+      success: false,
+
+      message:
+        "Failed to fetch membership pass plans"
     });
   }
 };

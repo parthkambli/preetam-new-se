@@ -21,7 +21,8 @@ const {
   getMemberMemberships,
   getMemberAttendance,
   createMembershipPassOrder,
-  verifyMembershipPassPayment
+  verifyMembershipPassPayment,
+  getMembershipPassPlans
 } = require("../controllers/fitnessMemberPanelController");
 
 // ===============================
@@ -210,4 +211,21 @@ router.post(
   auth,
   allowPermissions("BOOK_ACTIVITY"),
   verifyMembershipPassPayment
+);
+
+//===============================
+// Membership Pass Plans
+//===============================
+
+router.get(
+
+  "/membership-pass-plans",
+
+  auth,
+
+  allowPermissions(
+    "VIEW_ACTIVITIES"
+  ),
+
+  getMembershipPassPlans
 );
