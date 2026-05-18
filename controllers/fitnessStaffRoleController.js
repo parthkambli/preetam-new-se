@@ -72,7 +72,9 @@ exports.createRole = async (req, res) => {
             'VIEW_ATTENDANCE',
             'VIEW_EVENTS',
             'VIEW_STAFF',
-            'VIEW_PARTICIPANTS'
+            'VIEW_PARTICIPANTS',
+            'VIEW_MEMBER',
+            'EDIT_MEMBER',
           ],
           isDefault: false
         });

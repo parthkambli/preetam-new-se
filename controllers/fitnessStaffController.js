@@ -551,11 +551,22 @@ if (value.emailId?.trim()) {
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(value.password, salt);
 
-// 🔥 Fetch default FitnessStaff role
-const accessRole = await AccessRole.findOne({
-  roleKey: 'FITNESS_STAFF',
-  organizationId: 'fitness'
-}).lean();
+  // 🔥 Fetch selected access role
+  const accessRole = await AccessRole.findOne({
+    name: value.role,
+    organizationId: "fitness",
+  }).lean();
+
+  if (!accessRole) {
+    if (req.file) deleteFile(req.file.path);
+
+    return respond(
+      res,
+      404,
+      false,
+      "Selected access role not found"
+    );
+  }
 
   const createdUser = await User.create({
     userId: staffUserId,

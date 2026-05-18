@@ -1659,55 +1659,91 @@ exports.getAvailability = async (req, res) => {
 
     const result = [];
 
-    // for (let slot of activity.slots) {
-    //   let fullyAvailableDays = 0;
+//     for (let slot of activity.slots) {
+//   let booked = 0;
 
-    //   for (let d of dates) {
-    //     const count = await FitnessBooking.countDocuments({ slotId: slot._id, date: d });
-    //     const isAvailable = count < activity.capacity;
-    //     if (isAvailable) fullyAvailableDays++;
-    //   }
+//   // for single date booking page
+//   if (date) {
+//     booked = await FitnessBooking.countDocuments({
+//       activityId: activityId,
+//       slotId: slot._id,
+//       // date: new Date(date)
+//       date: date
+//     });
+//   }
 
-    //   const percentage = Math.round((fullyAvailableDays / dates.length) * 100);
+//   const isFull = booked >= activity.capacity;
+//   const remaining = Math.max(activity.capacity - booked, 0);
 
-    //   // membersOnly removed from response
-    //   result.push({
-    //     slotId:                 slot._id,
-    //     startTime:              slot.startTime,
-    //     endTime:                slot.endTime,
-    //     capacity:               activity.capacity,
-    //     totalDays:              dates.length,
-    //     fullyAvailableDays,
-    //     availabilityPercentage: percentage,
-    //   });
-    // }
-
+//   result.push({
+//     slotId: slot._id,
+//     startTime: slot.startTime,
+//     endTime: slot.endTime,
+//     capacity: activity.capacity,
+//     booked,
+//     remaining,
+//     isFull
+//   });
+// }
     for (let slot of activity.slots) {
-  let booked = 0;
 
-  // for single date booking page
-  if (date) {
-    booked = await FitnessBooking.countDocuments({
-      activityId: activityId,
-      slotId: slot._id,
-      // date: new Date(date)
-      date: date
-    });
-  }
+      // SINGLE DATE MODE
+      if (date) {
 
-  const isFull = booked >= activity.capacity;
-  const remaining = Math.max(activity.capacity - booked, 0);
+        const booked = await FitnessBooking.countDocuments({
+          activityId: activityId,
+          slotId: slot._id,
+          date: date
+        });
 
-  result.push({
-    slotId: slot._id,
-    startTime: slot.startTime,
-    endTime: slot.endTime,
-    capacity: activity.capacity,
-    booked,
-    remaining,
-    isFull
-  });
-}
+        const isFull = booked >= activity.capacity;
+        const remaining = Math.max(activity.capacity - booked, 0);
+
+        result.push({
+          slotId: slot._id,
+          startTime: slot.startTime,
+          endTime: slot.endTime,
+          capacity: activity.capacity,
+          booked,
+          remaining,
+          isFull
+        });
+
+      }
+
+      // DATE RANGE MODE
+      else {
+
+        let fullyAvailableDays = 0;
+
+        for (let d of dates) {
+
+          const booked = await FitnessBooking.countDocuments({
+            activityId: activityId,
+            slotId: slot._id,
+            date: d
+          });
+
+          if (booked < activity.capacity) {
+            fullyAvailableDays++;
+          }
+        }
+
+        const availabilityPercentage =
+          Math.round((fullyAvailableDays / dates.length) * 100);
+
+        result.push({
+          slotId: slot._id,
+          startTime: slot.startTime,
+          endTime: slot.endTime,
+          capacity: activity.capacity,
+          totalDays: dates.length,
+          fullyAvailableDays,
+          availabilityPercentage,
+          isFull: fullyAvailableDays === 0
+        });
+      }
+    }
 
     res.json({
       success: true,

@@ -332,24 +332,175 @@ const createRecurringSlotBookings = async (member, activityFeesSerialized) => {
   }
 };
 
+const computeMembershipMeta = (item) => {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const start = item?.startDate
+    ? new Date(item.startDate)
+    : null;
+
+  const end = item?.endDate
+    ? new Date(item.endDate)
+    : null;
+
+  if (start) {
+    start.setHours(0, 0, 0, 0);
+  }
+
+  if (end) {
+    end.setHours(23, 59, 59, 999);
+  }
+
+  // invalid dates
+  if (!start || !end) {
+    return {
+      membershipStatus: "Inactive",
+      remainingDays: "-",
+      canRenew: true,
+      isUpcoming: false,
+    };
+  }
+
+  // upcoming
+  if (today < start) {
+    const diff = Math.ceil(
+      (start - today) / (1000 * 60 * 60 * 24)
+    );
+
+    return {
+      membershipStatus: "Inactive",
+      remainingDays: `Starts in ${diff} day${diff > 1 ? "s" : ""}`,
+      canRenew: false,
+      isUpcoming: true,
+    };
+  }
+
+  // active
+  if (today >= start && today <= end) {
+    const diff = Math.ceil(
+      (end - today) / (1000 * 60 * 60 * 24)
+    );
+
+    return {
+      membershipStatus: "Active",
+      remainingDays:
+        diff <= 0
+          ? "Last Day"
+          : `${diff} day${diff > 1 ? "s" : ""}`,
+      canRenew: false,
+      isUpcoming: false,
+    };
+  }
+
+  // expired
+  return {
+    membershipStatus: "Inactive",
+    remainingDays: "Expired",
+    canRenew: true,
+    isUpcoming: false,
+  };
+};
+
 // ─── Apply computed statuses ──────────────────────────────────────────────────
 const applyComputedStatuses = (obj) => {
   let anyActive = false;
 
-  obj.activityFees = (obj.activityFees || []).map((af) => {
-    const status = computeActivityMembershipStatus(af);
-    af.membershipStatus = status;
-    if (status === "Active") anyActive = true;
-    return af;
-  });
+  // PASS MEMBER
+  if (
+    obj.membershipPass &&
+    obj.membershipPass.startDate &&
+    obj.membershipPass.endDate
+  ) {
+    const passMeta = computeMembershipMeta(
+      obj.membershipPass
+    );
 
-  obj.membershipStatus = anyActive ? "Active" : "Inactive";
+    obj.membershipStatus =
+      passMeta.membershipStatus;
+
+    obj.remainingDays =
+      passMeta.remainingDays;
+
+    obj.canRenew =
+      passMeta.canRenew;
+
+    obj.isUpcoming =
+      passMeta.isUpcoming;
+
+    return obj;
+  }
+
+  // ACTIVITY MEMBERS
+  obj.activityFees = (obj.activityFees || []).map(
+    (af) => {
+      const meta = computeMembershipMeta(af);
+
+      af.membershipStatus =
+        meta.membershipStatus;
+
+      af.remainingDays =
+        meta.remainingDays;
+
+      af.canRenew =
+        meta.canRenew;
+
+      af.isUpcoming =
+        meta.isUpcoming;
+
+      if (meta.membershipStatus === "Active") {
+        anyActive = true;
+      }
+
+      return af;
+    }
+  );
+
+  // overall membership
+  obj.membershipStatus = anyActive
+    ? "Active"
+    : "Inactive";
+
+  // latest active/upcoming/expired activity
+  const sortedFees = [...(obj.activityFees || [])]
+    .filter((af) => af.startDate && af.endDate)
+    .sort(
+      (a, b) =>
+        new Date(b.endDate) -
+        new Date(a.endDate)
+    );
+
+  const primary =
+    sortedFees.find(
+      (af) =>
+        af.membershipStatus === "Active"
+    ) ||
+    sortedFees.find((af) => af.isUpcoming) ||
+    sortedFees[0];
+
+  obj.remainingDays =
+    primary?.remainingDays || "-";
+
+  obj.canRenew =
+    primary?.canRenew ?? true;
+
+  obj.isUpcoming =
+    primary?.isUpcoming ?? false;
+
   return obj;
 };
 
 exports.getAllMembers = async (req, res) => {
   try {
-    const { search, status, activity, plan } = req.query;
+    const {
+      search,
+      status,
+      activity,
+      plan,
+      membershipPlan,
+      startDate,
+      endDate,
+    } = req.query;
     const query = { organizationId: req.organizationId };
 
     if (plan === "Pass") {
@@ -361,6 +512,37 @@ exports.getAllMembers = async (req, res) => {
     if (status) query.membershipStatus = status;
     // if (plan)     query['activityFees.plan'] = plan;
     if (activity) query["activityFees.activity"] = activity;
+
+    if (membershipPlan) {
+      query["activityFees.plan"] = membershipPlan;
+    }
+
+    if (startDate || endDate) {
+      query.activityFees = {
+        ...query.activityFees,
+        $elemMatch: {},
+      };
+
+      if (activity) {
+        query.activityFees.$elemMatch.activity = activity;
+      }
+
+      if (membershipPlan) {
+        query.activityFees.$elemMatch.plan = membershipPlan;
+      }
+
+      if (startDate) {
+        query.activityFees.$elemMatch.startDate = {
+          $gte: new Date(startDate),
+        };
+      }
+
+      if (endDate) {
+        query.activityFees.$elemMatch.endDate = {
+          $lte: new Date(endDate),
+        };
+      }
+    }
 
     if (search) {
       query.$or = [
