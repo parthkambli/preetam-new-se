@@ -53,10 +53,17 @@ router.get(
   getAttendanceByDate
 );
 
+// router.get(
+//   "/members",
+//   auth,
+//   allowPermissions("VIEW_REPORTS"),
+//   getAllMembersForStaff
+// );
+
 router.get(
   "/members",
   auth,
-  allowPermissions("VIEW_PARTICIPANTS"),
+  allowPermissions("VIEW_REPORTS", "VIEW_FEES"),
   getAllMembersForStaff
 );
 

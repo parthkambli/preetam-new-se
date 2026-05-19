@@ -33,15 +33,17 @@ const fitnessAttendanceSchema = new mongoose.Schema({
   index: true
 },
 
-  attendanceDate: {
-    type: Date,
+  attendanceDay: {
+    type: String,
     required: true,
-    default: () => {
-      const d = new Date();
-      d.setHours(0, 0, 0, 0);
-      return d;
-    }
+    index: true,
+    match: /^\d{4}-\d{2}-\d{2}$/
   },
+
+  markedAt: {
+  type: Date,
+  default: Date.now
+},
 
  markedBy: {
   type: mongoose.Schema.Types.ObjectId,
@@ -72,7 +74,12 @@ const fitnessAttendanceSchema = new mongoose.Schema({
 
 // Unique index: One attendance per member + activity + date
 fitnessAttendanceSchema.index(
-  { member: 1, activity: 1, attendanceDate: 1, organizationId: 1 },
+  {
+    member: 1,
+    activity: 1,
+    attendanceDay: 1,
+    organizationId: 1
+  },
   { unique: true }
 );
 

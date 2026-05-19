@@ -5,13 +5,13 @@ const mongoose = require('mongoose');
 
 const { getTodayIST } = require("../utils/date");
 
-const isValidObjectId = (id) => mongoose.Types.ObjectId.isValid(id);
+// const isValidObjectId = (id) => mongoose.Types.ObjectId.isValid(id);
 
-const getTodayStart = () => {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  return today;
-};
+// const getTodayStart = () => {
+//   const today = new Date();
+//   today.setHours(0, 0, 0, 0);
+//   return today;
+// };
 
 // 1. Validate QR Code - Called by Staff Android App after scanning
 exports.validateMemberQR = async (req, res) => {
@@ -141,15 +141,15 @@ exports.markAttendance = async (req, res) => {
       return res.status(400).json({ error: 'This activity is not active for the member today' });
     }
 
-    const today = getTodayStart();
+    const attendanceDay = getTodayIST();
 
     // const attendance = await FitnessAttendance.findOneAndUpdate(
-    //   { member: member._id, activity: activityId, activityFeeId, attendanceDate: today },
+    //   { member: member._id, activity: activityId, activityFeeId, attendanceDay: today },
     //   { 
     //     member: member._id, 
     //     activity: activityId, 
     //     activityFeeId, 
-    //     attendanceDate: today, 
+    //     attendanceDay: today, 
     //     markedBy, 
     //     status, 
     //     notes: notes || '', 
@@ -162,7 +162,7 @@ exports.markAttendance = async (req, res) => {
   await FitnessAttendance.findOne({
     member: member._id,
     activity: activityId,
-    attendanceDate: today,
+    attendanceDay,
     organizationId
   });
 
@@ -181,7 +181,8 @@ const attendance =
     member: member._id,
     activity: activityId,
     activityFeeId,
-    attendanceDate: today,
+    attendanceDay,
+    markedAt: new Date(),
     markedBy,
     status,
     notes: notes || '',
@@ -207,23 +208,32 @@ exports.getAttendanceSummary = async (req, res) => {
     const match = { organizationId };
 
     if (fromDate || toDate) {
-      match.attendanceDate = {};
-      if (fromDate) match.attendanceDate.$gte = new Date(fromDate);
-      if (toDate) match.attendanceDate.$lte = new Date(toDate);
+      match.attendanceDay = {};
+
+      if (fromDate) {
+        match.attendanceDay.$gte = fromDate;
+      }
+
+      if (toDate) {
+        match.attendanceDay.$lte = toDate;
+      }
     }
-    if (activity) match.activity = mongoose.Types.ObjectId(activity);
+
+    if (activity) {
+      match.activity = new mongoose.Types.ObjectId(activity);
+    }
 
     const summary = await FitnessAttendance.aggregate([
       { $match: match },
       {
         $group: {
-          _id: { activity: "$activity", attendanceDate: "$attendanceDate" },
+          _id: { activity: "$activity", attendanceDay: "$attendanceDay" },
           total: { $sum: 1 },
           present: { $sum: { $cond: [{ $eq: ["$status", "Present"] }, 1, 0] } },
           absent: { $sum: { $cond: [{ $eq: ["$status", "Absent"] }, 1, 0] } }
         }
       },
-      { $sort: { "_id.attendanceDate": -1 } },
+      { $sort: { "_id.attendanceDay": -1 } },
       {
         $lookup: {
           from: 'fitnessactivities',
@@ -236,7 +246,7 @@ exports.getAttendanceSummary = async (req, res) => {
       {
         $project: {
           activity: '$activityInfo.name',
-          date: '$_id.attendanceDate',
+          date: '$_id.attendanceDay',
           total: 1,
           present: 1,
           absent: 1,
@@ -253,37 +263,20 @@ exports.getAttendanceSummary = async (req, res) => {
 };
 
 // 4. Get Detailed Student Attendance
-// exports.getStudentAttendance = async (req, res) => {
-//   try {
-//     const { activityId, date } = req.params;
-//     const organizationId = req.organizationId;
-
-//     const records = await FitnessAttendance.find({
-//       activity: activityId,
-//       attendanceDate: new Date(date).setHours(0, 0, 0, 0),
-//       organizationId
-//     })
-//     .populate('member', 'name memberId photo')
-//     .populate('markedBy', 'fullName name')
-//     .sort({ createdAt: -1 });
-
-//     res.json(records);
-//   } catch (err) {
-//     console.error(err);
-//     res.status(500).json({ error: 'Server error' });
-//   }
-// };
-
-
 exports.getStudentAttendance = async (req, res) => {
   try {
     const { activityId, date } = req.params;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      return res.status(400).json({
+        error: 'Invalid date format'
+      });
+    }
     const { page = 1, limit = 10 } = req.query;   // ✅ ADD THIS
     const organizationId = req.organizationId;
 
     const query = {
       activity: activityId,
-      attendanceDate: new Date(date).setHours(0, 0, 0, 0),
+      attendanceDay: date,
       organizationId
     };
 
@@ -292,7 +285,7 @@ exports.getStudentAttendance = async (req, res) => {
     const records = await FitnessAttendance.find(query)
       .populate('member', 'name memberId photo')
       .populate('markedBy', 'fullName name')
-      .sort({ createdAt: -1 })
+      .sort({ markedAt: -1 })
       .skip((page - 1) * limit)   // ✅ ADD
       .limit(Number(limit));      // ✅ ADD
 
@@ -311,8 +304,6 @@ exports.getStudentAttendance = async (req, res) => {
     res.status(500).json({ error: 'Server error' });
   }
 };
-
-
 
 
 
@@ -435,12 +426,12 @@ exports.getStudentAttendance = async (req, res) => {
 //     const today = getTodayStart();
 
 //     const attendance = await FitnessAttendance.findOneAndUpdate(
-//       { member: member._id, activity: activityId, activityFeeId, attendanceDate: today, organizationId },
+//       { member: member._id, activity: activityId, activityFeeId, attendanceDay: today, organizationId },
 //       {
 //         member: member._id,
 //         activity: activityId,
 //         activityFeeId,
-//         attendanceDate: today,
+//         attendanceDay: today,
 //         markedBy,
 //         status,
 //         notes: notes || '',
@@ -469,16 +460,16 @@ exports.getStudentAttendance = async (req, res) => {
 //     const match = { organizationId };
 
 //     if (fromDate || toDate) {
-//       match.attendanceDate = {};
+//       match.attendanceDay = {};
 //       if (fromDate) {
 //         const start = new Date(fromDate);
 //         start.setHours(0, 0, 0, 0);
-//         match.attendanceDate.$gte = start;
+//         match.attendanceDay.$gte = start;
 //       }
 //       if (toDate) {
 //         const end = new Date(toDate);
 //         end.setHours(23, 59, 59, 999);
-//         match.attendanceDate.$lte = end;
+//         match.attendanceDay.$lte = end;
 //       }
 //     }
 
@@ -490,7 +481,7 @@ exports.getStudentAttendance = async (req, res) => {
 //       { $match: match },
 //       {
 //         $group: {
-//           _id: { activity: "$activity", attendanceDate: "$attendanceDate" }
+//           _id: { activity: "$activity", attendanceDay: "$attendanceDay" }
 //         }
 //       },
 //       { $count: "total" }
@@ -500,13 +491,13 @@ exports.getStudentAttendance = async (req, res) => {
 //       { $match: match },
 //       {
 //         $group: {
-//           _id: { activity: "$activity", attendanceDate: "$attendanceDate" },
+//           _id: { activity: "$activity", attendanceDay: "$attendanceDay" },
 //           total: { $sum: 1 },
 //           present: { $sum: { $cond: [{ $eq: ["$status", "Present"] }, 1, 0] } },
 //           absent: { $sum: { $cond: [{ $eq: ["$status", "Absent"] }, 1, 0] } }
 //         }
 //       },
-//       { $sort: { "_id.attendanceDate": -1 } },
+//       { $sort: { "_id.attendanceDay": -1 } },
 //       { $skip: skip },
 //       { $limit: limit },
 //       {
@@ -526,7 +517,7 @@ exports.getStudentAttendance = async (req, res) => {
 //       {
 //         $project: {
 //           activity: { $ifNull: ['$activityInfo.name', 'Unknown Activity'] },
-//           date: '$_id.attendanceDate',
+//           date: '$_id.attendanceDay',
 //           total: 1,
 //           present: 1,
 //           absent: 1,
@@ -582,21 +573,21 @@ exports.getStudentAttendance = async (req, res) => {
 //   const end = new Date(date);
 //   end.setHours(23, 59, 59, 999);
 
-//   query.attendanceDate = { $gte: start, $lte: end };
+//   query.attendanceDay = { $gte: start, $lte: end };
 // }
 // else if (fromDate || toDate) {
-//   query.attendanceDate = {};
+//   query.attendanceDay = {};
 
 //   if (fromDate) {
 //     const start = new Date(fromDate);
 //     start.setHours(0, 0, 0, 0);
-//     query.attendanceDate.$gte = start;
+//     query.attendanceDay.$gte = start;
 //   }
 
 //   if (toDate) {
 //     const end = new Date(toDate);
 //     end.setHours(23, 59, 59, 999);
-//     query.attendanceDate.$lte = end;
+//     query.attendanceDay.$lte = end;
 //   }
 // }
 

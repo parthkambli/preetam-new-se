@@ -62,7 +62,7 @@ const allowPermissions = (...requiredPermissions) => {
       console.log("finalPermissions:", finalPermissions);
       console.log("=====================================");
 
-      const hasPermission = requiredPermissions.every(permission =>
+      const hasPermission = requiredPermissions.some(permission =>
         finalPermissions.includes(permission)
       );
 
