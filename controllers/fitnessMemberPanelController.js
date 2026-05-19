@@ -4277,14 +4277,10 @@ else if (currentDate > today) {
   status = "Upcoming";
 
 }
-else if (currentDate < today) {
-
-  status = "Absent";
-
-}
 else {
 
   status = "Pending";
+
 }
 
 attendance.push({
