@@ -3977,6 +3977,364 @@ bookingActivities: activeBookings.map(item => ({
 // GET /api/fitness/member-panel/attendance
 // ============================================
 
+// exports.getMemberAttendance = async (req, res) => {
+//   try {
+
+//     const member = await findLoggedInMember(req);
+
+//     if (!member) {
+//       return res.status(404).json({
+//         success: false,
+//         message: "Member not found"
+//       });
+//     }
+
+//     const month =
+//       parseInt(req.query.month);
+
+//     const year =
+//       parseInt(req.query.year);
+
+//     if (!month || !year) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "month and year are required"
+//       });
+//     }
+
+//     // ======================================
+//     // MONTH RANGE
+//     // ======================================
+
+//     const startDate =
+//       new Date(year, month - 1, 1);
+
+//     const endDate =
+//       new Date(year, month, 0);
+
+//     endDate.setHours(23, 59, 59, 999);
+
+//     // ======================================
+//     // GET PRESENT ATTENDANCE
+//     // ======================================
+
+//     const attendanceRecords =
+//       await FitnessAttendance.find({
+//         member: member._id,
+//         attendanceDate: {
+//           $gte: startDate,
+//           $lte: endDate
+//         },
+//         organizationId: req.organizationId
+//       })
+//       .populate("activity", "name")
+//       .populate("markedBy", "fullName name")
+//       .lean();
+
+//     // ======================================
+//     // ATTENDANCE MAP
+//     // ======================================
+
+//     const attendanceMap = {};
+
+//     attendanceRecords.forEach(record => {
+
+//       const activityId =
+//   record.activity?._id
+//     ? String(record.activity._id)
+//     : "membership-pass";
+
+//       const dateKey =
+//   new Intl.DateTimeFormat(
+//     "en-CA",
+//     {
+//       timeZone: "Asia/Kolkata"
+//     }
+//   ).format(
+//     new Date(record.attendanceDate)
+//   );
+
+//       if (!attendanceMap[activityId]) {
+//         attendanceMap[activityId] = {};
+//       }
+
+//       attendanceMap[activityId][dateKey] = {
+//         status: record.status,
+
+//         markedAt: record.createdAt,
+
+//         markedTime:
+//           new Date(record.createdAt)
+//             .toLocaleTimeString(
+//               "en-IN",
+//               {
+//                 hour: "2-digit",
+//                 minute: "2-digit",
+//                 hour12: true
+//               }
+//             ),
+
+//         markedBy:
+//           record.markedBy?.fullName ||
+//           record.markedBy?.name ||
+//           "Staff"
+//       };
+//     });
+
+//     // ======================================
+//     // BUILD RESPONSE
+//     // ======================================
+
+//     const responseData = [];
+
+//     // ======================================
+// // MEMBERSHIP PASS MEMBER
+// // ======================================
+
+// if (member.membershipPass) {
+
+//   const attendance = [];
+
+//   const totalDays =
+//     new Date(year, month, 0).getDate();
+
+//   for (
+//     let day = 1;
+//     day <= totalDays;
+//     day++
+//   ) {
+
+//     const currentDate =
+//       new Date(year, month - 1, day);
+
+//     const dateKey =
+//       new Intl.DateTimeFormat(
+//         "en-CA",
+//         {
+//           timeZone: "Asia/Kolkata"
+//         }
+//       ).format(currentDate);
+
+//     const existing =
+//   attendanceMap?.["membership-pass"]?.[dateKey];
+
+//     const today =
+//       new Intl.DateTimeFormat(
+//         "en-CA",
+//         {
+//           timeZone: "Asia/Kolkata"
+//         }
+//       ).format(new Date());
+
+//     let status = "Pending";
+
+//     if (existing?.status) {
+
+//       status = existing.status;
+
+//     }
+//     else if (dateKey > today) {
+
+//       status = "Upcoming";
+
+//     }
+//     else if (dateKey < today) {
+
+//       status = "Absent";
+
+//     }
+
+//     attendance.push({
+
+//       date: dateKey,
+
+//       status,
+
+//       markedTime:
+//         status === "Present"
+//           ? existing?.markedTime
+//           : null,
+
+//       markedBy:
+//         status === "Present"
+//           ? existing?.markedBy
+//           : null,
+
+//       markedAt:
+//         status === "Present"
+//           ? existing?.markedAt
+//           : null
+//     });
+//   }
+
+//   responseData.push({
+
+//     activityId: null,
+
+//     activityName: "Membership Pass",
+
+//     attendance
+//   });
+
+//   return res.status(200).json({
+
+//     success: true,
+
+//     month,
+
+//     year,
+
+//     data: responseData
+//   });
+// }
+
+//     const totalDays =
+//       new Date(year, month, 0).getDate();
+
+//     for (const item of member.activityFees || []) {
+
+//       // ONLY ACTIVE MEMBERSHIPS
+//       if (
+//         !["Active", "Inactive"]
+//     .includes(item.membershipStatus)
+//       ) {
+//         continue;
+//       }
+
+//       // IGNORE HOURLY / DAILY
+//       if (
+//         ["Hourly", "Daily"]
+//           .includes(item.plan)
+//       ) {
+//         continue;
+//       }
+
+//       const activityId =
+//         String(item.activity?._id || item.activity);
+
+//       const activityName =
+//         item.activity?.name || "Activity";
+
+//       const attendance = [];
+
+//       for (
+//         let day = 1;
+//         day <= totalDays;
+//         day++
+//       ) {
+
+//         const currentDate =
+//           new Date(year, month - 1, day);
+
+//         const dateKey =
+//   new Intl.DateTimeFormat(
+//     "en-CA",
+//     {
+//       timeZone: "Asia/Kolkata"
+//     }
+//   ).format(currentDate);
+
+//         const existing =
+//           attendanceMap?.[activityId]?.[dateKey];
+
+//         const today = new Date();
+
+// const membershipStart =
+//   item.startDate
+//     ? new Date(item.startDate)
+//     : null;
+
+// const membershipEnd =
+//   item.endDate
+//     ? new Date(item.endDate)
+//     : null;
+
+// let status = "Pending";
+
+// if (existing?.status) {
+
+//   status = existing.status;
+
+// }
+// else if (
+//   membershipStart &&
+//   currentDate < membershipStart
+// ) {
+
+//   status = "Not Applicable";
+
+// }
+// else if (
+//   membershipEnd &&
+//   currentDate > membershipEnd
+// ) {
+
+//   status = "Expired";
+
+// }
+// else if (currentDate > today) {
+
+//   status = "Upcoming";
+
+// }
+// else {
+
+//   status = "Pending";
+
+// }
+
+// attendance.push({
+
+//   date: dateKey,
+
+//   status,
+
+//   markedTime:
+//     status === "Present"
+//       ? existing?.markedTime
+//       : null,
+
+//   markedBy:
+//     status === "Present"
+//       ? existing?.markedBy
+//       : null,
+
+//   markedAt:
+//     status === "Present"
+//       ? existing?.markedAt
+//       : null
+// });
+//       }
+
+//       responseData.push({
+//         activityId,
+//         activityName,
+//         attendance
+//       });
+//     }
+
+//     return res.status(200).json({
+//       success: true,
+//       month,
+//       year,
+//       data: responseData
+//     });
+
+//   } catch (error) {
+
+//     console.error(
+//       "getMemberAttendance error:",
+//       error
+//     );
+
+//     return res.status(500).json({
+//       success: false,
+//       message:
+//         "Failed to fetch attendance"
+//     });
+//   }
+// };
+
 exports.getMemberAttendance = async (req, res) => {
   try {
 
@@ -3989,11 +4347,8 @@ exports.getMemberAttendance = async (req, res) => {
       });
     }
 
-    const month =
-      parseInt(req.query.month);
-
-    const year =
-      parseInt(req.query.year);
+    const month = parseInt(req.query.month);
+    const year = parseInt(req.query.year);
 
     if (!month || !year) {
       return res.status(400).json({
@@ -4012,111 +4367,28 @@ exports.getMemberAttendance = async (req, res) => {
     const endDate =
       new Date(year, month, 0);
 
-    endDate.setHours(23, 59, 59, 999);
+    const totalDays =
+      new Date(year, month, 0).getDate();
 
     // ======================================
-    // GET PRESENT ATTENDANCE
+    // FORMAT YYYY-MM-DD
     // ======================================
 
-    const attendanceRecords =
-      await FitnessAttendance.find({
-        member: member._id,
-        attendanceDate: {
-          $gte: startDate,
-          $lte: endDate
-        },
-        organizationId: req.organizationId
-      })
-      .populate("activity", "name")
-      .populate("markedBy", "fullName name")
-      .lean();
-
-    // ======================================
-    // ATTENDANCE MAP
-    // ======================================
-
-    const attendanceMap = {};
-
-    attendanceRecords.forEach(record => {
-
-      const activityId =
-  record.activity?._id
-    ? String(record.activity._id)
-    : "membership-pass";
-
-      const dateKey =
-  new Intl.DateTimeFormat(
-    "en-CA",
-    {
-      timeZone: "Asia/Kolkata"
-    }
-  ).format(
-    new Date(record.attendanceDate)
-  );
-
-      if (!attendanceMap[activityId]) {
-        attendanceMap[activityId] = {};
-      }
-
-      attendanceMap[activityId][dateKey] = {
-        status: record.status,
-
-        markedAt: record.createdAt,
-
-        markedTime:
-          new Date(record.createdAt)
-            .toLocaleTimeString(
-              "en-IN",
-              {
-                hour: "2-digit",
-                minute: "2-digit",
-                hour12: true
-              }
-            ),
-
-        markedBy:
-          record.markedBy?.fullName ||
-          record.markedBy?.name ||
-          "Staff"
-      };
-    });
-
-    // ======================================
-    // BUILD RESPONSE
-    // ======================================
-
-    const responseData = [];
-
-    // ======================================
-// MEMBERSHIP PASS MEMBER
-// ======================================
-
-if (member.membershipPass) {
-
-  const attendance = [];
-
-  const totalDays =
-    new Date(year, month, 0).getDate();
-
-  for (
-    let day = 1;
-    day <= totalDays;
-    day++
-  ) {
-
-    const currentDate =
-      new Date(year, month - 1, day);
-
-    const dateKey =
+    const startDay =
       new Intl.DateTimeFormat(
         "en-CA",
         {
           timeZone: "Asia/Kolkata"
         }
-      ).format(currentDate);
+      ).format(startDate);
 
-    const existing =
-  attendanceMap?.["membership-pass"]?.[dateKey];
+    const endDay =
+      new Intl.DateTimeFormat(
+        "en-CA",
+        {
+          timeZone: "Asia/Kolkata"
+        }
+      ).format(endDate);
 
     const today =
       new Intl.DateTimeFormat(
@@ -4126,82 +4398,242 @@ if (member.membershipPass) {
         }
       ).format(new Date());
 
-    let status = "Pending";
+    // ======================================
+    // FETCH ATTENDANCE
+    // ======================================
 
-    if (existing?.status) {
+    const attendanceRecords =
+      await FitnessAttendance.find({
 
-      status = existing.status;
+        member: member._id,
 
-    }
-    else if (dateKey > today) {
+        attendanceDay: {
+          $gte: startDay,
+          $lte: endDay
+        },
 
-      status = "Upcoming";
+        organizationId:
+          req.organizationId
+      })
+      .populate("activity", "name")
+      .populate("markedBy", "fullName name")
+      .lean();
 
-    }
-    else if (dateKey < today) {
+    // ======================================
+    // BUILD ATTENDANCE MAP
+    // ======================================
 
-      status = "Absent";
+    const attendanceMap = {};
 
-    }
+    attendanceRecords.forEach(record => {
 
-    attendance.push({
+      const activityId =
+        record.activity?._id
+          ? String(record.activity._id)
+          : "membership-pass";
 
-      date: dateKey,
+      const dateKey =
+        record.attendanceDay;
 
-      status,
+      if (!attendanceMap[activityId]) {
+        attendanceMap[activityId] = {};
+      }
 
-      markedTime:
-        status === "Present"
-          ? existing?.markedTime
-          : null,
+      attendanceMap[activityId][dateKey] = {
 
-      markedBy:
-        status === "Present"
-          ? existing?.markedBy
-          : null,
+        status: record.status,
 
-      markedAt:
-        status === "Present"
-          ? existing?.markedAt
-          : null
+        markedAt:
+          record.markedAt ||
+          record.createdAt,
+
+        markedTime:
+          new Date(
+            record.markedAt ||
+            record.createdAt
+          )
+          .toLocaleTimeString(
+            "en-IN",
+            {
+              hour: "2-digit",
+              minute: "2-digit",
+              hour12: true
+            }
+          ),
+
+        markedBy:
+          record.markedBy?.fullName ||
+          record.markedBy?.name ||
+          "Staff"
+      };
     });
-  }
 
-  responseData.push({
+    // ======================================
+    // FINAL RESPONSE DATA
+    // ======================================
 
-    activityId: null,
+    const responseData = [];
 
-    activityName: "Membership Pass",
+    // ======================================
+    // MEMBERSHIP PASS SECTION
+    // ======================================
 
-    attendance
-  });
+    const activePass =
+      (member.activityFees || []).find(
 
-  return res.status(200).json({
+        item =>
 
-    success: true,
+          !item.activity &&
 
-    month,
+          ["Active", "Inactive"]
+            .includes(
+              item.membershipStatus
+            )
+      );
 
-    year,
+    if (activePass) {
 
-    data: responseData
-  });
-}
+      const attendance = [];
 
-    const totalDays =
-      new Date(year, month, 0).getDate();
+      const membershipStart =
+        activePass.startDate
+          ? new Date(activePass.startDate)
+          : null;
+
+      const membershipEnd =
+        activePass.endDate
+          ? new Date(activePass.endDate)
+          : null;
+
+      for (
+        let day = 1;
+        day <= totalDays;
+        day++
+      ) {
+
+        const currentDate =
+          new Date(
+            year,
+            month - 1,
+            day
+          );
+
+        const dateKey =
+          new Intl.DateTimeFormat(
+            "en-CA",
+            {
+              timeZone:
+                "Asia/Kolkata"
+            }
+          ).format(currentDate);
+
+        const existing =
+          attendanceMap?.[
+            "membership-pass"
+          ]?.[dateKey];
+
+        let status = "Pending";
+
+        if (existing?.status) {
+
+          status = existing.status;
+
+        }
+        else if (
+          membershipStart &&
+          currentDate < membershipStart
+        ) {
+
+          status = "Not Applicable";
+
+        }
+        else if (
+          membershipEnd &&
+          currentDate > membershipEnd
+        ) {
+
+          status = "Expired";
+
+        }
+        else if (
+          dateKey > today
+        ) {
+
+          status = "Upcoming";
+
+        }
+        else if (
+          dateKey === today
+        ) {
+
+          status = "Pending";
+
+        }
+        else {
+
+          // fallback if cron missed
+          status = "Absent";
+        }
+
+        attendance.push({
+
+          date: dateKey,
+
+          status,
+
+          markedTime:
+            status === "Present" ||
+            status === "Absent"
+              ? existing?.markedTime
+              : null,
+
+          markedBy:
+            status === "Present" ||
+            status === "Absent"
+              ? existing?.markedBy
+              : null,
+
+          markedAt:
+            status === "Present" ||
+            status === "Absent"
+              ? existing?.markedAt
+              : null
+        });
+      }
+
+      responseData.push({
+
+        activityId: null,
+
+        activityName:
+          "Membership Pass",
+
+        attendance
+      });
+    }
+
+    // ======================================
+    // NORMAL MEMBERSHIPS
+    // ======================================
 
     for (const item of member.activityFees || []) {
 
-      // ONLY ACTIVE MEMBERSHIPS
+      // skip pass memberships
+      if (!item.activity) {
+        continue;
+      }
+
+      // ONLY ACTIVE/FUTURE
       if (
         !["Active", "Inactive"]
-    .includes(item.membershipStatus)
+          .includes(
+            item.membershipStatus
+          )
       ) {
         continue;
       }
 
-      // IGNORE HOURLY / DAILY
+      // IGNORE DAILY/HOURLY
       if (
         ["Hourly", "Daily"]
           .includes(item.plan)
@@ -4210,10 +4642,24 @@ if (member.membershipPass) {
       }
 
       const activityId =
-        String(item.activity?._id || item.activity);
+        String(
+          item.activity?._id ||
+          item.activity
+        );
 
       const activityName =
-        item.activity?.name || "Activity";
+        item.activity?.name ||
+        "Activity";
+
+      const membershipStart =
+        item.startDate
+          ? new Date(item.startDate)
+          : null;
+
+      const membershipEnd =
+        item.endDate
+          ? new Date(item.endDate)
+          : null;
 
       const attendance = [];
 
@@ -4224,99 +4670,114 @@ if (member.membershipPass) {
       ) {
 
         const currentDate =
-          new Date(year, month - 1, day);
+          new Date(
+            year,
+            month - 1,
+            day
+          );
 
         const dateKey =
-  new Intl.DateTimeFormat(
-    "en-CA",
-    {
-      timeZone: "Asia/Kolkata"
-    }
-  ).format(currentDate);
+          new Intl.DateTimeFormat(
+            "en-CA",
+            {
+              timeZone:
+                "Asia/Kolkata"
+            }
+          ).format(currentDate);
 
         const existing =
-          attendanceMap?.[activityId]?.[dateKey];
+          attendanceMap?.[
+            activityId
+          ]?.[dateKey];
 
-        const today = new Date();
+        let status = "Pending";
 
-const membershipStart =
-  item.startDate
-    ? new Date(item.startDate)
-    : null;
+        if (existing?.status) {
 
-const membershipEnd =
-  item.endDate
-    ? new Date(item.endDate)
-    : null;
+          status = existing.status;
 
-let status = "Pending";
+        }
+        else if (
+          membershipStart &&
+          currentDate < membershipStart
+        ) {
 
-if (existing?.status) {
+          status =
+            "Not Applicable";
 
-  status = existing.status;
+        }
+        else if (
+          membershipEnd &&
+          currentDate > membershipEnd
+        ) {
 
-}
-else if (
-  membershipStart &&
-  currentDate < membershipStart
-) {
+          status = "Expired";
 
-  status = "Not Applicable";
+        }
+        else if (
+          dateKey > today
+        ) {
 
-}
-else if (
-  membershipEnd &&
-  currentDate > membershipEnd
-) {
+          status = "Upcoming";
 
-  status = "Expired";
+        }
+        else if (
+          dateKey === today
+        ) {
 
-}
-else if (currentDate > today) {
+          status = "Pending";
 
-  status = "Upcoming";
+        }
+        else {
 
-}
-else {
+          // fallback if cron missed
+          status = "Absent";
+        }
 
-  status = "Pending";
+        attendance.push({
 
-}
+          date: dateKey,
 
-attendance.push({
+          status,
 
-  date: dateKey,
+          markedTime:
+            status === "Present" ||
+            status === "Absent"
+              ? existing?.markedTime
+              : null,
 
-  status,
+          markedBy:
+            status === "Present" ||
+            status === "Absent"
+              ? existing?.markedBy
+              : null,
 
-  markedTime:
-    status === "Present"
-      ? existing?.markedTime
-      : null,
-
-  markedBy:
-    status === "Present"
-      ? existing?.markedBy
-      : null,
-
-  markedAt:
-    status === "Present"
-      ? existing?.markedAt
-      : null
-});
+          markedAt:
+            status === "Present" ||
+            status === "Absent"
+              ? existing?.markedAt
+              : null
+        });
       }
 
       responseData.push({
+
         activityId,
+
         activityName,
+
         attendance
       });
     }
 
     return res.status(200).json({
+
       success: true,
+
       month,
+
       year,
+
       data: responseData
     });
 
@@ -4328,13 +4789,14 @@ attendance.push({
     );
 
     return res.status(500).json({
+
       success: false,
+
       message:
         "Failed to fetch attendance"
     });
   }
 };
-
 
 
 exports.createMembershipPassOrder = async (req, res) => {
@@ -4355,7 +4817,12 @@ exports.createMembershipPassOrder = async (req, res) => {
     }
 
     const member =
-      await findLoggedInMember(req);
+  await findLoggedInMember(req);
+
+await member.populate(
+  "activityFees.activity",
+  "name"
+);
 
       // ======================================
 // CHECK EXISTING ACTIVE PASS

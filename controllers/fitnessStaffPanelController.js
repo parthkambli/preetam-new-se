@@ -561,17 +561,13 @@ exports.handleQRScan = async (req, res) => {
 
 if (member.membershipPass) {
 
-  const todayIST = getTodayIST();
-
-  const today =
-    new Date(
-      `${todayIST}T12:00:00.000Z`
-    );
+  const attendanceDay =
+  getTodayIST();
 
   const existing =
     await FitnessAttendance.findOne({
       member: member._id,
-      attendanceDate: today
+      attendanceDay
     });
 
   if (!existing) {
@@ -584,7 +580,7 @@ if (member.membershipPass) {
 
       activityFeeId: null,
 
-      attendanceDate: today,
+      attendanceDay,
 
       markedBy: staffObjectId,
 
@@ -622,19 +618,15 @@ if (member.membershipPass) {
     if (allowedActivities.length === 1) {
       const af = allowedActivities[0];
 
-const todayIST = getTodayIST();
-
-const today =
-  new Date(
-    `${todayIST}T12:00:00.000Z`
-  );
+const attendanceDay =
+  getTodayIST();
 
       // ✅ CHECK IF ALREADY MARKED (ADD THIS)
 const existing = await FitnessAttendance.findOne({
   member: member._id,
   activity: af.activity._id,
   activityFeeId: af._id,
-  attendanceDate: today
+  attendanceDay
 });
       
 
@@ -643,13 +635,13 @@ const existing = await FitnessAttendance.findOne({
           member: member._id,
           activity: af.activity._id,
           activityFeeId: af._id,
-          attendanceDate: today
+          attendanceDay
         },
         {
           member: member._id,
           activity: af.activity._id,
           activityFeeId: af._id,
-          attendanceDate: today,
+          attendanceDay,
           markedBy: staffObjectId,
           status: "Present",
           organizationId
