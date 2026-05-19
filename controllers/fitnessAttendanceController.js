@@ -200,6 +200,68 @@ const attendance =
 };
 
 // 3. Attendance Summary (for your Web Admin Table)
+// exports.getAttendanceSummary = async (req, res) => {
+//   try {
+//     const { fromDate, toDate, activity } = req.query;
+//     const organizationId = req.organizationId;
+
+//     const match = { organizationId };
+
+//     if (fromDate || toDate) {
+//       match.attendanceDay = {};
+
+//       if (fromDate) {
+//         match.attendanceDay.$gte = fromDate;
+//       }
+
+//       if (toDate) {
+//         match.attendanceDay.$lte = toDate;
+//       }
+//     }
+
+//     if (activity) {
+//       match.activity = new mongoose.Types.ObjectId(activity);
+//     }
+
+//     const summary = await FitnessAttendance.aggregate([
+//       { $match: match },
+//       {
+//         $group: {
+//           _id: { activity: "$activity", attendanceDay: "$attendanceDay" },
+//           total: { $sum: 1 },
+//           present: { $sum: { $cond: [{ $eq: ["$status", "Present"] }, 1, 0] } },
+//           absent: { $sum: { $cond: [{ $eq: ["$status", "Absent"] }, 1, 0] } }
+//         }
+//       },
+//       { $sort: { "_id.attendanceDay": -1 } },
+//       {
+//         $lookup: {
+//           from: 'fitnessactivities',
+//           localField: '_id.activity',
+//           foreignField: '_id',
+//           as: 'activityInfo'
+//         }
+//       },
+//       { $unwind: '$activityInfo' },
+//       {
+//         $project: {
+//           activity: '$activityInfo.name',
+//           date: '$_id.attendanceDay',
+//           total: 1,
+//           present: 1,
+//           absent: 1,
+//           activityId: '$_id.activity'
+//         }
+//       }
+//     ]);
+
+//     res.json(summary);
+//   } catch (err) {
+//     console.error('getAttendanceSummary error:', err);
+//     res.status(500).json({ error: 'Server error' });
+//   }
+// };
+
 exports.getAttendanceSummary = async (req, res) => {
   try {
     const { fromDate, toDate, activity } = req.query;
@@ -242,14 +304,26 @@ exports.getAttendanceSummary = async (req, res) => {
           as: 'activityInfo'
         }
       },
-      { $unwind: '$activityInfo' },
+
+      {
+        $unwind: {
+          path: '$activityInfo',
+          preserveNullAndEmptyArrays: true
+        }
+      },
+
       {
         $project: {
-          activity: '$activityInfo.name',
+          activity: {
+            $ifNull: ['$activityInfo.name', 'Pass Members']
+          },
+
           date: '$_id.attendanceDay',
+
           total: 1,
           present: 1,
           absent: 1,
+
           activityId: '$_id.activity'
         }
       }
@@ -275,10 +349,15 @@ exports.getStudentAttendance = async (req, res) => {
     const organizationId = req.organizationId;
 
     const query = {
-      activity: activityId,
       attendanceDay: date,
       organizationId
     };
+
+    if (activityId === 'pass') {
+      query.activity = null;
+    } else {
+      query.activity = activityId;
+    }
 
     const total = await FitnessAttendance.countDocuments(query); // ✅ ADD
 
