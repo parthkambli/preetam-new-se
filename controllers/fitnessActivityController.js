@@ -2045,21 +2045,16 @@ exports.getBookings = async (req, res) => {
     // Date Range Filter
     // =========================
     if (fromDate || toDate) {
-      query.date = {};
+  query.date = {};
 
-      if (fromDate) {
-        query.date.$gte = new Date(fromDate);
-      }
+  if (fromDate) {
+    query.date.$gte = fromDate;
+  }
 
-      if (toDate) {
-        const endDate = new Date(toDate);
-
-        // include full day till 23:59:59
-        endDate.setHours(23, 59, 59, 999);
-
-        query.date.$lte = endDate;
-      }
-    }
+  if (toDate) {
+    query.date.$lte = toDate;
+  }
+}
 
     // =========================
     // Activity Filter

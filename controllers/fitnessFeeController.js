@@ -1603,7 +1603,7 @@ exports.createFitnessFeeType = async (req, res) => {
 
 exports.updateFitnessFeeType = async (req, res) => {
   try {
-    const { description, type, annual, halfYearly, quarterly, monthly, weekly, daily, hourly } = req.body;
+    const { description, type, annual, halfYearly, quarterly, monthly, weekly, daily, hourly, numberOfPersons  } = req.body;
 
     const feeType = await FeeType.findOne({
       _id: req.params.id,
