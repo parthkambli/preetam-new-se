@@ -10,7 +10,7 @@ const { getTodayIST } =
   require("../utils/date");
 
 cron.schedule(
-  "59 23 * * *",
+  "00 0 * * *",
   async () => {
 
     try {
@@ -19,14 +19,11 @@ cron.schedule(
         "Running absent attendance cron..."
       );
 
+      // ✅ Get today in YYYY-MM-DD IST format
       const todayIST =
         getTodayIST();
 
-      const attendanceDate =
-        new Date(
-          `${todayIST}T12:00:00.000Z`
-        );
-
+      // ✅ Fetch all active members
       const members =
         await FitnessMember.find({
           organizationId: "fitness",
@@ -35,18 +32,31 @@ cron.schedule(
 
       for (const member of members) {
 
+        // ✅ Skip if no activity fees
+        if (
+          !member.activityFees ||
+          !member.activityFees.length
+        ) {
+          continue;
+        }
+
         for (
-          const af of member.activityFees || []
+          const af of member.activityFees
         ) {
 
-          // ✅ Skip unpaid
+          // ✅ Skip invalid entry
+          if (!af) {
+            continue;
+          }
+
+          // ✅ Skip unpaid memberships
           if (
             af.paymentStatus !== "Paid"
           ) {
             continue;
           }
 
-          // ✅ Skip inactive
+          // ✅ Skip inactive memberships
           if (
             af.membershipStatus !==
             "Active"
@@ -59,6 +69,15 @@ cron.schedule(
             continue;
           }
 
+          // ✅ Start/end required
+          if (
+            !af.startDate ||
+            !af.endDate
+          ) {
+            continue;
+          }
+
+          // ✅ Convert dates to IST YYYY-MM-DD
           const start =
             new Intl.DateTimeFormat(
               "en-CA",
@@ -81,7 +100,7 @@ cron.schedule(
               new Date(af.endDate)
             );
 
-          // ✅ Today must be within range
+          // ✅ Today must be within membership range
           if (
             todayIST < start ||
             todayIST > end
@@ -89,22 +108,29 @@ cron.schedule(
             continue;
           }
 
-          // ✅ Already exists?
+          // ✅ Check if attendance already exists
           const existing =
             await FitnessAttendance.findOne({
               member: member._id,
-              activity: af.activity,
+
+              // IMPORTANT:
+              // using activityFeeId instead of activity
+              // because same activity can exist
+              // multiple times for same member
               activityFeeId: af._id,
-              attendanceDate,
+
+              attendanceDay: todayIST,
+
               organizationId:
                 member.organizationId
             });
 
+          // ✅ Already marked
           if (existing) {
             continue;
           }
 
-          // ✅ Create absent
+          // ✅ Create absent attendance
           await FitnessAttendance.create({
 
             member: member._id,
@@ -113,11 +139,14 @@ cron.schedule(
 
             activityFeeId: af._id,
 
-            attendanceDate,
+            attendanceDay: todayIST,
 
             markedBy: null,
 
             status: "Absent",
+
+            notes:
+              "Auto-generated absent attendance by cron",
 
             organizationId:
               member.organizationId

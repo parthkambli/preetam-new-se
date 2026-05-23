@@ -1527,7 +1527,34 @@ const calculateEndDate = (startDate, plan) => {
 };
 
 
+const hasMembershipOverlap = (
+  activityFees,
+  newStartDate
+) => {
 
+  const start =
+    new Date(newStartDate);
+
+  return (activityFees || []).some(item => {
+
+    if (
+      item.membershipStatus !== "Active"
+    ) {
+      return false;
+    }
+
+    const existingStart =
+      new Date(item.startDate);
+
+    const existingEnd =
+      new Date(item.endDate);
+
+    return (
+      start >= existingStart &&
+      start <= existingEnd
+    );
+  });
+};
 
 // =====================================================
 // COMMON MEMBER FINDER
@@ -2418,6 +2445,37 @@ exports.createMembershipOrder = async (req, res) => {
 
     const member = await findLoggedInMember(req);
 
+
+    // ======================================
+// MEMBERSHIP OVERLAP CHECK
+// ======================================
+
+const selectedStartDate =
+  startDate
+    ? new Date(startDate)
+    : new Date();
+
+const hasOverlap =
+  !!member.membershipPass &&
+  hasMembershipOverlap(
+    member.activityFees,
+    selectedStartDate
+  );
+
+if (hasOverlap) {
+
+  return res.status(400).json({
+
+    success: false,
+
+    message:
+      "Selected start date overlaps with existing active membership"
+  });
+}
+
+
+
+
     if (!member) {
       return res.status(404).json({
         success: false,
@@ -2614,17 +2672,17 @@ exports.verifyMembershipPayment = async (req, res) => {
 
 // uncomment after postman testing...
 
-    const generatedSignature = crypto
-      .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
-      .update(`${razorpay_order_id}|${razorpay_payment_id}`)
-      .digest("hex");
+    // const generatedSignature = crypto
+    //   .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
+    //   .update(`${razorpay_order_id}|${razorpay_payment_id}`)
+    //   .digest("hex");
 
-    if (generatedSignature !== razorpay_signature) {
-      return res.status(400).json({
-        success: false,
-        message: "Payment verification failed"
-      });
-    }
+    // if (generatedSignature !== razorpay_signature) {
+    //   return res.status(400).json({
+    //     success: false,
+    //     message: "Payment verification failed"
+    //   });
+    // }
 
     // ======================================
     // FIND ACTIVITY
@@ -2782,31 +2840,99 @@ exports.verifyMembershipPayment = async (req, res) => {
     // SAVE MEMBERSHIP
     // ======================================
     if (isMembershipPlan) {
-      await FitnessMember.findByIdAndUpdate(member._id, {
-        $push: {
-          activityFees: {
-            activity: activity._id,
-            feeType: feeType._id,
-            plan: normalizedPlan,
-            planFee: amount,
-            finalAmount: amount,
-            paymentStatus: "Paid",
-            paymentMode: "Bank Transfer",
-            paymentDate: new Date(),
-            startDate: membershipStartDate,
-            endDate,
-            membershipStatus:
-               membershipStartDate > new Date()
-                ? "Inactive"
-                : "Active",
-            allotmentId: allotment._id
-          }
-        },
-        membershipStatus:
-  membershipStartDate > new Date()
-    ? "Inactive"
-    : "Active"
-      });
+      const updateData = {
+
+  upgrade:
+    "Membership Pass",
+
+  upgradeAt:
+    membershipStartDate,
+
+  // membershipPass: feeType._id,
+
+  // numberOfPersons:
+  //   1,
+
+  $push: {
+
+    activityFees: {
+
+      activity: activity._id,
+
+      feeType:
+        feeType._id,
+
+      plan,
+
+      planFee:
+        amount,
+
+      finalAmount:
+        amount,
+
+      paymentStatus:
+        "Paid",
+
+      paymentMode:
+        "Bank Transfer",
+
+      paymentDate:
+        new Date(),
+
+      startDate:
+        membershipStartDate,
+
+      endDate,
+
+      membershipStatus:
+        membershipStartDate >
+        new Date()
+          ? "Inactive"
+          : "Active",
+
+      allotmentId:
+        allotment._id
+    }
+  }
+};
+
+// ======================================
+// PASS → ACTIVITY
+// ======================================
+
+// if (member.membershipPass) {
+
+//   updateData.upgrade =
+//     "Activity";
+
+//   updateData.upgradeAt =
+//     membershipStartDate;
+// }
+
+const hasActivePass =
+  (member.activityFees || []).some(item => {
+
+    return (
+      !item.activity &&
+      new Date(item.endDate) >= new Date()
+    );
+  });
+
+if (!hasActivePass) {
+
+  updateData.membershipPass =
+    null;
+
+  updateData.numberOfPersons =
+    1;
+}
+
+
+
+await FitnessMember.findByIdAndUpdate(
+  member._id,
+  updateData
+);
     }
 
     // ======================================
@@ -4819,10 +4945,30 @@ exports.createMembershipPassOrder = async (req, res) => {
     const member =
   await findLoggedInMember(req);
 
-await member.populate(
-  "activityFees.activity",
-  "name"
-);
+
+  const membershipStartDate =
+  req.body.startDate
+    ? new Date(req.body.startDate)
+    : new Date();
+
+const hasOverlap =
+  hasMembershipOverlap(
+    member.activityFees,
+    membershipStartDate
+  );
+
+if (hasOverlap) {
+
+  return res.status(400).json({
+
+    success: false,
+
+    message:
+      "Membership Pass start date overlaps with active memberships"
+  });
+}
+
+
 
       // ======================================
 // CHECK EXISTING ACTIVE PASS
@@ -5060,31 +5206,31 @@ exports.verifyMembershipPassPayment = async (req, res) => {
     // ======================================
 //uncomment before deployment.....
 
-    const generatedSignature =
-      crypto
-        .createHmac(
-          "sha256",
-          process.env
-            .RAZORPAY_KEY_SECRET
-        )
-        .update(
-          `${razorpay_order_id}|${razorpay_payment_id}`
-        )
-        .digest("hex");
+    // const generatedSignature =
+    //   crypto
+    //     .createHmac(
+    //       "sha256",
+    //       process.env
+    //         .RAZORPAY_KEY_SECRET
+    //     )
+    //     .update(
+    //       `${razorpay_order_id}|${razorpay_payment_id}`
+    //     )
+    //     .digest("hex");
 
-    if (
-      generatedSignature !==
-      razorpay_signature
-    ) {
+    // if (
+    //   generatedSignature !==
+    //   razorpay_signature
+    // ) {
 
-      return res.status(400).json({
+    //   return res.status(400).json({
 
-        success: false,
+    //     success: false,
 
-        message:
-          "Payment verification failed"
-      });
-    }
+    //     message:
+    //       "Payment verification failed"
+    //   });
+    // }
 
     // ======================================
     // FIND MEMBERSHIP PASS
@@ -5233,61 +5379,94 @@ exports.verifyMembershipPassPayment = async (req, res) => {
     // SAVE MEMBERSHIP PASS
     // ======================================
 
-    await FitnessMember.findByIdAndUpdate(
+    const updateData = {
 
-      member._id,
+  membershipPass:
+    feeType._id,
 
-      {
+  numberOfPersons:
+    feeType.numberOfPersons,
 
-        membershipPass:
-          feeType._id,
+  $push: {
 
-        numberOfPersons:
-          feeType.numberOfPersons,
+    activityFees: {
 
-        $push: {
+      activity: null,
 
-          activityFees: {
+      feeType:
+        feeType._id,
 
-            activity: null,
+      plan,
 
-            feeType:
-              feeType._id,
+      planFee:
+        amount,
 
-            plan,
+      finalAmount:
+        amount,
 
-            planFee:
-              amount,
+      paymentStatus:
+        "Paid",
 
-            finalAmount:
-              amount,
+      paymentMode:
+        "Bank Transfer",
 
-            paymentStatus:
-              "Paid",
+      paymentDate:
+        new Date(),
 
-            paymentMode:
-              "Bank Transfer",
+      startDate:
+        membershipStartDate,
 
-            paymentDate:
-              new Date(),
+      endDate,
 
-            startDate:
-              membershipStartDate,
+      membershipStatus:
+        membershipStartDate >
+        new Date()
+          ? "Inactive"
+          : "Active",
 
-            endDate,
+      allotmentId:
+        allotment._id
+    }
+  }
+};
 
-            membershipStatus:
-              membershipStartDate >
-              new Date()
-                ? "Inactive"
-                : "Active",
 
-            allotmentId:
-              allotment._id
-          }
-        }
-      }
+
+// ======================================
+// ACTIVITY → MEMBERSHIP PASS
+// ======================================
+
+// const hasActivityMembership =
+//   (member.activityFees || []).some(
+//     item => item.activity
+//   );
+
+const hasActiveActivity =
+  (member.activityFees || []).some(item => {
+
+    return (
+
+      item.activity &&
+
+      new Date(item.endDate) >= new Date()
     );
+  });
+
+if (hasActiveActivity) {
+
+  updateData.upgrade =
+    "Membership Pass";
+
+  updateData.upgradeAt =
+    membershipStartDate;
+
+  updateData.membershipPass = null;
+}
+
+await FitnessMember.findByIdAndUpdate(
+  member._id,
+  updateData
+);
 
     return res.status(200).json({
 

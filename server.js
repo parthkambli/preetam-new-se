@@ -144,6 +144,7 @@ const connectDB = require('./config/db');
 const { startMembershipCron } = require('./utils/updateMembershipStatuses');
 const { startBackupCron } = require('./scripts/dbBackup');
 require("./cron/generateAbsentAttendance");
+require("./cron/membershipUpgradeCron");
 const auth = require('./middleware/auth');
 const { allowPermissions } = require('./middleware/permissions');
 
@@ -178,6 +179,12 @@ const accessRoleRoutes = require('./routes/accessRoleRoutes');
 
 const fitnessMemberPanelRoutes = require("./routes/fitnessMemberPanelRoutes");
 
+const mobileFitnessRoutes =
+require("./routes/androidFitnessEnqRoutes");
+
+const mobileSchoolRoutes =
+require("./routes/androidSchoolEnqRoutes");
+
 
 const path = require('path');
 
@@ -209,6 +216,20 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Public attendance validation (keep open)
 app.use('/api/attendance', fitnessAttendance);
+
+// ===================== MOBILE PUBLIC APIs =====================
+
+// Fitness mobile APIs
+app.use(
+  '/api/mobile/fitness', mobileFitnessRoutes
+);
+
+// School mobile APIs
+app.use(
+  '/api/mobile/school',
+  mobileSchoolRoutes
+);
+
 
 // ===================== STAFF PANEL =====================
 // Only FitnessStaff allowed

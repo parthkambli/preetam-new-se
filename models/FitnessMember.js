@@ -266,6 +266,8 @@ const activityFeeSchema = new mongoose.Schema({
     ref: 'FitnessFeeAllotment',
     default: null,
   },
+ 
+
 }, { _id: true });
 
 // ── Main member schema ────────────────────────────────────────────────────
@@ -320,6 +322,17 @@ const fitnessMemberSchema = new mongoose.Schema({
 numberOfPersons: {
   type: Number,
   default: 1
+},
+
+ upgrade: {
+  type: String,
+  enum: ["Activity", "Membership Pass"],
+  default: null
+},
+
+upgradeAt: {
+  type: Date,
+  default: null
 },
 
 qrCode: {
