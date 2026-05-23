@@ -481,11 +481,34 @@ const applyComputedStatuses = (obj) => {
   obj.remainingDays =
     primary?.remainingDays || "-";
 
+
   obj.canRenew =
-    primary?.canRenew ?? true;
+    (obj.activityFees || []).some(
+      (af) => af.canRenew === true
+    );
+
 
   obj.isUpcoming =
     primary?.isUpcoming ?? false;
+
+  return obj;
+};
+
+const filterActivityFeesForResponse = (obj) => {
+  if (!obj) return obj;
+
+  // PASS MEMBER
+  if (obj.membershipPass) {
+    obj.activityFees = (obj.activityFees || []).filter(
+      (af) => af.activity == null
+    );
+  }
+  // ACTIVITY MEMBER
+  else {
+    obj.activityFees = (obj.activityFees || []).filter(
+      (af) => af.activity != null
+    );
+  }
 
   return obj;
 };
@@ -567,7 +590,11 @@ exports.getAllMembers = async (req, res) => {
       .limit(limit)
       .select("-password");
 
-    const result = members.map((m) => applyComputedStatuses(m.toObject()));
+    // const result = members.map((m) => applyComputedStatuses(m.toObject()));
+    const result = members.map((m) => {
+    const obj = applyComputedStatuses(m.toObject());
+    return filterActivityFeesForResponse(obj);
+  });
 
     res.json({
       data: result,
@@ -608,7 +635,11 @@ exports.getMemberById = async (req, res) => {
     if (!member) return res.status(404).json({ message: "Member not found." });
 
     const obj = applyComputedStatuses(member.toObject());
-    res.json(obj);
+
+    const filtered =
+      filterActivityFeesForResponse(obj);
+
+    res.json(filtered);
   } catch (err) {
     console.error("getMemberById error:", err);
     if (err.name === "CastError")
