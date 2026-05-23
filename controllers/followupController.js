@@ -186,7 +186,10 @@ enquiry.status = fixedStatus;        if (remark) enquiry.remark = remark;
       remark,
       nextVisit,
       organizationId: req.organizationId,
-      createdBy: req.admin.userId
+      createdBy:
+        req.admin?.userId ||
+        req.staff?.userId ||
+        req.user?.userId
     });
 
     await followup.save();
