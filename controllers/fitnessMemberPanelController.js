@@ -2672,17 +2672,17 @@ exports.verifyMembershipPayment = async (req, res) => {
 
 // uncomment after postman testing...
 
-    // const generatedSignature = crypto
-    //   .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
-    //   .update(`${razorpay_order_id}|${razorpay_payment_id}`)
-    //   .digest("hex");
+    const generatedSignature = crypto
+      .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
+      .update(`${razorpay_order_id}|${razorpay_payment_id}`)
+      .digest("hex");
 
-    // if (generatedSignature !== razorpay_signature) {
-    //   return res.status(400).json({
-    //     success: false,
-    //     message: "Payment verification failed"
-    //   });
-    // }
+    if (generatedSignature !== razorpay_signature) {
+      return res.status(400).json({
+        success: false,
+        message: "Payment verification failed"
+      });
+    }
 
     // ======================================
     // FIND ACTIVITY
@@ -5206,31 +5206,31 @@ exports.verifyMembershipPassPayment = async (req, res) => {
     // ======================================
 //uncomment before deployment.....
 
-    // const generatedSignature =
-    //   crypto
-    //     .createHmac(
-    //       "sha256",
-    //       process.env
-    //         .RAZORPAY_KEY_SECRET
-    //     )
-    //     .update(
-    //       `${razorpay_order_id}|${razorpay_payment_id}`
-    //     )
-    //     .digest("hex");
+    const generatedSignature =
+      crypto
+        .createHmac(
+          "sha256",
+          process.env
+            .RAZORPAY_KEY_SECRET
+        )
+        .update(
+          `${razorpay_order_id}|${razorpay_payment_id}`
+        )
+        .digest("hex");
 
-    // if (
-    //   generatedSignature !==
-    //   razorpay_signature
-    // ) {
+    if (
+      generatedSignature !==
+      razorpay_signature
+    ) {
 
-    //   return res.status(400).json({
+      return res.status(400).json({
 
-    //     success: false,
+        success: false,
 
-    //     message:
-    //       "Payment verification failed"
-    //   });
-    // }
+        message:
+          "Payment verification failed"
+      });
+    }
 
     // ======================================
     // FIND MEMBERSHIP PASS
