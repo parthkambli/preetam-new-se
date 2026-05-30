@@ -2745,8 +2745,8 @@ exports.verifyMembershipPayment = async (req, res) => {
     // ======================================
     // NORMALIZE PLAN (🔥 IMPORTANT)
     // ======================================
-    const normalizedPlan =
-      plan.charAt(0).toUpperCase() + plan.slice(1);
+    // const normalizedPlan =
+    //   plan.charAt(0).toUpperCase() + plan.slice(1);
 
     // ======================================
     // PLAN → AMOUNT
@@ -2761,7 +2761,9 @@ exports.verifyMembershipPayment = async (req, res) => {
       Annual: feeType.annual || 0
     };
 
-    const amount = amountMap[normalizedPlan];
+
+    const amount = amountMap[plan];
+
 
     if (!amount || amount <= 0) {
       return res.status(400).json({
@@ -2794,7 +2796,7 @@ exports.verifyMembershipPayment = async (req, res) => {
       memberId: member._id,
       feeTypeId: feeType._id,
       description: `Member App Purchase - ${activity.name}`,
-      feePlan: normalizedPlan,
+      feePlan: plan,
       amount,
       dueDate: new Date(),
       status: "Paid",
@@ -2809,7 +2811,7 @@ exports.verifyMembershipPayment = async (req, res) => {
       allotmentId: allotment._id,
       customerName: member.name,
       description: `Member App (Razorpay) - ${activity.name}`,
-      feePlan: normalizedPlan,
+      feePlan: plan,
       amount,
       paymentMode: "Bank Transfer",
       paymentSource: "Member App Razorpay",
