@@ -5536,10 +5536,10 @@ exports.getMembershipPassPlans =
           Monthly:
             item.monthly || 0,
 
-          Quarterly:
+          quarterly:
             item.quarterly || 0,
 
-          HalfYearly:
+          halfYearly:
             item.halfYearly || 0,
 
           Annual:
