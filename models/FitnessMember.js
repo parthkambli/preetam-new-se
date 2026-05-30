@@ -294,6 +294,8 @@ const fitnessMemberSchema = new mongoose.Schema({
 
   // Activities & fees (new multi-activity structure)
   activityFees: { type: [activityFeeSchema], default: [] },
+  historyFees: { type: [activityFeeSchema], default: [] },
+
 
   // Overall membership status (computed from activityFees)
   membershipStatus: {
