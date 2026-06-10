@@ -1668,8 +1668,8 @@ const syncFeesToTables = async (member, orgId, previousAllotmentIds = []) => {
 
     const planMap = {
       Annual: "Annual",
-      Halfyearly: "halfYearly",
-      Quarterly: "quarterly",
+      halfYearly: "halfYearly",
+      quarterly: "quarterly",
       Monthly: "Monthly",
       Weekly: "Weekly",
       Daily: "Daily",

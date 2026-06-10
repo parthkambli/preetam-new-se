@@ -1498,8 +1498,8 @@ const FitnessMember = require('../models/FitnessMember');
 const VALID_FEE_TYPES = ['Visitor', 'Residency', 'Membership Pass'];
 const VALID_FEE_PLANS = [
   'Annual',
-  'Half-Yearly',   // ✅ NEW
-  'Quarterly',     // ✅ NEW
+  'halfYearly',   // ✅ NEW
+  'quarterly',     // ✅ NEW
   'Monthly',
   'Weekly',
   'Daily',
