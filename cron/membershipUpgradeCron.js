@@ -4,8 +4,9 @@ const FitnessMember = require("../models/FitnessMember");
 const { getTodayIST } = require("../utils/date");
 
 // Runs every day at 1:00 AM IST
+
 cron.schedule(
-  "0 1 * * *",
+  "5 0 * * *",
   async () => {
     try {
       console.log("Running membership upgrade cron...");
@@ -20,6 +21,9 @@ cron.schedule(
       const endOfDay = new Date(
         `${todayIST}T23:59:59.999+05:30`
       );
+      console.log("todayIST =", todayIST);
+console.log("startOfDay =", startOfDay);
+console.log("endOfDay =", endOfDay);
 
       // Find members whose root upgradeAt is today
       const members = await FitnessMember.find({
@@ -29,6 +33,15 @@ cron.schedule(
         },
       });
 
+      console.log(
+  "Members Found:",
+  members.map(m => ({
+    memberId: m.memberId,
+    upgrade: m.upgrade,
+    upgradeAt: m.upgradeAt,
+  }))
+);
+
       console.log(`Found ${members.length} members`);
 
       for (const member of members) {
@@ -36,6 +49,19 @@ cron.schedule(
         // DOWNGRADE TO ACTIVITY
         // ====================================
         if (member.upgrade === "Activity") {
+          const passRecords =
+  member.activityFees.filter(
+    item => !item.activity
+  );
+
+member.historyFees.push(
+  ...passRecords
+);
+
+member.activityFees =
+  member.activityFees.filter(
+    item => item.activity
+  );
           member.membershipPass = null;
           member.numberOfPersons = 1;
 
@@ -56,6 +82,20 @@ cron.schedule(
             );
 
           if (membershipActivityFee?.feeType) {
+          const activities =
+  member.activityFees.filter(
+    item => item.activity
+  );
+
+member.historyFees.push(
+  ...activities
+);
+
+member.activityFees =
+  member.activityFees.filter(
+    item => !item.activity
+  );
+
             member.membershipPass =
               membershipActivityFee.feeType;
 

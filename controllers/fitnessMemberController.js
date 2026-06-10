@@ -1717,6 +1717,12 @@ const syncFeesToTables = async (member, orgId, previousAllotmentIds = []) => {
       }
 
       if ((af.finalAmount || af.planFee) > 0) {
+        console.log("DESCRIPTION CHECK", {
+  renewedFrom: af._renewedFromId,
+  isRenewal: af.isRenewal,
+  activity: af.activity,
+  plan: af.plan
+});
         await FeePayment.findOneAndUpdate(
           { allotmentId: allotment._id, organizationId: orgId },
           {
@@ -1726,9 +1732,17 @@ const syncFeesToTables = async (member, orgId, previousAllotmentIds = []) => {
             paymentMode: af.paymentMode || "Cash",
             paymentDate: af.paymentDate || new Date(),
             organizationId: orgId,
-            description: af.activity
-              ? `Activity fee - ${af.plan} plan`
-              : `Membership pass - ${af.plan} plan`,
+            description: af.isRenewal
+  ? (
+      af.activity
+        ? `Activity Renewal - ${af.plan} plan`
+        : `Membership Pass Renewal - ${af.plan} plan`
+    )
+  : (
+      af.activity
+        ? `New Activity - ${af.plan} plan`
+        : `New Membership Pass - ${af.plan} plan`
+    ),
             feePlan,
           },
           { upsert: true, new: true },
@@ -1747,9 +1761,17 @@ const syncFeesToTables = async (member, orgId, previousAllotmentIds = []) => {
           paymentMode: af.paymentMode || "Cash",
           paymentDate: af.paymentDate || new Date(),
           organizationId: orgId,
-          description: af.activity
-            ? `Activity fee - ${af.plan} plan`
-            : `Membership pass - ${af.plan} plan`,
+          description: af.isRenewal
+  ? (
+      af.activity
+        ? `Activity Renewal - ${af.plan} plan`
+        : `Membership Pass Renewal - ${af.plan} plan`
+    )
+  : (
+      af.activity
+        ? `New Activity - ${af.plan} plan`
+        : `New Membership Pass - ${af.plan} plan`
+    ),
           feePlan,
         },
         { upsert: true, new: true },
@@ -2448,6 +2470,7 @@ exports.renewMember = async (req, res) => {
       validatedRenewals.push({
         activity: r.activityId || null,
         feeType: r.feeTypeId || null,
+        isRenewal: true,
         plan: r.plan || "Monthly",
         planFee,
         discount,

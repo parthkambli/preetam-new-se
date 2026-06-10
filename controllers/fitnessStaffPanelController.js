@@ -514,6 +514,8 @@ exports.handleQRScan = async (req, res) => {
       });
     }
 
+    
+
     // 🔥 STEP 1: Resolve logged-in staff
     const staffObjectId = await resolveLoggedInStaffObjectId(req);
 
@@ -536,6 +538,13 @@ exports.handleQRScan = async (req, res) => {
         message: "Member not found"
       });
     }
+
+    if (member.membershipStatus !== "Active") {
+  return res.status(403).json({
+    success: false,
+    message: "Membership expired"
+  });
+}
 
 
    const allowedActivities =
