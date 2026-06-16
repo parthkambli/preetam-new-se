@@ -178,6 +178,7 @@ const userManagementRoutes = require('./routes/userManagementRoutes');
 const accessRoleRoutes = require('./routes/accessRoleRoutes');
 
 const fitnessMemberPanelRoutes = require("./routes/fitnessMemberPanelRoutes");
+const timeTableRoutes = require('./routes/timeTableRoutes');
 
 const mobileFitnessRoutes =
 require("./routes/androidFitnessEnqRoutes");
@@ -253,6 +254,7 @@ app.use('/api/health-records', auth, healthRecordRoutes);
 app.use('/api/events', auth, eventRoutes);
 
 // ===================== ADMIN (FITNESS) =====================
+
 app.use('/api/fitness/enquiry', auth, fitnessEnquiryRoutes);
 app.use('/api/fitness/member', auth, fitnessMemberRoutes);
 app.use('/api/fitness/events', auth, fitnessEventRoutes);
@@ -276,6 +278,9 @@ app.use('/api/access-roles', accessRoleRoutes);
 
 // fitness member panel
 app.use("/api/fitness/member-panel",auth, fitnessMemberPanelRoutes);
+
+// Timetable
+app.use('/api/timetable', auth, timeTableRoutes);
 
 
 // ===================== HEALTH =====================
