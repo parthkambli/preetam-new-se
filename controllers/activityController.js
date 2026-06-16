@@ -166,7 +166,7 @@ const handleError = (res, err, customMessage = 'Server error') => {
 // Server-side validation for master activity
 const validateActivityData = (data) => {
   const errors = [];
- 
+
   if (!data.name?.trim()) {
     errors.push('Activity name is required.');
   } else if (data.name.trim().length < 2) {
@@ -174,7 +174,15 @@ const validateActivityData = (data) => {
   } else if (data.name.trim().length > 100) {
     errors.push('Activity name must not exceed 100 characters.');
   }
- 
+
+  if (!data.staffName?.trim()) {
+    errors.push('Instructor name is required.');
+  } else if (data.staffName.trim().length < 2) {
+    errors.push('Instructor name must be at least 2 characters.');
+  } else if (data.staffName.trim().length > 100) {
+    errors.push('Instructor name must not exceed 100 characters.');
+  }
+
   return errors;
 };
  
@@ -229,7 +237,7 @@ exports.getAllActivities = async (req, res) => {
     const activities = await Activity.find({ organizationId: req.organizationId })
       .sort({ name: 1 })
       .lean();
- 
+
     res.json({
       success: true,
       count: activities.length,
@@ -251,14 +259,15 @@ exports.createActivity = async (req, res) => {
         errors: validationErrors
       });
     }
- 
+
     const activity = new Activity({
       name: req.body.name.trim(),
+      staffName: req.body.staffName.trim(),
       organizationId: req.organizationId
     });
- 
+
     await activity.save();
- 
+
     res.status(201).json({
       success: true,
       message: 'Activity created successfully.',
@@ -276,14 +285,14 @@ exports.updateActivity = async (req, res) => {
       _id: req.params.id,
       organizationId: req.organizationId
     });
- 
+
     if (!activity) {
       return res.status(404).json({
         success: false,
         message: 'Activity not found. It may have been deleted.'
       });
     }
- 
+
     if (req.body.name !== undefined) {
       const validationErrors = validateActivityData(req.body);
       if (validationErrors.length > 0) {
@@ -295,9 +304,13 @@ exports.updateActivity = async (req, res) => {
       }
       activity.name = req.body.name.trim();
     }
- 
+
+    if (req.body.staffName !== undefined) {
+      activity.staffName = req.body.staffName.trim();
+    }
+
     await activity.save();
- 
+
     res.json({
       success: true,
       message: 'Activity updated successfully.',
