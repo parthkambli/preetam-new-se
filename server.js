@@ -186,6 +186,9 @@ const mobileSchoolRoutes =
 require("./routes/androidSchoolEnqRoutes");
 
 
+const serviceRoutes = require("./routes/schoolServiceRoutes");
+
+
 const path = require('path');
 
 process.env.TZ = "Asia/Kolkata";
@@ -251,6 +254,7 @@ app.use('/api/activities', auth, activityRoutes);
 app.use('/api/fees', auth, feeRoutes);
 app.use('/api/health-records', auth, healthRecordRoutes);
 app.use('/api/events', auth, eventRoutes);
+app.use("/api/school/services", serviceRoutes);
 
 // ===================== ADMIN (FITNESS) =====================
 app.use('/api/fitness/enquiry', auth, fitnessEnquiryRoutes);
