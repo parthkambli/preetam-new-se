@@ -3,9 +3,14 @@ const mongoose = require('mongoose');
 const activitySchema = new mongoose.Schema({
   name: {
     type: String,
-    required: true,
+    required: [true, 'Activity name is required'],
     trim: true,
     unique: true
+  },
+  staffName: {
+    type: String,
+    required: [true, 'Instructor name is required'],
+    trim: true,
   },
   organizationId: {
     type: String,
