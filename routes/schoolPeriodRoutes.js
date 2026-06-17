@@ -5,7 +5,7 @@ const {
   createPeriod,
   updatePeriod,
   deletePeriod,
-} = require('../controllers/timeTableController');
+} = require('../controllers/schoolPeriodController');
 
 const router = express.Router();
 

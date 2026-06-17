@@ -178,7 +178,7 @@ const userManagementRoutes = require('./routes/userManagementRoutes');
 const accessRoleRoutes = require('./routes/accessRoleRoutes');
 
 const fitnessMemberPanelRoutes = require("./routes/fitnessMemberPanelRoutes");
-const timeTableRoutes = require('./routes/timeTableRoutes');
+const schoolPeriodRoutes = require('./routes/schoolPeriodRoutes');
 
 const mobileFitnessRoutes =
 require("./routes/androidFitnessEnqRoutes");
@@ -284,7 +284,7 @@ app.use('/api/access-roles', accessRoleRoutes);
 app.use("/api/fitness/member-panel",auth, fitnessMemberPanelRoutes);
 
 // Timetable
-app.use('/api/timetable', auth, timeTableRoutes);
+app.use('/api/period', auth, schoolPeriodRoutes);
 
 
 // ===================== HEALTH =====================

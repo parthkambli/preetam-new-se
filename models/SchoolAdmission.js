@@ -1,5 +1,24 @@
 const mongoose = require('mongoose');
 
+const timetableRowSchema = new mongoose.Schema({
+  periodId: { type: mongoose.Schema.Types.ObjectId, ref: 'TimeTable' },
+  mondayActivityId: { type: mongoose.Schema.Types.ObjectId, ref: 'Activity' },
+  tuesdayActivityId: { type: mongoose.Schema.Types.ObjectId, ref: 'Activity' },
+  wednesdayActivityId: { type: mongoose.Schema.Types.ObjectId, ref: 'Activity' },
+  thursdayActivityId: { type: mongoose.Schema.Types.ObjectId, ref: 'Activity' },
+  fridayActivityId: { type: mongoose.Schema.Types.ObjectId, ref: 'Activity' },
+  saturdayActivityId: { type: mongoose.Schema.Types.ObjectId, ref: 'Activity' },
+}, { _id: false });
+
+const serviceBookingSchema = new mongoose.Schema({
+  serviceId: { type: mongoose.Schema.Types.ObjectId, ref: 'Service' },
+  startDate: Date,
+  endDate: Date,
+  days: Number,
+  perDayFee: Number,
+  totalFee: Number,
+}, { _id: false });
+
 const schoolAdmissionSchema = new mongoose.Schema({
   // Personal Information
   fullName: {
@@ -186,7 +205,7 @@ const schoolAdmissionSchema = new mongoose.Schema({
   },
   feePlan: {
     type: String,
-    enum: ['Daily', 'Weekly', 'Monthly', 'Annual'],
+    enum: ['Daily', 'Weekly', 'Monthly', 'Quarterly', 'HalfYearly', 'Annual'],
     default: 'Monthly'
   },
   instituteType: {
@@ -207,6 +226,53 @@ const schoolAdmissionSchema = new mongoose.Schema({
     enum: ['Yes', 'No'],
     default: 'No'
   },
+
+  // Fee calculation fields (server-calculated, never trust frontend)
+  feeTypeId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'FeeType'
+  },
+  feeAmount: {
+    type: Number,
+    default: 0
+  },
+  discount: {
+    type: Number,
+    default: 0
+  },
+  totalFee: {
+    type: Number,
+    default: 0
+  },
+  paidAmount: {
+    type: Number,
+    default: 0
+  },
+  remainingAmount: {
+    type: Number,
+    default: 0
+  },
+  startDate: {
+    type: Date
+  },
+  endDate: {
+    type: Date
+  },
+  responsibleStaffId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Staff'
+  },
+
+  // Embedded timetable (per-student)
+  timetable: {
+    type: [timetableRowSchema],
+    default: []
+  },
+  services: {
+    type: [serviceBookingSchema],
+    default: []
+  },
+
   paymentDate: {
     type: Date
   },
@@ -216,12 +282,12 @@ const schoolAdmissionSchema = new mongoose.Schema({
   },
   paymentStatus: {
     type: String,
-    enum: ['Paid', 'Pending', 'Partial'],
+    enum: ['Paid', 'Pending'],
     default: 'Pending'
   },
   paymentMode: {
     type: String,
-    enum: ['Cash', 'UPI', 'Bank Transfer']
+    enum: ['Cash', 'Bank Transfer']
   },
   nextDueDate: {
     type: Date
@@ -256,17 +322,31 @@ const schoolAdmissionSchema = new mongoose.Schema({
   }
 });
 
-// Generate admission ID before save
+// Generate sequential admission ID before save (PSCYYYYMMDD-001)
 schoolAdmissionSchema.pre('save', async function(next) {
   this.updatedAt = Date.now();
-  
-  if (!this.admissionId) {
-    const date = new Date();
-    const dateStr = date.toISOString().slice(0, 10).replace(/-/g, '');
-    const randomNum = Math.floor(100 + Math.random() * 900);
-    this.admissionId = `PSC${dateStr}-${randomNum}`;
+
+  if (!this.admissionId || this.admissionId.startsWith('PSC') === false) {
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, '0');
+    const d = String(now.getDate()).padStart(2, '0');
+    const prefix = `PSC${y}${m}${d}-`;
+
+    const last = await mongoose.model('SchoolAdmission')
+      .findOne({ admissionId: new RegExp(`^${prefix}`) })
+      .sort({ admissionId: -1 })
+      .select('admissionId')
+      .lean();
+
+    let seq = 1;
+    if (last) {
+      const parts = last.admissionId.split('-');
+      seq = parseInt(parts[1], 10) + 1;
+    }
+    this.admissionId = `${prefix}${String(seq).padStart(3, '0')}`;
   }
-  
+
   next();
 });
 

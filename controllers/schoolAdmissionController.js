@@ -892,14 +892,19 @@ const Student = require('../models/Student');
 const User = require('../models/User');
 const SchoolEnquiry = require('../models/SchoolEnquiry');
 const FeeAllotment = require('../models/FeeAllotment');
+const FeeType = require('../models/FeeType');
+const TimeTable = require('../models/schoolPeriod');
+const Activity = require('../models/Activity');
+// const Staff = require('../models/Staff');
+const FitnessStaff = require('../models/FitnessStaff');
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const VALID_GENDERS        = ['Male', 'Female', 'Other'];
-const VALID_FEE_PLANS      = ['Daily', 'Weekly', 'Monthly', 'Annual'];
+const VALID_FEE_PLANS      = ['Daily', 'Weekly', 'Monthly', 'Quarterly', 'HalfYearly', 'Annual'];
 const VALID_INSTITUTE_TYPES= ['School', 'Residency', 'DayCare'];
-const VALID_PAYMENT_STATUS = ['Paid', 'Pending', 'Partial'];
-const VALID_PAYMENT_MODES  = ['Cash', 'UPI', 'Bank Transfer'];
+const VALID_PAYMENT_STATUS = ['Paid', 'Pending'];
+const VALID_PAYMENT_MODES  = ['Cash', 'Bank Transfer'];
 const VALID_OCCUPATION     = ['Government', 'Private', 'Retired', 'Self Employed'];
 const VALID_BEHAVIOURS     = ['Calm', 'Angry', 'Moderate', 'Strict'];
 const VALID_YES_NO         = ['Yes', 'No'];
@@ -914,6 +919,32 @@ const isDateInPast = (dateStr) => {
   return input < today;
 };
 
+// ─── Fee / Date helpers ────────────────────────────────────────────────────────
+const FEE_PLAN_DURATION = {
+  Daily: 1, Weekly: 7, Monthly: 1, Quarterly: 3, HalfYearly: 6, Annual: 12
+};
+
+const FEE_PLAN_MAP = {
+  daily: 'Daily', weekly: 'Weekly', monthly: 'Monthly',
+  quarterly: 'Quarterly', halfYearly: 'HalfYearly', annual: 'Annual'
+};
+
+function calcEndDate(startDate, feePlan) {
+  if (!startDate || !feePlan) return null;
+  const d = new Date(startDate);
+  const unit = FEE_PLAN_DURATION[feePlan];
+  if (!unit) return null;
+  if (feePlan === 'Daily' || feePlan === 'Weekly') d.setDate(d.getDate() + unit);
+  else d.setMonth(d.getMonth() + unit);
+  return d;
+}
+
+function parseJSONField(val) {
+  if (!val) return undefined;
+  if (typeof val === 'string') { try { return JSON.parse(val); } catch { return undefined; } }
+  return val;
+}
+
 // Fields that exist on both Admission and Student and should always stay in sync
 const STUDENT_SYNC_FIELDS = [
   'fullName', 'age', 'gender', 'dob', 'aadhaar', 'mobile', 'fullAddress',
@@ -922,7 +953,9 @@ const STUDENT_SYNC_FIELDS = [
   'primaryContactName', 'primaryRelation', 'primaryPhone',
   'secondaryContactName', 'secondaryRelation', 'secondaryPhone',
   'villageCity', 'alternateContact',
-  'feePlan', 'amount', 'assignedCaregiver',
+  'feePlan', 'feeTypeId', 'feeAmount', 'discount', 'totalFee',
+  'paidAmount', 'remainingAmount', 'startDate', 'endDate',
+  'amount', 'assignedCaregiver', 'responsibleStaffId',
   'hobbies', 'games', 'behaviour', 'status'
 ];
 
@@ -1018,6 +1051,24 @@ if (req.files) {
     );
   }
 }
+
+    // ── Normalize feePlan (frontend sends lowercase) ───────────────────────
+    if (admissionData.feePlan) {
+      const normalized = FEE_PLAN_MAP[admissionData.feePlan.trim().toLowerCase()];
+      if (normalized) admissionData.feePlan = normalized;
+    }
+
+    // ── Map responsibleStaff → responsibleStaffId ──────────────────────────
+    if (admissionData.responsibleStaff && !admissionData.responsibleStaffId) {
+      admissionData.responsibleStaffId = admissionData.responsibleStaff;
+    }
+    delete admissionData.responsibleStaff;
+
+    // ── Parse timetable / services from JSON strings ───────────────────────
+    const rawTimetable = parseJSONField(admissionData.timetable);
+    const rawServices = parseJSONField(admissionData.services);
+    delete admissionData.timetable;
+    delete admissionData.services;
 
     // ── Required fields ────────────────────────────────────────────────────
     if (!admissionData.fullName || !admissionData.fullName.trim()) {
@@ -1217,9 +1268,101 @@ if (req.files) {
     // ── Trim name fields ───────────────────────────────────────────────────
     admissionData.fullName = fullName;
 
+    // ── Fee calculation (server-authoritative) ─────────────────────────────
+    let feeAmount = 0, discount = 0, totalFee = 0;
+    let paidAmount = 0, remainingAmount = 0, paymentStatus = 'Pending';
+
+    if (admissionData.feeTypeId && admissionData.feePlan) {
+      const feeType = await FeeType.findOne({
+        _id: admissionData.feeTypeId,
+        organizationId: req.organizationId
+      }).lean();
+
+      if (!feeType) {
+        return res.status(400).json({ message: 'Selected fee type not found in this organization.' });
+      }
+
+      const planKey = admissionData.feePlan.toLowerCase();
+      feeAmount = feeType[planKey] || 0;
+      discount = Math.max(0, Number(admissionData.discount) || 0);
+      totalFee = Math.max(0, feeAmount - discount);
+
+      // Add service totals to grand total
+      let servicesTotal = 0;
+      if (rawServices && rawServices.length > 0) {
+        for (const s of rawServices) {
+          servicesTotal += Number(s.totalFee) || 0;
+        }
+      }
+      totalFee += servicesTotal;
+
+      paidAmount = Math.max(0, Number(admissionData.paidAmount) || 0);
+      remainingAmount = Math.max(0, totalFee - paidAmount);
+      paymentStatus = (remainingAmount <= 0 && paidAmount > 0) ? 'Paid' : 'Pending';
+
+      // Overwrite with server-calculated values
+      admissionData.feeAmount = feeAmount;
+      admissionData.discount = discount;
+      admissionData.totalFee = totalFee;
+      admissionData.paidAmount = paidAmount;
+      admissionData.remainingAmount = remainingAmount;
+      admissionData.paymentStatus = paymentStatus;
+    }
+
+    // ── End date calculation ───────────────────────────────────────────────
+    if (admissionData.startDate && admissionData.feePlan) {
+      admissionData.endDate = calcEndDate(admissionData.startDate, admissionData.feePlan);
+    }
+
+    // ── Reference validations ──────────────────────────────────────────────
+    const refErrors = [];
+
+    if (admissionData.assignedCaregiver) {
+      const cg = await FitnessStaff.findOne({
+        _id: admissionData.assignedCaregiver
+      }).lean();
+      if (!cg) refErrors.push('Assigned caregiver not found.');
+    }
+
+    if (admissionData.responsibleStaffId) {
+      const rs = await FitnessStaff.findOne({
+        _id: admissionData.responsibleStaffId
+      }).lean();
+      if (!rs) refErrors.push('Responsible staff not found.');
+    }
+
+    if (rawTimetable && rawTimetable.length > 0) {
+      for (let i = 0; i < rawTimetable.length; i++) {
+        const row = rawTimetable[i];
+        if (row.periodId) {
+          const p = await TimeTable.findOne({
+            _id: row.periodId,
+            organizationId: req.organizationId
+          }).lean();
+          if (!p) refErrors.push(`Period at row ${i + 1} not found.`);
+        }
+        const dayFields = ['mondayActivityId', 'tuesdayActivityId', 'wednesdayActivityId', 'thursdayActivityId', 'fridayActivityId', 'saturdayActivityId'];
+        for (const df of dayFields) {
+          if (row[df]) {
+            const a = await Activity.findOne({
+              _id: row[df],
+              organizationId: req.organizationId
+            }).lean();
+            if (!a) refErrors.push(`Activity for ${df} at row ${i + 1} not found.`);
+          }
+        }
+      }
+    }
+
+    if (refErrors.length > 0) {
+      return res.status(400).json({ message: refErrors.join(' ') });
+    }
+
     // ── Save admission ─────────────────────────────────────────────────────
     const admission = new SchoolAdmission({
       ...admissionData,
+      timetable: rawTimetable || [],
+      services: rawServices || [],
       organizationId: req.organizationId
     });
 
@@ -1266,14 +1409,15 @@ if (req.files) {
     await student.save();
 
     // ── Auto-create fee allotment ──────────────────────────────────────────
-    if (admission.feePlan && admission.amount && admission.amount > 0) {
+    if (admission.feePlan && admission.totalFee > 0) {
       try {
         const feeAllotment = new FeeAllotment({
           studentId:   student._id,
           admissionId: admission._id,
+          feeTypeId:   admission.feeTypeId,
           description: admission.feeDescription || 'Fee Allotted at Admission',
           feePlan:     admission.feePlan,
-          amount:      admission.amount,
+          amount:      admission.totalFee,
           dueDate:     admission.nextDueDate || null,
           status:      admission.paymentStatus === 'Paid' ? 'Paid' : 'Pending',
           organizationId: req.organizationId
@@ -1358,26 +1502,39 @@ if (req.files?.photo && admission.photo) {
 
 const updateData = req.body;
 
-if (admissionData.hobbies) {
-  try {
-    admissionData.hobbies = JSON.parse(admissionData.hobbies);
-  } catch {}
+// ── Parse JSON fields from frontend ──
+if (updateData.hobbies) {
+  try { updateData.hobbies = JSON.parse(updateData.hobbies); } catch {}
+}
+if (updateData.games) {
+  try { updateData.games = JSON.parse(updateData.games); } catch {}
+}
+if (updateData.timetable) {
+  const parsed = parseJSONField(updateData.timetable);
+  if (parsed) updateData.timetable = parsed;
+}
+if (updateData.services) {
+  const parsed = parseJSONField(updateData.services);
+  if (parsed) updateData.services = parsed;
 }
 
-if (admissionData.games) {
-  try {
-    admissionData.games = JSON.parse(admissionData.games);
-  } catch {}
+// ── Normalize feePlan (frontend sends lowercase) ───────────────────
+if (updateData.feePlan) {
+  const normalized = FEE_PLAN_MAP[updateData.feePlan.trim().toLowerCase()];
+  if (normalized) updateData.feePlan = normalized;
 }
+
+// ── Map responsibleStaff → responsibleStaffId ──────────────────────
+if (updateData.responsibleStaff && !updateData.responsibleStaffId) {
+  updateData.responsibleStaffId = updateData.responsibleStaff;
+}
+delete updateData.responsibleStaff;
 
 // ── Handle uploaded files ──
 if (req.files) {
-  // Replace photo
   if (req.files.photo && req.files.photo.length > 0) {
     updateData.photo = `/uploads/school/${req.files.photo[0].filename}`;
   }
-
-  // Replace health records (simple version)
   if (req.files.healthRecord && req.files.healthRecord.length > 0) {
     updateData.medicalReports = req.files.healthRecord.map(
       file => `/uploads/school/${file.filename}`
@@ -1429,6 +1586,50 @@ if (req.files) {
     }
     if (updateData.nextDueDate && isDateInPast(updateData.nextDueDate)) {
       return res.status(400).json({ message: 'Next due date cannot be in the past.' });
+    }
+
+    // ── Recalculate fee if feeTypeId or feePlan changed ─────────────────────
+    if (updateData.feeTypeId || updateData.feePlan || updateData.paidAmount !== undefined || updateData.discount !== undefined) {
+      const feeTypeId = updateData.feeTypeId || admission.feeTypeId;
+      const feePlan = updateData.feePlan || admission.feePlan;
+      const discount = updateData.discount !== undefined ? Number(updateData.discount) : (admission.discount || 0);
+      const paidAmount = updateData.paidAmount !== undefined ? Number(updateData.paidAmount) : (admission.paidAmount || 0);
+
+      if (feeTypeId && feePlan) {
+        const feeType = await FeeType.findOne({ _id: feeTypeId, organizationId: req.organizationId }).lean();
+        if (!feeType) {
+          return res.status(400).json({ message: 'Selected fee type not found in this organization.' });
+        }
+        const planKey = feePlan.toLowerCase();
+        let feeAmount = feeType[planKey] || 0;
+        let totalFee = Math.max(0, feeAmount - Math.max(0, discount));
+
+        // Recalculate service totals from current admission.services
+        let servicesTotal = 0;
+        if (admission.services && admission.services.length > 0) {
+          for (const s of admission.services) {
+            servicesTotal += Number(s.totalFee) || 0;
+          }
+        }
+        totalFee += servicesTotal;
+
+        let remainingAmount = Math.max(0, totalFee - Math.max(0, paidAmount));
+        let paymentStatus = (remainingAmount <= 0 && paidAmount > 0) ? 'Paid' : 'Pending';
+
+        updateData.feeAmount = feeAmount;
+        updateData.discount = Math.max(0, discount);
+        updateData.totalFee = totalFee;
+        updateData.paidAmount = Math.max(0, paidAmount);
+        updateData.remainingAmount = remainingAmount;
+        updateData.paymentStatus = paymentStatus;
+      }
+    }
+
+    // ── Recalculate endDate if startDate or feePlan changed ─────────────────
+    const startDate = updateData.startDate || admission.startDate;
+    const feePlan = updateData.feePlan || admission.feePlan;
+    if (startDate && feePlan) {
+      updateData.endDate = calcEndDate(startDate, feePlan);
     }
 
     // ── Apply updates to admission ─────────────────────────────────────────

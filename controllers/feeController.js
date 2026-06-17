@@ -8,8 +8,15 @@ const Student = require('../models/Student');
 // ─────────────────────────────────────────────
 
 const VALID_FEE_TYPES    = ['School', 'Residency', 'DayCare'];
-const VALID_FEE_PLANS    = ['Annual', 'Monthly', 'Weekly', 'Daily'];
-const VALID_PAYMENT_MODES = ['Cash', 'Cheque', 'Online', 'UPI'];
+const VALID_FEE_PLANS = [
+  'Annual',
+  'HalfYearly',
+  'Quarterly',
+  'Monthly',
+  'Weekly',
+  'Daily',
+];
+const VALID_PAYMENT_MODES = ['Cash', 'Bank transfer'];
 
 /** Mongoose CastError means the given id string is not a valid ObjectId */
 const isBadId = (err) => err.name === 'CastError' && err.kind === 'ObjectId';
@@ -30,7 +37,16 @@ exports.getFeeTypes = async (req, res) => {
 
 exports.createFeeType = async (req, res) => {
   try {
-    const { description, type, annual, monthly, weekly, daily } = req.body;
+    const {
+  description,
+  type,
+  annual,
+  halfYearly,
+  quarterly,
+  monthly,
+  weekly,
+  daily,
+} = req.body;
 
     // ── Required field ──────────────────────────────────────────
     if (!description || !description.trim()) {
@@ -45,7 +61,14 @@ exports.createFeeType = async (req, res) => {
     }
 
     // ── No negative amounts ─────────────────────────────────────
-    const amounts = { annual, monthly, weekly, daily };
+    const amounts = {
+  annual,
+  halfYearly,
+  quarterly,
+  monthly,
+  weekly,
+  daily,
+};
     for (const [key, val] of Object.entries(amounts)) {
       if (val !== undefined && val !== '' && Number(val) < 0) {
         return res.status(400).json({ message: `${key} amount cannot be negative.` });
@@ -80,7 +103,16 @@ exports.createFeeType = async (req, res) => {
 
 exports.updateFeeType = async (req, res) => {
   try {
-    const { description, type, annual, monthly, weekly, daily } = req.body;
+    const {
+  description,
+  type,
+  annual,
+  halfYearly,
+  quarterly,
+  monthly,
+  weekly,
+  daily,
+} = req.body;
 
     // ── Valid ObjectId ──────────────────────────────────────────
     const feeType = await FeeType.findOne({
@@ -99,7 +131,14 @@ exports.updateFeeType = async (req, res) => {
     }
 
     // ── No negative amounts ─────────────────────────────────────
-    const amounts = { annual, monthly, weekly, daily };
+    const amounts = {
+  annual,
+  halfYearly,
+  quarterly,
+  monthly,
+  weekly,
+  daily,
+};
     for (const [key, val] of Object.entries(amounts)) {
       if (val !== undefined && val !== '' && Number(val) < 0) {
         return res.status(400).json({ message: `${key} amount cannot be negative.` });

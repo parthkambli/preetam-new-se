@@ -1,4 +1,4 @@
-const TimeTable = require('../models/TimeTable');
+const TimeTable = require('../models/schoolPeriod');
 
 const handleError = (res, err, customMessage = 'Server error') => {
   console.error('[TimeTableController Error]', err);
