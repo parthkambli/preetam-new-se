@@ -18,7 +18,7 @@ const feeAllotmentSchema = new mongoose.Schema({
   description: String,           // e.g. "Senior Citizen Happiness School"
   feePlan: {
     type: String,
-    enum: ['Daily', 'Weekly', 'Monthly', 'Annual'],
+    enum: ['Daily', 'Weekly', 'Monthly', 'Quarterly', 'HalfYearly', 'Annual'],
     required: true
   },
   amount: {

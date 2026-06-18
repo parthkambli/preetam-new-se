@@ -926,7 +926,13 @@ const FEE_PLAN_DURATION = {
 
 const FEE_PLAN_MAP = {
   daily: 'Daily', weekly: 'Weekly', monthly: 'Monthly',
-  quarterly: 'Quarterly', halfYearly: 'HalfYearly', annual: 'Annual'
+  quarterly: 'Quarterly', halfyearly: 'HalfYearly', annual: 'Annual'
+};
+
+// Reverse map: schema (title-case) → FeeType field name
+const FEE_TYPE_FIELD_MAP = {
+  Daily: 'daily', Weekly: 'weekly', Monthly: 'monthly',
+  Quarterly: 'quarterly', HalfYearly: 'halfYearly', Annual: 'annual'
 };
 
 function calcEndDate(startDate, feePlan) {
@@ -1282,7 +1288,7 @@ if (req.files) {
         return res.status(400).json({ message: 'Selected fee type not found in this organization.' });
       }
 
-      const planKey = admissionData.feePlan.toLowerCase();
+      const planKey = FEE_TYPE_FIELD_MAP[admissionData.feePlan] || admissionData.feePlan.toLowerCase();
       feeAmount = feeType[planKey] || 0;
       discount = Math.max(0, Number(admissionData.discount) || 0);
       totalFee = Math.max(0, feeAmount - discount);
@@ -1600,7 +1606,7 @@ if (req.files) {
         if (!feeType) {
           return res.status(400).json({ message: 'Selected fee type not found in this organization.' });
         }
-        const planKey = feePlan.toLowerCase();
+        const planKey = FEE_TYPE_FIELD_MAP[feePlan] || feePlan.toLowerCase();
         let feeAmount = feeType[planKey] || 0;
         let totalFee = Math.max(0, feeAmount - Math.max(0, discount));
 

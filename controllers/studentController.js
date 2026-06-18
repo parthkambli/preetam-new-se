@@ -1,4 +1,5 @@
 const Student = require('../models/Student');
+const SchoolAdmission = require('../models/SchoolAdmission');
 
 /**
  * @desc    Get all students with filtering
@@ -175,6 +176,22 @@ exports.updateEmergencyContact = async (req, res) => {
 
     await student.save();
 
+    await SchoolAdmission.findOneAndUpdate(
+  {
+    _id: student.admissionId,
+    organizationId: req.organizationId
+  },
+  {
+    primaryContactName: student.primaryContactName,
+    primaryRelation: student.primaryRelation,
+    primaryPhone: student.primaryPhone,
+    secondaryContactName: student.secondaryContactName,
+    secondaryRelation: student.secondaryRelation,
+    secondaryPhone: student.secondaryPhone,
+    updatedAt: Date.now()
+  }
+);
+
     res.json({
       success: true,
       message: 'Emergency contact updated successfully',
@@ -215,6 +232,22 @@ exports.clearEmergencyContact = async (req, res) => {
     student.secondaryPhone = null;
 
     await student.save();
+
+    await SchoolAdmission.findOneAndUpdate(
+  {
+    _id: student.admissionId,
+    organizationId: req.organizationId
+  },
+  {
+    primaryContactName: null,
+    primaryRelation: null,
+    primaryPhone: null,
+    secondaryContactName: null,
+    secondaryRelation: null,
+    secondaryPhone: null,
+    updatedAt: Date.now()
+  }
+);
 
     res.json({ success: true, message: 'Emergency contact cleared successfully' });
   } catch (err) {

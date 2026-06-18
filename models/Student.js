@@ -276,7 +276,7 @@ const studentSchema = new mongoose.Schema({
   // Academic & Activity Details
   feePlan: {
     type: String,
-    enum: ['Daily', 'Weekly', 'Monthly', 'Annual'],
+    enum: ['Daily', 'Weekly', 'Monthly', 'Quarterly', 'HalfYearly', 'Annual'],
     default: 'Monthly'
   },
   amount: {
