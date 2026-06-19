@@ -19,6 +19,14 @@ const serviceBookingSchema = new mongoose.Schema({
   totalFee: Number,
 }, { _id: false });
 
+const paymentHistorySchema = new mongoose.Schema({
+  amount: { type: Number, required: true },
+  paymentDate: Date,
+  paymentMode: { type: String, enum: ['Cash', 'Bank Transfer'] },
+  description: String,
+  responsibleStaff: { type: mongoose.Schema.Types.ObjectId, ref: 'FitnessStaff' },
+}, { _id: false });
+
 const schoolAdmissionSchema = new mongoose.Schema({
   // Personal Information
   fullName: {
@@ -288,6 +296,10 @@ const schoolAdmissionSchema = new mongoose.Schema({
   paymentMode: {
     type: String,
     enum: ['Cash', 'Bank Transfer']
+  },
+  paymentHistory: {
+    type: [paymentHistorySchema],
+    default: []
   },
   nextDueDate: {
     type: Date

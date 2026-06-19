@@ -4,7 +4,8 @@ const {
   getAdmissionById,
   createAdmission,
   updateAdmission,
-  deleteAdmission
+  deleteAdmission,
+  collectPayment
 } = require('../controllers/schoolAdmissionController');
 const auth = require('../middleware/auth');
 const { upload, handleUpload } = require('../middleware/upload');
@@ -48,5 +49,10 @@ router.put(
 // @desc    Delete admission by ID
 // @access  Private
 router.delete('/:id', auth, deleteAdmission);
+
+// POST /api/school/admission/:id/collect-payment
+// @desc    Collect pending fee payment for an admission
+// @access  Private
+router.post('/:id/collect-payment', auth, collectPayment);
 
 module.exports = router;

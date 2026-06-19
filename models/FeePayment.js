@@ -26,6 +26,10 @@ const feePaymentSchema = new mongoose.Schema({
   },
   transactionId: String,
   remarks: String,
+  responsibleStaff: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'FitnessStaff'
+  },
 
   organizationId: { type: String, required: true },
   createdAt: { type: Date, default: Date.now }

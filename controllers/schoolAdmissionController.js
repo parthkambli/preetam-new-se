@@ -892,11 +892,14 @@ const Student = require('../models/Student');
 const User = require('../models/User');
 const SchoolEnquiry = require('../models/SchoolEnquiry');
 const FeeAllotment = require('../models/FeeAllotment');
+const FeePayment = require('../models/FeePayment');
 const FeeType = require('../models/FeeType');
 const TimeTable = require('../models/schoolPeriod');
 const Activity = require('../models/Activity');
 // const Staff = require('../models/Staff');
 const FitnessStaff = require('../models/FitnessStaff');
+const Service = require('../models/SchoolService');
+const SchoolServiceBooking = require('../models/SchoolServiceBooking');
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -1364,6 +1367,31 @@ if (req.files) {
       return res.status(400).json({ message: refErrors.join(' ') });
     }
 
+    // ── Date-aware capacity check for services ──────────────────────────
+    if (rawServices && rawServices.length > 0) {
+      for (const s of rawServices) {
+        const svc = await Service.findById(s.serviceId).lean();
+        if (!svc) {
+          return res.status(400).json({ message: 'Service not found.' });
+        }
+        if (!svc.isActive) {
+          return res.status(400).json({ message: `"${svc.serviceName}" is not active.` });
+        }
+        const overlapping = await SchoolServiceBooking.countDocuments({
+          serviceId: s.serviceId,
+          organizationId: req.organizationId,
+          status: 'Active',
+          startDate: { $lt: new Date(s.endDate) },
+          endDate: { $gt: new Date(s.startDate) },
+        });
+        if (overlapping >= svc.capacity) {
+          return res.status(409).json({
+            message: `"${svc.serviceName}" is fully booked (${overlapping}/${svc.capacity}) for the selected dates.`,
+          });
+        }
+      }
+    }
+
     // ── Save admission ─────────────────────────────────────────────────────
     const admission = new SchoolAdmission({
       ...admissionData,
@@ -1415,9 +1443,10 @@ if (req.files) {
     await student.save();
 
     // ── Auto-create fee allotment ──────────────────────────────────────────
+    let feeAllotment = null;
     if (admission.feePlan && admission.totalFee > 0) {
       try {
-        const feeAllotment = new FeeAllotment({
+        feeAllotment = await FeeAllotment.create({
           studentId:   student._id,
           admissionId: admission._id,
           feeTypeId:   admission.feeTypeId,
@@ -1428,9 +1457,80 @@ if (req.files) {
           status:      admission.paymentStatus === 'Paid' ? 'Paid' : 'Pending',
           organizationId: req.organizationId
         });
-        await feeAllotment.save();
       } catch (allotmentErr) {
         console.error('⚠️ Failed to create Fee Allotment:', allotmentErr.message);
+      }
+    }
+
+    // ── Create SchoolServiceBooking records for each service ───────────
+    if (rawServices && rawServices.length > 0) {
+      for (const s of rawServices) {
+        try {
+          const dates = [];
+          const cursor = new Date(s.startDate);
+          const end = new Date(s.endDate);
+          while (cursor < end) {
+            dates.push(new Date(cursor));
+            cursor.setDate(cursor.getDate() + 1);
+          }
+
+          await SchoolServiceBooking.create({
+            admissionId: admission._id,
+            serviceId: s.serviceId,
+            studentName: admission.fullName,
+            startDate: new Date(s.startDate),
+            endDate: new Date(s.endDate),
+            duration: Number(s.days) || 0,
+            perDayFee: Number(s.perDayFee) || 0,
+            totalFee: Number(s.totalFee) || 0,
+            paidAmount: 0,
+            isFromAdmission: true,
+            responsibleStaff: admissionData.responsibleStaffId || null,
+            organizationId: req.organizationId,
+            status: 'Active',
+            dates,
+          });
+
+          await Service.findByIdAndUpdate(s.serviceId, { $inc: { bookedCount: 1 } });
+        } catch (bookingErr) {
+          console.error(`⚠️ Failed to create booking for service ${s.serviceId}:`, bookingErr.message);
+        }
+      }
+    }
+
+    // ── If paidAmount > 0, create FeePayment + push to paymentHistory ──
+    if (paidAmount > 0) {
+      try {
+        await FeePayment.create({
+          studentId:   student._id,
+          admissionId: admission._id,
+          allotmentId: feeAllotment?._id,
+          amount:      paidAmount,
+          paymentMode: admissionData.paymentMode || 'Cash',
+          paymentDate: admissionData.paymentDate || new Date(),
+          description: admission.feeDescription || 'Admission Fee',
+          responsibleStaff: admissionData.responsibleStaffId || null,
+          organizationId: req.organizationId
+        });
+
+        admission.paymentHistory.push({
+          amount: paidAmount,
+          paymentDate: admissionData.paymentDate || new Date(),
+          paymentMode: admissionData.paymentMode || 'Cash',
+          description: admission.feeDescription || 'Admission Fee',
+          responsibleStaff: admissionData.responsibleStaffId || null,
+        });
+
+        const allPayments = await FeePayment.aggregate([
+          { $match: { admissionId: admission._id, organizationId: req.organizationId } },
+          { $group: { _id: null, total: { $sum: '$amount' } } },
+        ]);
+        const totalPaid = allPayments[0]?.total || 0;
+        admission.paidAmount = totalPaid;
+        admission.remainingAmount = Math.max(0, (admission.totalFee || 0) - totalPaid);
+        await admission.save();
+      } catch (paymentErr) {
+        console.error('⚠️ Failed to create FeePayment:', paymentErr.message);
       }
     }
 
@@ -1716,3 +1816,141 @@ exports.deleteAdmission = async (req, res) => {
     res.status(500).json({ message: 'Server error while deleting admission.' });
   }
 };
+
+/**
+ * @desc    Collect pending fee payment for an admission
+ * @route   POST /api/school/admission/:id/collect-payment
+ */
+exports.collectPayment = async (req, res) => {
+  try {
+    const { amount, paymentMode, paymentDate, description, responsibleStaff } = req.body;
+
+    if (!amount || Number(amount) <= 0) {
+      return res.status(400).json({ message: 'Valid payment amount is required.' });
+    }
+    if (!paymentDate) {
+      return res.status(400).json({ message: 'Payment date is required.' });
+    }
+    if (paymentMode && !VALID_PAYMENT_MODES.includes(paymentMode)) {
+      return res.status(400).json({ message: `Invalid payment mode. Must be one of: ${VALID_PAYMENT_MODES.join(', ')}.` });
+    }
+
+    const numAmount = Number(amount);
+    const pDate = new Date(paymentDate);
+    if (isNaN(pDate.getTime())) {
+      return res.status(400).json({ message: 'Invalid payment date.' });
+    }
+
+    // ── Find admission ───────────────────────────────────────────
+    const admission = await SchoolAdmission.findOne({
+      _id: req.params.id,
+      organizationId: req.organizationId,
+    });
+    if (!admission) {
+      return res.status(404).json({ message: 'Admission not found.' });
+    }
+
+    // ── Find Student linked to this admission ────────────────────
+    let student = await Student.findOne({ admissionId: admission._id });
+    if (!student) {
+      return res.status(400).json({ message: 'No student record linked to this admission.' });
+    }
+
+    // ── Find or create FeeAllotment ──────────────────────────────
+    let allotment = await FeeAllotment.findOne({
+      studentId: student._id,
+      admissionId: admission._id,
+      organizationId: req.organizationId,
+    });
+    if (!allotment) {
+      allotment = await FeeAllotment.create({
+        studentId: student._id,
+        admissionId: admission._id,
+        feeTypeId: admission.feeTypeId || undefined,
+        description: description || admission.feeDescription || 'School Fee',
+        feePlan: admission.feePlan || 'Monthly',
+        amount: admission.totalFee || numAmount,
+        dueDate: admission.nextDueDate || null,
+        organizationId: req.organizationId,
+        status: 'Pending',
+      });
+    }
+
+    // ── Check remaining balance ──────────────────────────────────
+    const totalPaidResult = await FeePayment.aggregate([
+      { $match: { allotmentId: allotment._id, organizationId: req.organizationId } },
+      { $group: { _id: null, total: { $sum: '$amount' } } },
+    ]);
+    const alreadyPaid = totalPaidResult[0]?.total || 0;
+    const totalFee = allotment.amount;
+    const remaining = totalFee - alreadyPaid;
+
+    if (remaining <= 0) {
+      return res.status(409).json({ message: 'This fee is already fully paid.' });
+    }
+    if (numAmount > remaining) {
+      return res.status(400).json({
+        message: `Payment of ₹${numAmount.toLocaleString('en-IN')} exceeds the remaining balance of ₹${remaining.toLocaleString('en-IN')}.`,
+      });
+    }
+
+    // ── Create FeePayment ────────────────────────────────────────
+    const payment = await FeePayment.create({
+      studentId: student._id,
+      admissionId: admission._id,
+      allotmentId: allotment._id,
+      amount: numAmount,
+      paymentMode: paymentMode || 'Cash',
+      paymentDate: pDate,
+      description: description || allotment.description || '',
+      responsibleStaff: responsibleStaff || null,
+      organizationId: req.organizationId,
+    });
+
+    // ── Update allotment status ──────────────────────────────────
+    const newPaid = alreadyPaid + numAmount;
+    if (newPaid >= totalFee) {
+      await FeeAllotment.findByIdAndUpdate(allotment._id, { status: 'Paid' });
+    } else {
+      await FeeAllotment.findByIdAndUpdate(allotment._id, { status: 'Partial' });
+    }
+
+    // ── Sync to SchoolAdmission paymentHistory + amounts ─────────
+    admission.paymentHistory.push({
+      amount: numAmount,
+      paymentDate: pDate,
+      paymentMode: paymentMode || 'Cash',
+      description: description || allotment.description || '',
+      responsibleStaff: responsibleStaff || null,
+    });
+
+    const allPayments = await FeePayment.aggregate([
+      { $match: { admissionId: admission._id, organizationId: req.organizationId } },
+      { $group: { _id: null, total: { $sum: '$amount' } } },
+    ]);
+    const totalPaidForAdmission = allPayments[0]?.total || 0;
+    admission.paidAmount = totalPaidForAdmission;
+    admission.remainingAmount = Math.max(0, (admission.totalFee || 0) - totalPaidForAdmission);
+    await admission.save();
+
+    const populated = await FeePayment.findById(payment._id)
+      .populate('responsibleStaff', 'fullName');
+
+    res.status(201).json({
+      payment: populated,
+      admission: {
+        _id: admission._id,
+        paidAmount: admission.paidAmount,
+        remainingAmount: admission.remainingAmount,
+        totalFee: admission.totalFee,
+      },
+    });
+  } catch (err) {
+    if (err.name === 'CastError' && err.kind === 'ObjectId') {
+      return res.status(400).json({ message: 'Invalid admission ID format.' });
+    }
+    console.error('collectPayment error:', err.message);
+    res.status(500).json({ message: 'Failed to record payment. Please try again.' });
+  }
+};
+

@@ -1,6 +1,7 @@
 const FeeType = require('../models/FeeType');
 const FeeAllotment = require('../models/FeeAllotment');
 const FeePayment = require('../models/FeePayment');
+const SchoolAdmission = require('../models/SchoolAdmission');
 const Student = require('../models/Student');
 
 // ─────────────────────────────────────────────
@@ -485,6 +486,7 @@ exports.getPayments = async (req, res) => {
   try {
     const payments = await FeePayment.find({ organizationId: req.organizationId })
       .populate('studentId', 'fullName studentId')
+      .populate('responsibleStaff', 'fullName')
       .sort({ paymentDate: -1 });
     res.json(payments);
   } catch (err) {
@@ -494,7 +496,7 @@ exports.getPayments = async (req, res) => {
 
 exports.addPayment = async (req, res) => {
   try {
-    const { studentId, allotmentId, amount, paymentMode, paymentDate } = req.body;
+    const { studentId, allotmentId, amount, paymentMode, paymentDate, description, responsibleStaff } = req.body;
 
     // ── Required fields ─────────────────────────────────────────
     if (!studentId) {
@@ -598,11 +600,37 @@ exports.addPayment = async (req, res) => {
     if (newPaid >= totalFee) {
       await FeeAllotment.findByIdAndUpdate(allotment._id, { status: 'Paid' });
     } else {
-      // Mark as partially paid if not already
       await FeeAllotment.findByIdAndUpdate(allotment._id, { status: 'Partial' });
     }
 
-    const populated = await payment.populate('studentId', 'fullName studentId');
+    // ── Sync to SchoolAdmission paymentHistory + amounts ─────────
+    if (allotment.admissionId) {
+      const admission = await SchoolAdmission.findById(allotment.admissionId);
+      if (admission) {
+        admission.paymentHistory.push({
+          amount: numAmount,
+          paymentDate: pDate,
+          paymentMode: paymentMode || 'Cash',
+          description: description || allotment.description || '',
+          responsibleStaff: responsibleStaff || null,
+        });
+
+        const allPayments = await FeePayment.aggregate([
+          { $match: { admissionId: allotment.admissionId, organizationId: req.organizationId } },
+          { $group: { _id: null, total: { $sum: '$amount' } } },
+        ]);
+        const totalPaidForAdmission = allPayments[0]?.total || 0;
+        admission.paidAmount = totalPaidForAdmission;
+        admission.remainingAmount = Math.max(0, (admission.totalFee || 0) - totalPaidForAdmission);
+
+        await admission.save();
+      }
+    }
+
+    const populated = await payment.populate([
+      { path: 'studentId', select: 'fullName studentId' },
+      { path: 'responsibleStaff', select: 'fullName' },
+    ]);
     res.status(201).json({
       payment: populated,
       summary: {
