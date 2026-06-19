@@ -21,6 +21,14 @@ const timeTableSchema = new mongoose.Schema({
     required: [true, 'Capacity is required'],
     min: [1, 'Capacity must be at least 1'],
   },
+  dayCounts: {
+    monday:    { type: Number, default: 0 },
+    tuesday:   { type: Number, default: 0 },
+    wednesday: { type: Number, default: 0 },
+    thursday:  { type: Number, default: 0 },
+    friday:    { type: Number, default: 0 },
+    saturday:  { type: Number, default: 0 },
+  },
   organizationId: {
     type: String,
     required: true,

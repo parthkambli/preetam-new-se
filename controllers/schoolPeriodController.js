@@ -214,10 +214,28 @@ exports.updatePeriod = async (req, res) => {
       });
     }
 
+    if (req.body.capacity !== undefined) {
+      const newCap = Number(req.body.capacity);
+      const maxDay = Math.max(
+        period.dayCounts?.monday || 0,
+        period.dayCounts?.tuesday || 0,
+        period.dayCounts?.wednesday || 0,
+        period.dayCounts?.thursday || 0,
+        period.dayCounts?.friday || 0,
+        period.dayCounts?.saturday || 0
+      );
+      if (newCap < maxDay) {
+        return res.status(400).json({
+          success: false,
+          message: `Capacity cannot be less than the highest booked day (${maxDay}).`
+        });
+      }
+      period.capacity = newCap;
+    }
+
     if (req.body.name !== undefined) period.name = req.body.name.trim();
     if (req.body.startTime !== undefined) period.startTime = req.body.startTime.trim();
     if (req.body.endTime !== undefined) period.endTime = req.body.endTime.trim();
-    if (req.body.capacity !== undefined) period.capacity = Number(req.body.capacity);
 
     await period.save();
 
@@ -233,7 +251,7 @@ exports.updatePeriod = async (req, res) => {
 
 exports.deletePeriod = async (req, res) => {
   try {
-    const period = await TimeTable.findOneAndDelete({
+    const period = await TimeTable.findOne({
       _id: req.params.id,
       organizationId: req.organizationId,
     });
@@ -244,6 +262,23 @@ exports.deletePeriod = async (req, res) => {
         message: 'Period not found.',
       });
     }
+
+    const maxDay = Math.max(
+      period.dayCounts?.monday || 0,
+      period.dayCounts?.tuesday || 0,
+      period.dayCounts?.wednesday || 0,
+      period.dayCounts?.thursday || 0,
+      period.dayCounts?.friday || 0,
+      period.dayCounts?.saturday || 0
+    );
+    if (maxDay > 0) {
+      return res.status(400).json({
+        success: false,
+        message: `Cannot delete period: ${maxDay} student(s) are still assigned to it.`,
+      });
+    }
+
+    await TimeTable.findByIdAndDelete(period._id);
 
     res.json({
       success: true,

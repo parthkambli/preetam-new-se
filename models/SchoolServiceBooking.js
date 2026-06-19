@@ -58,7 +58,7 @@ const schoolServiceBookingSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ['Active', 'Cancelled'],
+    enum: ['Active', 'Cancelled', 'Expired'],
     default: 'Active',
   },
   dates: [Date],

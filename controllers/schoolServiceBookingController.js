@@ -5,6 +5,20 @@ const FeePayment = require('../models/FeePayment');
 const FeeAllotment = require('../models/FeeAllotment');
 const Student = require('../models/Student');
 
+async function expireOverdueBookings(organizationId) {
+  const now = new Date();
+  const expired = await SchoolServiceBooking.find({
+    organizationId,
+    status: 'Active',
+    endDate: { $lt: now },
+  });
+  for (const booking of expired) {
+    booking.status = 'Expired';
+    await booking.save();
+    await Service.findByIdAndUpdate(booking.serviceId, { $inc: { bookedCount: -1 } });
+  }
+}
+
 /**
  * @desc    Book a service for an existing admission (separate collection)
  * @route   POST /api/school/service-bookings
@@ -25,6 +39,9 @@ exports.createBooking = async (req, res) => {
 
     const eDate = new Date(sDate);
     eDate.setDate(eDate.getDate() + numDuration);
+
+    // ── Expire overdue bookings so counts are current ────────────
+    await expireOverdueBookings(req.organizationId);
 
     // ── Find admission ───────────────────────────────────────────
     const admission = await SchoolAdmission.findOne({
@@ -93,6 +110,9 @@ exports.createBooking = async (req, res) => {
       organizationId: req.organizationId,
       dates,
     });
+
+    // ── Increment service bookedCount ────────────────────────────
+    await Service.findByIdAndUpdate(service._id, { $inc: { bookedCount: 1 } });
 
     // ── Push to admission.services (denormalized copy) ──────────
     admission.services.push({
@@ -207,6 +227,8 @@ exports.createBooking = async (req, res) => {
  */
 exports.getBookings = async (req, res) => {
   try {
+    await expireOverdueBookings(req.organizationId);
+
     const { page = 1, limit = 10, serviceId, dateFrom, dateTo, search } = req.query;
     const pageNum = Math.max(1, parseInt(page, 10) || 1);
     const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10) || 10));
@@ -291,12 +313,16 @@ exports.getBookings = async (req, res) => {
  */
 exports.cancelBooking = async (req, res) => {
   try {
+    await expireOverdueBookings(req.organizationId);
+
     const booking = await SchoolServiceBooking.findOneAndUpdate(
-      { _id: req.params.id, organizationId: req.organizationId },
+      { _id: req.params.id, organizationId: req.organizationId, status: 'Active' },
       { status: 'Cancelled' },
       { new: true }
     );
-    if (!booking) return res.status(404).json({ message: 'Booking not found.' });
+    if (!booking) return res.status(404).json({ message: 'Active booking not found.' });
+
+    await Service.findByIdAndUpdate(booking.serviceId, { $inc: { bookedCount: -1 } });
 
     res.json({ message: 'Booking cancelled successfully.', booking });
   } catch (err) {

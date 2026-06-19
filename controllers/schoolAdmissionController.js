@@ -954,6 +954,40 @@ function parseJSONField(val) {
   return val;
 }
 
+const DAY_FIELDS = ['mondayActivityId', 'tuesdayActivityId', 'wednesdayActivityId', 'thursdayActivityId', 'fridayActivityId', 'saturdayActivityId'];
+const DAY_NAMES = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+
+function computeTimetableDayCounts(timetable) {
+  const counts = {};
+  for (const row of (timetable || [])) {
+    if (!row.periodId) continue;
+    const pid = row.periodId.toString();
+    if (!counts[pid]) counts[pid] = { monday: 0, tuesday: 0, wednesday: 0, thursday: 0, friday: 0, saturday: 0 };
+    for (let i = 0; i < DAY_FIELDS.length; i++) {
+      if (row[DAY_FIELDS[i]]) counts[pid][DAY_NAMES[i]]++;
+    }
+  }
+  return counts;
+}
+
+function diffTimetableDayCounts(oldTt, newTt) {
+  const oldCounts = computeTimetableDayCounts(oldTt);
+  const newCounts = computeTimetableDayCounts(newTt);
+  const allPids = new Set([...Object.keys(oldCounts), ...Object.keys(newCounts)]);
+  const diff = {};
+  for (const pid of allPids) {
+    const old = oldCounts[pid] || { monday: 0, tuesday: 0, wednesday: 0, thursday: 0, friday: 0, saturday: 0 };
+    const cur = newCounts[pid] || { monday: 0, tuesday: 0, wednesday: 0, thursday: 0, friday: 0, saturday: 0 };
+    const d = {};
+    for (const day of DAY_NAMES) {
+      const delta = (cur[day] || 0) - (old[day] || 0);
+      if (delta !== 0) d[day] = delta;
+    }
+    if (Object.keys(d).length > 0) diff[pid] = d;
+  }
+  return diff;
+}
+
 // Fields that exist on both Admission and Student and should always stay in sync
 const STUDENT_SYNC_FIELDS = [
   'fullName', 'age', 'gender', 'dob', 'aadhaar', 'mobile', 'fullAddress',
@@ -1350,14 +1384,35 @@ if (req.files) {
           }).lean();
           if (!p) refErrors.push(`Period at row ${i + 1} not found.`);
         }
-        const dayFields = ['mondayActivityId', 'tuesdayActivityId', 'wednesdayActivityId', 'thursdayActivityId', 'fridayActivityId', 'saturdayActivityId'];
-        for (const df of dayFields) {
+        for (const df of DAY_FIELDS) {
           if (row[df]) {
             const a = await Activity.findOne({
               _id: row[df],
               organizationId: req.organizationId
             }).lean();
             if (!a) refErrors.push(`Activity for ${df} at row ${i + 1} not found.`);
+          }
+        }
+      }
+      // ── Per-day capacity check ─────────────────────────────────────────
+      const newCounts = computeTimetableDayCounts(rawTimetable);
+      const periodDocs = await TimeTable.find({
+        _id: { $in: Object.keys(newCounts) },
+        organizationId: req.organizationId
+      }).lean();
+      const periodMap = {};
+      for (const p of periodDocs) periodMap[p._id.toString()] = p;
+      for (const [pid, days] of Object.entries(newCounts)) {
+        const period = periodMap[pid];
+        if (!period) continue;
+        for (const day of DAY_NAMES) {
+          if (days[day] > 0) {
+            const current = period.dayCounts?.[day] || 0;
+            if (current + days[day] > period.capacity) {
+              refErrors.push(
+                `"${period.name}" on ${day} has only ${period.capacity - current} seat(s) left but needs ${days[day]}.`
+              );
+            }
           }
         }
       }
@@ -1401,6 +1456,20 @@ if (req.files) {
     });
 
     await admission.save();
+
+    // ── Increment period dayCounts for timetable ──────────────────────────
+    if (rawTimetable && rawTimetable.length > 0) {
+      const newCounts = computeTimetableDayCounts(rawTimetable);
+      for (const [pid, days] of Object.entries(newCounts)) {
+        const inc = {};
+        for (const day of DAY_NAMES) {
+          if (days[day] > 0) inc[`dayCounts.${day}`] = days[day];
+        }
+        if (Object.keys(inc).length > 0) {
+          await TimeTable.findByIdAndUpdate(pid, { $inc: inc });
+        }
+      }
+    }
 
     // ── Update enquiry status ──────────────────────────────────────────────
     if (admissionData.enquiryId) {
@@ -1738,6 +1807,42 @@ if (req.files) {
       updateData.endDate = calcEndDate(startDate, feePlan);
     }
 
+    // ── Capture timetable diff before applying updates ─────────────────
+    let timetableDiff = null;
+    if (updateData.timetable !== undefined) {
+      timetableDiff = diffTimetableDayCounts(admission.timetable, updateData.timetable);
+      // Check capacity for additions
+      const additions = {};
+      for (const [pid, days] of Object.entries(timetableDiff)) {
+        for (const [day, delta] of Object.entries(days)) {
+          if (delta > 0) {
+            if (!additions[pid]) additions[pid] = {};
+            additions[pid][day] = (additions[pid][day] || 0) + delta;
+          }
+        }
+      }
+      if (Object.keys(additions).length > 0) {
+        const periodDocs = await TimeTable.find({
+          _id: { $in: Object.keys(additions) },
+          organizationId: req.organizationId
+        }).lean();
+        const periodMap = {};
+        for (const p of periodDocs) periodMap[p._id.toString()] = p;
+        for (const [pid, days] of Object.entries(additions)) {
+          const period = periodMap[pid];
+          if (!period) continue;
+          for (const [day, needed] of Object.entries(days)) {
+            const current = period.dayCounts?.[day] || 0;
+            if (current + needed > period.capacity) {
+              return res.status(409).json({
+                message: `"${period.name}" on ${day} has only ${period.capacity - current} seat(s) left but needs ${needed}.`
+              });
+            }
+          }
+        }
+      }
+    }
+
     // ── Apply updates to admission ─────────────────────────────────────────
     const updateFields = { ...updateData, updatedAt: Date.now() };
     delete updateFields._id;
@@ -1746,6 +1851,19 @@ if (req.files) {
 
     Object.assign(admission, updateFields);
     await admission.save();
+
+    // ── Apply timetable dayCount changes ──────────────────────────
+    if (timetableDiff) {
+      for (const [pid, days] of Object.entries(timetableDiff)) {
+        const inc = {};
+        for (const [day, delta] of Object.entries(days)) {
+          inc[`dayCounts.${day}`] = delta;
+        }
+        if (Object.keys(inc).length > 0) {
+          await TimeTable.findByIdAndUpdate(pid, { $inc: inc });
+        }
+      }
+    }
 
     // ── Sync Student record ────────────────────────────────────────────────
     // Build a Student update object containing only the fields that were
@@ -1798,7 +1916,7 @@ if (req.files) {
  */
 exports.deleteAdmission = async (req, res) => {
   try {
-    const admission = await SchoolAdmission.findOneAndDelete({
+    const admission = await SchoolAdmission.findOne({
       _id: req.params.id,
       organizationId: req.organizationId
     });
@@ -1806,6 +1924,20 @@ exports.deleteAdmission = async (req, res) => {
     if (!admission) {
       return res.status(404).json({ message: 'Admission not found.' });
     }
+
+    // Decrement period dayCounts for the deleted timetable
+    const counts = computeTimetableDayCounts(admission.timetable);
+    for (const [pid, days] of Object.entries(counts)) {
+      const dec = {};
+      for (const day of DAY_NAMES) {
+        if (days[day] > 0) dec[`dayCounts.${day}`] = -days[day];
+      }
+      if (Object.keys(dec).length > 0) {
+        await TimeTable.findByIdAndUpdate(pid, { $inc: dec });
+      }
+    }
+
+    await SchoolAdmission.findByIdAndDelete(admission._id);
 
     res.json({ message: 'Admission deleted successfully.' });
   } catch (err) {
