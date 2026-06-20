@@ -145,7 +145,7 @@
 //           feePlan: admission.feePlan,
 //           amount: admission.amount,
 //           dueDate: admission.nextDueDate || null,
-//           status: admission.paymentStatus === 'Paid' ? 'Paid' : 'Pending',
+//                     status:      paidAmount > 0 && admission.paymentStatus === 'Paid' ? 'Paid' : 'Pending',
 //           organizationId: req.organizationId
 //         });
 
@@ -1010,13 +1010,22 @@ const STUDENT_SYNC_FIELDS = [
  */
 exports.getAllAdmissions = async (req, res) => {
   try {
-    const { admissionId, name, mobile, feePlan, status } = req.query;
+    const page = Math.max(parseInt(req.query.page) || 1, 1);
+    const limit = Math.max(parseInt(req.query.limit) || 10, 1);
+    const skip = (page - 1) * limit;
+
+    const { search, feePlan, status, paymentFilter } = req.query;
 
     let query = { organizationId: req.organizationId };
 
-    if (admissionId) query.admissionId = { $regex: admissionId.trim(), $options: 'i' };
-    if (name)        query.fullName    = { $regex: name.trim(), $options: 'i' };
-    if (mobile)      query.mobile      = { $regex: mobile.trim(), $options: 'i' };
+    if (search) {
+      const s = search.trim();
+      query.$or = [
+        { admissionId: { $regex: s, $options: 'i' } },
+        { fullName:    { $regex: s, $options: 'i' } },
+        { mobile:      { $regex: s, $options: 'i' } },
+      ];
+    }
 
     if (feePlan) {
       if (!VALID_FEE_PLANS.includes(feePlan)) {
@@ -1027,8 +1036,31 @@ exports.getAllAdmissions = async (req, res) => {
 
     if (status) query.status = status;
 
-    const admissions = await SchoolAdmission.find(query).sort({ createdAt: -1 });
-    res.json(admissions);
+    if (paymentFilter === 'Paid') {
+      query.remainingAmount = { $lte: 0 };
+    } else if (paymentFilter === 'Pending') {
+      query.remainingAmount = { $gt: 0 };
+    }
+
+    const totalRecords = await SchoolAdmission.countDocuments(query);
+    const totalPages = Math.ceil(totalRecords / limit);
+
+    const admissions = await SchoolAdmission.find(query)
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit);
+
+    res.json({
+      data: admissions,
+      pagination: {
+        totalRecords,
+        currentPage: page,
+        totalPages,
+        limit,
+        hasNextPage: page < totalPages,
+        hasPrevPage: page > 1,
+      },
+    });
   } catch (err) {
     console.error('Error fetching admissions:', err.message);
     res.status(500).json({ message: 'Server error while fetching admissions.' });

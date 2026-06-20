@@ -484,12 +484,69 @@ exports.updateAllotment = async (req, res) => {
 
 exports.getPayments = async (req, res) => {
   try {
-    const payments = await FeePayment.find({ organizationId: req.organizationId })
+    const page = Math.max(parseInt(req.query.page) || 1, 1);
+    const limit = Math.max(parseInt(req.query.limit) || 10, 1);
+    const skip = (page - 1) * limit;
+
+    const { participant, type, mode, staff, fromDate, toDate } = req.query;
+
+    const query = { organizationId: req.organizationId };
+
+    if (fromDate || toDate) {
+      query.paymentDate = {};
+      if (fromDate) query.paymentDate.$gte = new Date(fromDate);
+      if (toDate) {
+        const end = new Date(toDate);
+        end.setHours(23, 59, 59, 999);
+        query.paymentDate.$lte = end;
+      }
+    }
+
+    if (mode) {
+      query.paymentMode = { $regex: mode, $options: 'i' };
+    }
+
+    if (staff) {
+      query.responsibleStaff = staff;
+    }
+
+    if (type) {
+      query.feePlan = type;
+    }
+
+    if (participant) {
+      const matchedStudents = await Student.find({
+        organizationId: req.organizationId,
+        fullName: { $regex: participant, $options: 'i' },
+      }).select('_id');
+      const studentIds = matchedStudents.map((s) => s._id);
+      query.studentId = { $in: studentIds };
+    }
+
+    const totalRecords = await FeePayment.countDocuments(query);
+    const totalPages = Math.ceil(totalRecords / limit);
+
+    const payments = await FeePayment.find(query)
       .populate('studentId', 'fullName studentId')
       .populate('responsibleStaff', 'fullName')
-      .sort({ paymentDate: -1 });
-    res.json(payments);
+      .populate('allotmentId', 'status')
+      .sort({ paymentDate: -1 })
+      .skip(skip)
+      .limit(limit);
+
+    res.json({
+      data: payments,
+      pagination: {
+        totalRecords,
+        currentPage: page,
+        totalPages,
+        limit,
+        hasNextPage: page < totalPages,
+        hasPrevPage: page > 1,
+      },
+    });
   } catch (err) {
+    console.error('getPayments error:', err);
     res.status(500).json({ message: 'Failed to fetch payments. Please try again.' });
   }
 };
