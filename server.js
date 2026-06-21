@@ -189,6 +189,7 @@ require("./routes/androidSchoolEnqRoutes");
 
 const serviceRoutes = require("./routes/schoolServiceRoutes");
 const serviceBookingRoutes = require("./routes/schoolServiceBookingRoutes");
+const renewalRoutes = require("./routes/renewals");
 
 
 const path = require('path');
@@ -258,6 +259,7 @@ app.use('/api/health-records', auth, healthRecordRoutes);
 app.use('/api/events', auth, eventRoutes);
 app.use("/api/school/services", serviceRoutes);
 app.use("/api/school/service-bookings", auth, serviceBookingRoutes);
+app.use("/api/school/renewals", auth, renewalRoutes);
 
 // ===================== ADMIN (FITNESS) =====================
 

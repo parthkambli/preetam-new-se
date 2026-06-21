@@ -139,7 +139,7 @@ exports.createBooking = async (req, res) => {
 
       if (allotment) {
         allotment.amount += totalFee;
-        if (allotment.status === 'Paid') allotment.status = 'Partially Paid';
+        if (allotment.status === 'Paid') allotment.status = 'Pending';
         await allotment.save();
       } else {
         allotment = await FeeAllotment.create({
@@ -186,7 +186,7 @@ exports.createBooking = async (req, res) => {
         if (paidOnAllotment >= allotment.amount) {
           await FeeAllotment.findByIdAndUpdate(allotment._id, { status: 'Paid' });
         } else {
-          await FeeAllotment.findByIdAndUpdate(allotment._id, { status: 'Partially Paid' });
+          await FeeAllotment.findByIdAndUpdate(allotment._id, { status: 'Pending' });
         }
 
         // ── Sync admission fee amounts ────────────────────────────

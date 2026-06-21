@@ -17,7 +17,7 @@ const VALID_FEE_PLANS = [
   'Weekly',
   'Daily',
 ];
-const VALID_PAYMENT_MODES = ['Cash', 'Bank transfer'];
+const VALID_PAYMENT_MODES = ['Cash', 'Bank Transfer'];
 
 /** Mongoose CastError means the given id string is not a valid ObjectId */
 const isBadId = (err) => err.name === 'CastError' && err.kind === 'ObjectId';
@@ -657,7 +657,7 @@ exports.addPayment = async (req, res) => {
     if (newPaid >= totalFee) {
       await FeeAllotment.findByIdAndUpdate(allotment._id, { status: 'Paid' });
     } else {
-      await FeeAllotment.findByIdAndUpdate(allotment._id, { status: 'Partial' });
+      await FeeAllotment.findByIdAndUpdate(allotment._id, { status: 'Pending' });
     }
 
     // ── Sync to SchoolAdmission paymentHistory + amounts ─────────
@@ -694,7 +694,7 @@ exports.addPayment = async (req, res) => {
         totalFee,
         totalPaid: newPaid,
         remaining: totalFee - newPaid,
-        status: newPaid >= totalFee ? 'Paid' : 'Partial',
+        status: newPaid >= totalFee ? 'Paid' : 'Pending',
       },
     });
   } catch (err) {

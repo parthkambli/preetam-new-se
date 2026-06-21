@@ -28,7 +28,7 @@ const feeAllotmentSchema = new mongoose.Schema({
   dueDate: Date,
   status: {
     type: String,
-    enum: ['Pending', 'Partially Paid', 'Paid'],
+    enum: ['Pending', 'Paid'],
     default: 'Pending'
   },
 

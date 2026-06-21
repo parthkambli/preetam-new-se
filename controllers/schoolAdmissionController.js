@@ -2076,7 +2076,7 @@ exports.collectPayment = async (req, res) => {
     if (newPaid >= totalFee) {
       await FeeAllotment.findByIdAndUpdate(allotment._id, { status: 'Paid' });
     } else {
-      await FeeAllotment.findByIdAndUpdate(allotment._id, { status: 'Partial' });
+      await FeeAllotment.findByIdAndUpdate(allotment._id, { status: 'Pending' });
     }
 
     // ── Sync to SchoolAdmission paymentHistory + amounts ─────────
