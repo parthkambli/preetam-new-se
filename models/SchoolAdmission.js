@@ -324,6 +324,10 @@ const schoolAdmissionSchema = new mongoose.Schema({
     type: String,
     required: true
   },
+  qrCode: {
+    type: String,
+    default: ""
+  },
   createdAt: {
     type: Date,
     default: Date.now

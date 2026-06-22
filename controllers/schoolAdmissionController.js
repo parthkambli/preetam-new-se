@@ -900,6 +900,7 @@ const Activity = require('../models/Activity');
 const FitnessStaff = require('../models/FitnessStaff');
 const Service = require('../models/SchoolService');
 const SchoolServiceBooking = require('../models/SchoolServiceBooking');
+const QRCode = require("qrcode");
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -1659,6 +1660,15 @@ if (req.files) {
 
       await user.save();
     }
+
+    // ── Generate QR Code ───────────────────────────────────────────
+    const qrData = JSON.stringify({
+      admissionId: admission.admissionId,
+      organizationId: admission.organizationId,
+    });
+    const qrImage = await QRCode.toDataURL(qrData);
+    admission.qrCode = qrImage;
+    await admission.save();
 
     res.status(201).json({
       ...admission.toObject(),
