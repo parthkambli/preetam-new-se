@@ -2035,7 +2035,17 @@ exports.collectPayment = async (req, res) => {
       studentId: student._id,
       admissionId: admission._id,
       organizationId: req.organizationId,
-    });
+      status: { $ne: 'Paid' }
+    }).sort({ _id: -1 });
+
+    if (!allotment) {
+      allotment = await FeeAllotment.findOne({
+        studentId: student._id,
+        admissionId: admission._id,
+        organizationId: req.organizationId,
+      }).sort({ _id: -1 });
+    }
+
     if (!allotment) {
       allotment = await FeeAllotment.create({
         studentId: student._id,
