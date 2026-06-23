@@ -90,28 +90,40 @@ exports.login = async (req, res) => {
       }
 
       const organizations = [];
-      if (user.organizationId === 'school') {
-        organizations.push({
-          id: 'school',
-          name: 'Preetam Senior Citizen School',
-          label: 'Senior Citizen School'
-        });
-      } else if (user.organizationId === 'fitness') {
-        organizations.push({
-          id: 'fitness',
-          name: 'Sport Fitness Club',
-          label: 'Sport Fitness Club'
-        });
-      }
 
+const allowedOrgs =
+  user.accessibleOrganizations?.length
+    ? user.accessibleOrganizations
+    : [user.organizationId];
+
+if (allowedOrgs.includes("school")) {
+  organizations.push({
+    id: "school",
+    name: "Preetam Senior Citizen School",
+    label: "Senior Citizen School"
+  });
+}
+
+if (allowedOrgs.includes("fitness")) {
+  organizations.push({
+    id: "fitness",
+    name: "Sport Fitness Club",
+    label: "Sport Fitness Club"
+  });
+}
       const defaultOrg = organizations[0];
       const token = jwt.sign(
-        {
-          id: user._id,
-          userId: user.userId,
-          role: user.role,
-          organizationId: user.organizationId
-        },
+{
+  id: user._id,
+  userId: user.userId,
+  role: user.role,
+  organizationId: user.organizationId,
+
+  accessibleOrganizations:
+    user.accessibleOrganizations?.length
+      ? user.accessibleOrganizations
+      : [user.organizationId]
+},
         process.env.JWT_SECRET,
         { expiresIn: '24h' }
       );

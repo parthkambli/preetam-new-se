@@ -265,6 +265,10 @@ const userSchema = new mongoose.Schema({
     type: String,
     required: true
   },
+  accessibleOrganizations: {
+  type: [String],
+  default: []
+},
   staffId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Staff'

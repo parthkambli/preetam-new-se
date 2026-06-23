@@ -581,6 +581,11 @@ if (value.emailId?.trim()) {
     role: "FitnessStaff",
     userType: "fitness",
     organizationId: "fitness",
+
+    accessibleOrganizations: [
+    "fitness",
+    "school"
+  ],
     staffId: savedStaff._id,
     linkedId: savedStaff._id,
     accessRoleId: accessRole?._id || null,

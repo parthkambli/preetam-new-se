@@ -105,13 +105,23 @@ const authMiddleware = (req, res, next) => {
 
     } else if (decoded.organizationId) {
       // USER / STAFF / MEMBER TOKEN
-      if (decoded.organizationId !== orgId) {
-        return res.status(403).json({ message: 'Organization not allowed' });
-      }
+      const allowedOrganizations =
+  decoded.accessibleOrganizations?.length
+    ? decoded.accessibleOrganizations
+    : [decoded.organizationId];
+
+if (!allowedOrganizations.includes(orgId)) {
+  return res.status(403).json({
+    message: 'Organization not allowed'
+  });
+}
 
       req.user = decoded;
       req.admin = null;
-      userOrgId = decoded.organizationId;
+      userOrgId =
+        decoded.accessibleOrganizations?.length
+          ? orgId
+          : decoded.organizationId;
 
     } else {
       return res.status(403).json({ message: 'Invalid token structure' });
@@ -127,6 +137,13 @@ const authMiddleware = (req, res, next) => {
     };
 
     req.organizationId = userOrgId;
+
+    console.log({
+      requestedOrg: orgId,
+      assignedOrg: userOrgId,
+      role: decoded.role,
+      accessibleOrganizations: decoded.accessibleOrganizations
+    });
 
     next();
 

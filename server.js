@@ -145,6 +145,7 @@ const { startMembershipCron } = require('./utils/updateMembershipStatuses');
 const { startBackupCron } = require('./scripts/dbBackup');
 require("./cron/generateAbsentAttendance");
 require("./cron/membershipUpgradeCron");
+require("./cron/schoolAbsentCron");
 const auth = require('./middleware/auth');
 const { allowPermissions } = require('./middleware/permissions');
 
@@ -190,6 +191,9 @@ require("./routes/androidSchoolEnqRoutes");
 const serviceRoutes = require("./routes/schoolServiceRoutes");
 const serviceBookingRoutes = require("./routes/schoolServiceBookingRoutes");
 const renewalRoutes = require("./routes/renewals");
+
+const schoolStaffPanelRoutes = require('./routes/schoolStaffPanelRoutes');
+
 
 
 const path = require('path');
@@ -289,6 +293,9 @@ app.use("/api/fitness/member-panel",auth, fitnessMemberPanelRoutes);
 
 // Timetable
 app.use('/api/period', auth, schoolPeriodRoutes);
+
+//school staff panel 
+app.use('/api/school-staff', auth, schoolStaffPanelRoutes);
 
 
 // ===================== HEALTH =====================

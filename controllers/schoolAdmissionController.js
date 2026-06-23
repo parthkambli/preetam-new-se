@@ -1093,6 +1093,23 @@ exports.getAdmissionById = async (req, res) => {
   }
 };
 
+exports.getAdmissionPayments = async (req, res) => {
+  try {
+    const payments = await FeePayment.find({
+      admissionId: req.params.id,
+      organizationId: req.organizationId,
+    })
+      .populate('responsibleStaff', 'fullName')
+      .populate('allotmentId', 'amount status')
+      .sort({ paymentDate: -1 });
+
+    res.json({ data: payments });
+  } catch (err) {
+    console.error('getAdmissionPayments error:', err.message);
+    res.status(500).json({ message: 'Failed to fetch payment history.' });
+  }
+};
+
 /**
  * @desc    Create new admission (also creates Student and User records)
  * @route   POST /api/school/admission
