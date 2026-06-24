@@ -890,6 +890,7 @@
 const SchoolAdmission = require('../models/SchoolAdmission');
 const Student = require('../models/Student');
 const User = require('../models/User');
+const bcrypt = require('bcryptjs');
 const SchoolEnquiry = require('../models/SchoolEnquiry');
 const FeeAllotment = require('../models/FeeAllotment');
 const FeePayment = require('../models/FeePayment');
@@ -1663,9 +1664,11 @@ if (req.files) {
         return res.status(409).json({ message: 'A user account with this login mobile already exists.' });
       }
 
+      const hashedPassword = await bcrypt.hash(admissionData.password, 10);
+
       const user = new User({
         userId:         admission.loginMobile,
-        password:       admissionData.password,
+        password:       hashedPassword,
         role:           'Student',
         mobile:         admission.mobile,
         fullName:       admission.fullName,
@@ -2052,7 +2055,8 @@ exports.collectPayment = async (req, res) => {
       studentId: student._id,
       admissionId: admission._id,
       organizationId: req.organizationId,
-    });
+      status: 'Pending',
+    }).sort({ createdAt: 1 });
     if (!allotment) {
       allotment = await FeeAllotment.create({
         studentId: student._id,
