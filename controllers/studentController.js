@@ -58,13 +58,16 @@ exports.getStudentById = async (req, res) => {
     const student = await Student.findOne({
       _id: req.params.id,
       organizationId: req.organizationId
-    });
+    }).populate('admissionId', 'admissionId');
 
     if (!student) {
       return res.status(404).json({ message: 'Student not found' });
     }
 
-    res.json(student);
+    const result = student.toObject();
+    result.admissionIdStr = student.admissionId?.admissionId || 'N/A';
+
+    res.json(result);
   } catch (err) {
     console.error('Error fetching student:', err.message);
     res.status(500).json({ message: 'Server error while fetching student' });

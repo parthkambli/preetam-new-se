@@ -337,6 +337,43 @@ const schoolAdmissionSchema = new mongoose.Schema({
     type: Date,
     default: Date.now
   }
+}, {
+  toJSON: { virtuals: true },
+  toObject: { virtuals: true }
+});
+
+// Virtuals for remaining days (always computed)
+const msPerDay = 1000 * 60 * 60 * 24;
+
+schoolAdmissionSchema.virtual('feeRemainingDays').get(function() {
+  if (!this.endDate) return '—';
+  const now = new Date();
+  const end = new Date(this.endDate);
+  const start = this.startDate ? new Date(this.startDate) : null;
+
+  if (start && start > now) {
+    const diff = Math.ceil((start - now) / msPerDay);
+    return `Starts in ${diff}d`;
+  }
+  if (end < now) return 'Expired';
+  const diff = Math.ceil((end - now) / msPerDay);
+  return `${diff}d`;
+});
+
+schoolAdmissionSchema.virtual('serviceRemainingDays').get(function() {
+  if (!this.services || this.services.length === 0) return '—';
+  const now = new Date();
+  let latestEnd = null;
+  for (const svc of this.services) {
+    if (svc.endDate) {
+      const d = new Date(svc.endDate);
+      if (!latestEnd || d > latestEnd) latestEnd = d;
+    }
+  }
+  if (!latestEnd) return '—';
+  if (latestEnd < now) return 'Expired';
+  const diff = Math.ceil((latestEnd - now) / msPerDay);
+  return `${diff}d`;
 });
 
 // Generate sequential admission ID before save (PSCYYYYMMDD-001)

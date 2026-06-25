@@ -1001,7 +1001,8 @@ const STUDENT_SYNC_FIELDS = [
   'feePlan', 'feeTypeId', 'feeAmount', 'discount', 'totalFee',
   'paidAmount', 'remainingAmount', 'startDate', 'endDate',
   'amount', 'assignedCaregiver', 'responsibleStaffId',
-  'hobbies', 'games', 'behaviour', 'status'
+  'hobbies', 'games', 'behaviour', 'status',
+  'wakeUpTime', 'breakfastTime', 'lunchTime', 'dinnerTime'
 ];
 
 // ─── Controllers ──────────────────────────────────────────────────────────────
@@ -1582,6 +1583,10 @@ if (req.files) {
       hobbies:              admission.hobbies || [],
       games:                admission.games || [],
       behaviour:            admission.behaviour,
+      wakeUpTime:           admission.wakeUpTime,
+      breakfastTime:        admission.breakfastTime,
+      lunchTime:            admission.lunchTime,
+      dinnerTime:           admission.dinnerTime,
       status:               admission.status,
       organizationId:       req.organizationId
     });

@@ -193,6 +193,7 @@ const serviceRoutes = require("./routes/schoolServiceRoutes");
 const serviceBookingRoutes = require("./routes/schoolServiceBookingRoutes");
 const renewalRoutes = require("./routes/renewals");
 const schoolAttendanceRoutes = require("./routes/schoolAttendanceRoutes");
+const schoolPeriodStudentRoutes = require('./routes/schoolPeriodStudentRoutes');
 
 const schoolStaffPanelRoutes = require('./routes/schoolStaffPanelRoutes');
 const schoolStudentPanelRoutes = require('./routes/schoolStudentPanelRoutes');
@@ -298,6 +299,7 @@ app.use("/api/fitness/member-panel",auth, fitnessMemberPanelRoutes);
 
 // Timetable
 app.use('/api/period', auth, schoolPeriodRoutes);
+app.use('/api/school/period-students', auth, schoolPeriodStudentRoutes);
 
 //school staff panel 
 app.use('/api/school-staff', auth, schoolStaffPanelRoutes);
