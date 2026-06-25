@@ -956,15 +956,15 @@ function parseJSONField(val) {
   return val;
 }
 
-const DAY_FIELDS = ['mondayActivityId', 'tuesdayActivityId', 'wednesdayActivityId', 'thursdayActivityId', 'fridayActivityId', 'saturdayActivityId'];
-const DAY_NAMES = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+const DAY_FIELDS = ['mondayActivityId', 'tuesdayActivityId', 'wednesdayActivityId', 'thursdayActivityId', 'fridayActivityId', 'saturdayActivityId', 'sundayActivityId'];
+const DAY_NAMES = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
 
 function computeTimetableDayCounts(timetable) {
   const counts = {};
   for (const row of (timetable || [])) {
     if (!row.periodId) continue;
     const pid = row.periodId.toString();
-    if (!counts[pid]) counts[pid] = { monday: 0, tuesday: 0, wednesday: 0, thursday: 0, friday: 0, saturday: 0 };
+    if (!counts[pid]) counts[pid] = { monday: 0, tuesday: 0, wednesday: 0, thursday: 0, friday: 0, saturday: 0, sunday: 0 };
     for (let i = 0; i < DAY_FIELDS.length; i++) {
       if (row[DAY_FIELDS[i]]) counts[pid][DAY_NAMES[i]]++;
     }
@@ -978,8 +978,8 @@ function diffTimetableDayCounts(oldTt, newTt) {
   const allPids = new Set([...Object.keys(oldCounts), ...Object.keys(newCounts)]);
   const diff = {};
   for (const pid of allPids) {
-    const old = oldCounts[pid] || { monday: 0, tuesday: 0, wednesday: 0, thursday: 0, friday: 0, saturday: 0 };
-    const cur = newCounts[pid] || { monday: 0, tuesday: 0, wednesday: 0, thursday: 0, friday: 0, saturday: 0 };
+    const old = oldCounts[pid] || { monday: 0, tuesday: 0, wednesday: 0, thursday: 0, friday: 0, saturday: 0, sunday: 0 };
+    const cur = newCounts[pid] || { monday: 0, tuesday: 0, wednesday: 0, thursday: 0, friday: 0, saturday: 0, sunday: 0 };
     const d = {};
     for (const day of DAY_NAMES) {
       const delta = (cur[day] || 0) - (old[day] || 0);
@@ -1173,6 +1173,27 @@ if (req.files) {
     }
     if (!admissionData.age) {
       return res.status(400).json({ message: 'Age is required.' });
+    }
+    if (!admissionData.gender) {
+      return res.status(400).json({ message: 'Gender is required.' });
+    }
+    if (!admissionData.fullAddress || !admissionData.fullAddress.trim()) {
+      return res.status(400).json({ message: 'Full address is required.' });
+    }
+    if (!admissionData.primaryContactName || !admissionData.primaryContactName.trim()) {
+      return res.status(400).json({ message: 'Primary contact name is required.' });
+    }
+    if (!admissionData.primaryRelation || !admissionData.primaryRelation.trim()) {
+      return res.status(400).json({ message: 'Primary relation is required.' });
+    }
+    if (!admissionData.primaryPhone) {
+      return res.status(400).json({ message: 'Primary phone is required.' });
+    }
+    if (!admissionData.startDate) {
+      return res.status(400).json({ message: 'Start date is required.' });
+    }
+    if (!admissionData.responsibleStaffId) {
+      return res.status(400).json({ message: 'Responsible staff is required.' });
     }
 
     // ── Full name validation ───────────────────────────────────────────────
@@ -1391,6 +1412,11 @@ if (req.files) {
       totalFee += servicesTotal;
 
       paidAmount = Math.max(0, Number(admissionData.paidAmount) || 0);
+      if (paidAmount > totalFee) {
+        return res.status(400).json({
+          message: `Paid amount (₹${paidAmount.toLocaleString('en-IN')}) cannot exceed the total fee (₹${totalFee.toLocaleString('en-IN')}).`
+        });
+      }
       remainingAmount = Math.max(0, totalFee - paidAmount);
       paymentStatus = (remainingAmount <= 0 && paidAmount > 0) ? 'Paid' : 'Pending';
 

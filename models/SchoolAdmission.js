@@ -8,6 +8,7 @@ const timetableRowSchema = new mongoose.Schema({
   thursdayActivityId: { type: mongoose.Schema.Types.ObjectId, ref: 'Activity' },
   fridayActivityId: { type: mongoose.Schema.Types.ObjectId, ref: 'Activity' },
   saturdayActivityId: { type: mongoose.Schema.Types.ObjectId, ref: 'Activity' },
+  sundayActivityId: { type: mongoose.Schema.Types.ObjectId, ref: 'Activity' },
 }, { _id: false });
 
 const serviceBookingSchema = new mongoose.Schema({

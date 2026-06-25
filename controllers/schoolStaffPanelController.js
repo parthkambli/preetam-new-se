@@ -61,6 +61,7 @@ exports.getMySchedule = async (req, res) => {
             { 'timetable.thursdayActivityId': { $in: activityIds } },
             { 'timetable.fridayActivityId': { $in: activityIds } },
             { 'timetable.saturdayActivityId': { $in: activityIds } },
+            { 'timetable.sundayActivityId': { $in: activityIds } },
           ]
         }
       },
@@ -73,6 +74,7 @@ exports.getMySchedule = async (req, res) => {
             { day: 'Thursday',  activityId: '$timetable.thursdayActivityId' },
             { day: 'Friday',    activityId: '$timetable.fridayActivityId' },
             { day: 'Saturday',  activityId: '$timetable.saturdayActivityId' },
+            { day: 'Sunday',    activityId: '$timetable.sundayActivityId' },
           ]
         }
       },
@@ -117,8 +119,9 @@ exports.getMySchedule = async (req, res) => {
                 { case: { $eq: ['$_id.day', 'Thursday'] }, then: 4 },
                 { case: { $eq: ['$_id.day', 'Friday'] }, then: 5 },
                 { case: { $eq: ['$_id.day', 'Saturday'] }, then: 6 },
+                { case: { $eq: ['$_id.day', 'Sunday'] }, then: 7 },
               ],
-              default: 7,
+              default: 8,
             }
           }
         }
@@ -151,9 +154,9 @@ exports.getScheduleStudents = async (req, res) => {
     const organizationId = req.organizationId;
     const { day, activityId, periodId } = req.query;
 
-    const validDays = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+    const validDays = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
     if (!validDays.includes(day)) {
-      return res.status(400).json({ message: 'Invalid day. Must be one of: monday, tuesday, wednesday, thursday, friday, saturday' });
+      return res.status(400).json({ message: 'Invalid day. Must be one of: monday, tuesday, wednesday, thursday, friday, saturday, sunday' });
     }
 
     if (!activityId || !periodId) {
@@ -438,10 +441,6 @@ exports.getStudentPeriods = async (req, res) => {
     const dayName = getDayNameFromDate(date);
     const dayField = dayName.toLowerCase() + 'ActivityId';
 
-    if (dayName === 'Sunday') {
-      return res.json({ periods: [] });
-    }
-
     const todayEntries = (student.timetable || []).filter(t => t[dayField] != null);
 
     if (todayEntries.length === 0) {
@@ -493,10 +492,6 @@ exports.scanMark = async (req, res) => {
     }
 
     const dayName = getDayNameFromDate(date);
-
-    if (dayName === 'Sunday') {
-      return res.status(400).json({ message: 'No school on Sunday' });
-    }
 
     const dayField = dayName.toLowerCase() + 'ActivityId';
 

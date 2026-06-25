@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const SchoolAdmission = require('../models/SchoolAdmission');
 const Service = require('../models/SchoolService');
 const SchoolServiceBooking = require('../models/SchoolServiceBooking');
@@ -235,7 +236,7 @@ exports.getBookings = async (req, res) => {
 
     const match = { organizationId: req.organizationId };
 
-    if (serviceId) match.serviceId = serviceId;
+    if (serviceId) match.serviceId = new mongoose.Types.ObjectId(serviceId);
     if (dateFrom || dateTo) {
       if (dateFrom && dateTo) {
         match.$and = [

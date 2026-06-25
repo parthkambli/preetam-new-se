@@ -222,7 +222,8 @@ exports.updatePeriod = async (req, res) => {
         period.dayCounts?.wednesday || 0,
         period.dayCounts?.thursday || 0,
         period.dayCounts?.friday || 0,
-        period.dayCounts?.saturday || 0
+        period.dayCounts?.saturday || 0,
+        period.dayCounts?.sunday || 0
       );
       if (newCap < maxDay) {
         return res.status(400).json({
@@ -269,7 +270,8 @@ exports.deletePeriod = async (req, res) => {
       period.dayCounts?.wednesday || 0,
       period.dayCounts?.thursday || 0,
       period.dayCounts?.friday || 0,
-      period.dayCounts?.saturday || 0
+      period.dayCounts?.saturday || 0,
+      period.dayCounts?.sunday || 0
     );
     if (maxDay > 0) {
       return res.status(400).json({

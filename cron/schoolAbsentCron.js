@@ -12,11 +12,6 @@ cron.schedule("0 20 * * *", async () => {
     const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
     const todayDay = dayNames[todayDate.getDay()];
 
-    if (todayDay === 'Sunday') {
-      console.log("Sunday — no school attendance, skipping");
-      return;
-    }
-
     const dayField = `${todayDay.toLowerCase()}ActivityId`;
 
     const students = await SchoolAdmission.find({
