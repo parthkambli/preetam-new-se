@@ -378,3 +378,46 @@ exports.getAvailableSeats = async (req, res) => {
     res.status(500).json({ message: 'Failed to check availability.' });
   }
 };
+
+/**
+ * @desc    Get students by service + date range (for Services dashboard)
+ * @route   GET /api/school/service-bookings/students
+ * @query   serviceId, fromDate, toDate
+ */
+exports.getServiceStudents = async (req, res) => {
+  try {
+    const { serviceId, fromDate, toDate } = req.query;
+    if (!serviceId || !fromDate || !toDate) {
+      return res.status(400).json({ message: 'serviceId, fromDate, and toDate query params required' });
+    }
+
+    const sDate = new Date(fromDate);
+    const eDate = new Date(toDate);
+    if (isNaN(sDate.getTime()) || isNaN(eDate.getTime())) {
+      return res.status(400).json({ message: 'Invalid date format.' });
+    }
+
+    const bookings = await SchoolServiceBooking.find({
+      organizationId: req.organizationId,
+      serviceId: new mongoose.Types.ObjectId(serviceId),
+      status: 'Active',
+      startDate: { $lt: eDate },
+      endDate: { $gt: sDate },
+    })
+      .populate('admissionId', 'admissionId')
+      .select('studentName startDate endDate admissionId')
+      .lean();
+
+    const students = bookings.map(b => ({
+      admissionId: b.admissionId?.admissionId || 'N/A',
+      studentName: b.studentName,
+      startDate: b.startDate,
+      endDate: b.endDate,
+    }));
+
+    res.json({ students });
+  } catch (err) {
+    console.error('getServiceStudents error:', err.message);
+    res.status(500).json({ message: 'Failed to fetch students.' });
+  }
+};

@@ -5,7 +5,11 @@ const {
   getBookings,
   cancelBooking,
   getAvailableSeats,
+  getServiceStudents,
 } = require('../controllers/schoolServiceBookingController');
+
+// GET /api/school/service-bookings/students — must be before /seats/:serviceId
+router.get('/students', getServiceStudents);
 
 // GET /api/school/service-bookings/seats/:serviceId — must be before /:id
 router.get('/seats/:serviceId', getAvailableSeats);
