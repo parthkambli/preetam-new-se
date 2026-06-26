@@ -30,6 +30,11 @@ const timeTableSchema = new mongoose.Schema({
     saturday:  { type: Number, default: 0 },
     sunday:    { type: Number, default: 0 },
   },
+  activityDayCounts: {
+    type: Map,
+    of: Number,
+    default: new Map(),
+  },
   organizationId: {
     type: String,
     required: true,

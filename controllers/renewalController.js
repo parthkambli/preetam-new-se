@@ -4,6 +4,11 @@ const FeePayment = require('../models/FeePayment');
 const Student = require('../models/Student');
 const SchoolFeeRenewal = require('../models/SchoolFeeRenewal');
 const ServiceRenewal = require('../models/ServiceRenewal');
+const TimeTable = require('../models/schoolPeriod');
+const {
+  computeTimetableActivityCounts,
+  buildOccupancyInc,
+} = require('../helpers/occupancyHelpers');
 
 const getPlanEndDate = (startDate, feePlan) => {
   const start = new Date(startDate);
@@ -267,6 +272,17 @@ exports.renew = async (req, res) => {
           amount,
         });
       }
+    }
+
+    // ── Reactivate admission if it was Inactive (renewal — skip capacity validation) ──
+    if (admission.status === 'Inactive') {
+      admission.status = 'Active';
+      const counts = computeTimetableActivityCounts(admission.timetable);
+      const incMap = buildOccupancyInc(counts);
+      const ops = Object.entries(incMap).map(([pid, inc]) => ({
+        updateOne: { filter: { _id: pid }, update: { $inc: inc } }
+      }));
+      if (ops.length > 0) await TimeTable.bulkWrite(ops);
     }
 
     admission.totalFee = (admission.totalFee || 0) + totalNewAmount;

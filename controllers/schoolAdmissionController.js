@@ -902,6 +902,14 @@ const FitnessStaff = require('../models/FitnessStaff');
 const Service = require('../models/SchoolService');
 const SchoolServiceBooking = require('../models/SchoolServiceBooking');
 const QRCode = require("qrcode");
+const {
+  computeTimetableActivityCounts,
+  diffTimetableActivityCounts,
+  negateActivityCounts,
+  buildOccupancyInc,
+  validateActivityCapacity,
+} = require('../helpers/occupancyHelpers');
+const { computeAdmissionStatus } = require('../utils/computeAdmissionStatus');
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -1053,8 +1061,13 @@ exports.getAllAdmissions = async (req, res) => {
       .skip(skip)
       .limit(limit);
 
+    const admissionsWithStatus = admissions.map(adm => {
+      const statusMeta = computeAdmissionStatus(adm);
+      return { ...adm.toObject(), ...statusMeta };
+    });
+
     res.json({
-      data: admissions,
+      data: admissionsWithStatus,
       pagination: {
         totalRecords,
         currentPage: page,
@@ -1085,7 +1098,9 @@ exports.getAdmissionById = async (req, res) => {
       return res.status(404).json({ message: 'Admission not found.' });
     }
 
-    res.json(admission);
+    const statusMeta = computeAdmissionStatus(admission);
+    const response = { ...admission.toObject(), ...statusMeta };
+    res.json(response);
   } catch (err) {
     if (err.kind === 'ObjectId') {
       return res.status(400).json({ message: 'Invalid admission ID format.' });
@@ -1472,28 +1487,16 @@ if (req.files) {
           }
         }
       }
-      // ── Per-day capacity check ─────────────────────────────────────────
-      const newCounts = computeTimetableDayCounts(rawTimetable);
+      // ── Per‑activity capacity check ──────────────────────────────────
+      const activityCounts = computeTimetableActivityCounts(rawTimetable);
       const periodDocs = await TimeTable.find({
-        _id: { $in: Object.keys(newCounts) },
+        _id: { $in: Object.keys(activityCounts) },
         organizationId: req.organizationId
       }).lean();
       const periodMap = {};
       for (const p of periodDocs) periodMap[p._id.toString()] = p;
-      for (const [pid, days] of Object.entries(newCounts)) {
-        const period = periodMap[pid];
-        if (!period) continue;
-        for (const day of DAY_NAMES) {
-          if (days[day] > 0) {
-            const current = period.dayCounts?.[day] || 0;
-            if (current + days[day] > period.capacity) {
-              refErrors.push(
-                `"${period.name}" on ${day} has only ${period.capacity - current} seat(s) left but needs ${days[day]}.`
-              );
-            }
-          }
-        }
-      }
+      const capErr = validateActivityCapacity(periodMap, activityCounts);
+      if (capErr) refErrors.push(capErr);
     }
 
     if (refErrors.length > 0) {
@@ -1535,18 +1538,14 @@ if (req.files) {
 
     await admission.save();
 
-    // ── Increment period dayCounts for timetable ──────────────────────────
+    // ── Increment period occupancy for timetable ─────────────────────────
     if (rawTimetable && rawTimetable.length > 0) {
-      const newCounts = computeTimetableDayCounts(rawTimetable);
-      for (const [pid, days] of Object.entries(newCounts)) {
-        const inc = {};
-        for (const day of DAY_NAMES) {
-          if (days[day] > 0) inc[`dayCounts.${day}`] = days[day];
-        }
-        if (Object.keys(inc).length > 0) {
-          await TimeTable.findByIdAndUpdate(pid, { $inc: inc });
-        }
-      }
+      const activityCounts = computeTimetableActivityCounts(rawTimetable);
+      const incMap = buildOccupancyInc(activityCounts);
+      const ops = Object.entries(incMap).map(([pid, inc]) => ({
+        updateOne: { filter: { _id: pid }, update: { $inc: inc } }
+      }));
+      if (ops.length > 0) await TimeTable.bulkWrite(ops);
     }
 
     // ── Update enquiry status ──────────────────────────────────────────────
@@ -1902,15 +1901,19 @@ if (req.files) {
 
     // ── Capture timetable diff before applying updates ─────────────────
     let timetableDiff = null;
+    let newStatusOccupancy = null;
     if (updateData.timetable !== undefined) {
-      timetableDiff = diffTimetableDayCounts(admission.timetable, updateData.timetable);
-      // Check capacity for additions
+      timetableDiff = diffTimetableActivityCounts(admission.timetable, updateData.timetable);
+      // Extract positive additions for capacity check
       const additions = {};
-      for (const [pid, days] of Object.entries(timetableDiff)) {
-        for (const [day, delta] of Object.entries(days)) {
-          if (delta > 0) {
-            if (!additions[pid]) additions[pid] = {};
-            additions[pid][day] = (additions[pid][day] || 0) + delta;
+      for (const [pid, activities] of Object.entries(timetableDiff)) {
+        for (const [aid, days] of Object.entries(activities)) {
+          for (const [day, delta] of Object.entries(days)) {
+            if (delta > 0) {
+              if (!additions[pid]) additions[pid] = {};
+              if (!additions[pid][aid]) additions[pid][aid] = { monday: 0, tuesday: 0, wednesday: 0, thursday: 0, friday: 0, saturday: 0, sunday: 0 };
+              additions[pid][aid][day] = (additions[pid][aid][day] || 0) + delta;
+            }
           }
         }
       }
@@ -1921,18 +1924,35 @@ if (req.files) {
         }).lean();
         const periodMap = {};
         for (const p of periodDocs) periodMap[p._id.toString()] = p;
-        for (const [pid, days] of Object.entries(additions)) {
-          const period = periodMap[pid];
-          if (!period) continue;
-          for (const [day, needed] of Object.entries(days)) {
-            const current = period.dayCounts?.[day] || 0;
-            if (current + needed > period.capacity) {
-              return res.status(409).json({
-                message: `"${period.name}" on ${day} has only ${period.capacity - current} seat(s) left but needs ${needed}.`
-              });
-            }
-          }
+        const capErr = validateActivityCapacity(periodMap, additions);
+        if (capErr) return res.status(409).json({ message: capErr });
+      }
+    }
+
+    // ── Handle status change occupancy ──────────────────────────────────────
+    if (updateData.status && updateData.status !== admission.status) {
+      if (updateData.status === 'Inactive') {
+        // Active → Inactive: release current occupancy
+        if (admission.status === 'Active') {
+          const counts = computeTimetableActivityCounts(admission.timetable);
+          newStatusOccupancy = buildOccupancyInc(negateActivityCounts(counts));
         }
+      } else if (updateData.status === 'Active') {
+        // Inactive → Active: validate and restore occupancy using final timetable
+        const effectiveTt = updateData.timetable !== undefined ? updateData.timetable : admission.timetable;
+        const counts = computeTimetableActivityCounts(effectiveTt);
+        const pidSet = Object.keys(counts);
+        if (pidSet.length > 0) {
+          const periodDocs = await TimeTable.find({
+            _id: { $in: pidSet },
+            organizationId: req.organizationId
+          }).lean();
+          const periodMap = {};
+          for (const p of periodDocs) periodMap[p._id.toString()] = p;
+          const capErr = validateActivityCapacity(periodMap, counts);
+          if (capErr) return res.status(409).json({ message: capErr });
+        }
+        newStatusOccupancy = buildOccupancyInc(counts);
       }
     }
 
@@ -1945,17 +1965,30 @@ if (req.files) {
     Object.assign(admission, updateFields);
     await admission.save();
 
-    // ── Apply timetable dayCount changes ──────────────────────────
+    // ── Apply occupancy changes (timetable diff + status change) ───────
+    const allOps = {};
     if (timetableDiff) {
-      for (const [pid, days] of Object.entries(timetableDiff)) {
-        const inc = {};
-        for (const [day, delta] of Object.entries(days)) {
-          inc[`dayCounts.${day}`] = delta;
-        }
-        if (Object.keys(inc).length > 0) {
-          await TimeTable.findByIdAndUpdate(pid, { $inc: inc });
+      const incMap = buildOccupancyInc(timetableDiff);
+      for (const [pid, inc] of Object.entries(incMap)) {
+        if (!allOps[pid]) allOps[pid] = {};
+        for (const [key, val] of Object.entries(inc)) {
+          allOps[pid][key] = (allOps[pid][key] || 0) + val;
         }
       }
+    }
+    if (newStatusOccupancy) {
+      for (const [pid, inc] of Object.entries(newStatusOccupancy)) {
+        if (!allOps[pid]) allOps[pid] = {};
+        for (const [key, val] of Object.entries(inc)) {
+          allOps[pid][key] = (allOps[pid][key] || 0) + val;
+        }
+      }
+    }
+    if (Object.keys(allOps).length > 0) {
+      const ops = Object.entries(allOps).map(([pid, inc]) => ({
+        updateOne: { filter: { _id: pid }, update: { $inc: inc } }
+      }));
+      await TimeTable.bulkWrite(ops);
     }
 
     // ── Sync Student record ────────────────────────────────────────────────
@@ -2018,16 +2051,14 @@ exports.deleteAdmission = async (req, res) => {
       return res.status(404).json({ message: 'Admission not found.' });
     }
 
-    // Decrement period dayCounts for the deleted timetable
-    const counts = computeTimetableDayCounts(admission.timetable);
-    for (const [pid, days] of Object.entries(counts)) {
-      const dec = {};
-      for (const day of DAY_NAMES) {
-        if (days[day] > 0) dec[`dayCounts.${day}`] = -days[day];
-      }
-      if (Object.keys(dec).length > 0) {
-        await TimeTable.findByIdAndUpdate(pid, { $inc: dec });
-      }
+    // Decrement occupancy only if Active
+    if (admission.status === 'Active') {
+      const counts = computeTimetableActivityCounts(admission.timetable);
+      const incMap = buildOccupancyInc(negateActivityCounts(counts));
+      const ops = Object.entries(incMap).map(([pid, inc]) => ({
+        updateOne: { filter: { _id: pid }, update: { $inc: inc } }
+      }));
+      if (ops.length > 0) await TimeTable.bulkWrite(ops);
     }
 
     await SchoolAdmission.findByIdAndDelete(admission._id);

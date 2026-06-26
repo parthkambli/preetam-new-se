@@ -138,12 +138,12 @@ if (!allowedOrganizations.includes(orgId)) {
 
     req.organizationId = userOrgId;
 
-    console.log({
-      requestedOrg: orgId,
-      assignedOrg: userOrgId,
-      role: decoded.role,
-      accessibleOrganizations: decoded.accessibleOrganizations
-    });
+    // console.log({
+    //   requestedOrg: orgId,
+    //   assignedOrg: userOrgId,
+    //   role: decoded.role,
+    //   accessibleOrganizations: decoded.accessibleOrganizations
+    // });
 
     next();
 

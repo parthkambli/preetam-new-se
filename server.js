@@ -143,6 +143,7 @@ const dotenv = require('dotenv');
 const connectDB = require('./config/db');
 const { startMembershipCron } = require('./utils/updateMembershipStatuses');
 const { startBackupCron } = require('./scripts/dbBackup');
+const { startSchoolExpirySync } = require('./utils/syncSchoolExpiredAdmissions');
 require("./cron/generateAbsentAttendance");
 require("./cron/membershipUpgradeCron");
 require("./cron/schoolAbsentCron");
@@ -209,6 +210,7 @@ connectDB();
 
 startMembershipCron();
 startBackupCron();
+startSchoolExpirySync();
 
 const app = express();
 
