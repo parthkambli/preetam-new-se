@@ -78,7 +78,7 @@ exports.login = async (req, res) => {
       // Block Participant login from web
       if (
         req.headers['x-platform'] === 'web' &&
-        user.role === 'Participant'
+        (user.role === 'Participant' || user.role === 'Student')
       ) {
         return res.status(401).json({
           message: 'Invalid credentials'

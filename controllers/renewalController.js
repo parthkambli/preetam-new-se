@@ -4,6 +4,7 @@ const FeePayment = require('../models/FeePayment');
 const Student = require('../models/Student');
 const SchoolFeeRenewal = require('../models/SchoolFeeRenewal');
 const ServiceRenewal = require('../models/ServiceRenewal');
+const SchoolServiceBooking = require('../models/SchoolServiceBooking');
 const TimeTable = require('../models/schoolPeriod');
 const {
   computeTimetableActivityCounts,
@@ -232,6 +233,17 @@ exports.renew = async (req, res) => {
           status: 'Pending',
           organizationId: req.organizationId,
         });
+
+        // ── Sync allotmentId to the booking being renewed ─────────
+        await SchoolServiceBooking.findOneAndUpdate(
+          {
+            admissionId: admission._id,
+            serviceId: oldSvc.serviceId,
+            endDate: oldSvc.endDate,
+            organizationId: req.organizationId,
+          },
+          { allotmentId: allotment._id }
+        );
 
         if (item.payment && Number(item.payment.amount) > 0) {
           const p = item.payment;

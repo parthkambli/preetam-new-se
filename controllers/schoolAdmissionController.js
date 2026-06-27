@@ -2017,6 +2017,33 @@ if (req.files) {
       }
     }
 
+    // ── Sync User record (password / loginMobile) ─────────────────────────
+    if (updateData.password || updateData.loginMobile) {
+      const studentDoc = await Student.findOne({ admissionId: admission._id }).lean();
+      if (studentDoc) {
+        const userUpdate = {};
+        if (updateData.password) {
+          userUpdate.password = await bcrypt.hash(updateData.password, 10);
+        }
+        if (updateData.loginMobile) {
+          userUpdate.userId = admission.loginMobile;
+        }
+        if (Object.keys(userUpdate).length > 0) {
+          userUpdate.updatedAt = Date.now();
+          const userResult = await User.findOneAndUpdate(
+            { linkedId: studentDoc._id, role: 'Student' },
+            { $set: userUpdate },
+            { new: true }
+          );
+          if (!userResult) {
+            console.warn(`⚠️ User record not found for studentId ${studentDoc._id}. Password/loginMobile not synced.`);
+          }
+        }
+      } else {
+        console.warn(`⚠️ Student record not found for admissionId ${admission._id}. Cannot sync User password/loginMobile.`);
+      }
+    }
+
     res.json(admission);
   } catch (err) {
     if (err.kind === 'ObjectId') {

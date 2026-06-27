@@ -44,6 +44,10 @@ const schoolServiceBookingSchema = new mongoose.Schema({
     enum: ['Cash', 'Bank Transfer'],
   },
   paymentDate: Date,
+  allotmentId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'FeeAllotment',
+  },
   responsibleStaff: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'FitnessStaff',
@@ -70,5 +74,6 @@ schoolServiceBookingSchema.index({ organizationId: 1, status: 1 });
 schoolServiceBookingSchema.index({ serviceId: 1, status: 1 });
 schoolServiceBookingSchema.index({ serviceId: 1, startDate: 1, endDate: 1 });
 schoolServiceBookingSchema.index({ organizationId: 1, serviceId: 1, status: 1, startDate: 1, endDate: 1 });
+schoolServiceBookingSchema.index({ allotmentId: 1 });
 
 module.exports = mongoose.model('SchoolServiceBooking', schoolServiceBookingSchema);
