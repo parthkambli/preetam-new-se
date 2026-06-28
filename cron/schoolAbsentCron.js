@@ -3,7 +3,7 @@ const SchoolAdmission = require("../models/SchoolAdmission");
 const SchoolAttendance = require("../models/SchoolAttendance");
 const { getTodayIST } = require("../utils/date");
 
-cron.schedule("0 20 * * *", async () => {
+cron.schedule("8 00 * * *", async () => {
   try {
     console.log("Running school absent attendance cron...");
 

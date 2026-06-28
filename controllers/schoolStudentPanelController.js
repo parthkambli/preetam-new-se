@@ -6,11 +6,14 @@ const Activity = require('../models/Activity');
 const HealthRecord = require('../models/HealthRecord');
 const FeeAllotment = require('../models/FeeAllotment');
 const FeePayment = require('../models/FeePayment');
+const FeeType = require('../models/FeeType');
 const SchoolServiceBooking = require('../models/SchoolServiceBooking');
 const Service = require('../models/SchoolService');
 const SchoolAttendance = require('../models/SchoolAttendance');
 const SchoolReminder = require('../models/SchoolReminder');
+const Event = require('../models/Event');
 const { calculateServiceFee } = require('../helpers/serviceCalculation');
+const { applyAdmissionPayment } = require('../helpers/schoolPaymentHelper');
 const razorpay = require('../config/razorpay');
 const crypto = require('crypto');
 const mongoose = require('mongoose');
@@ -1150,6 +1153,431 @@ exports.deleteReminder = async (req, res) => {
   }
 };
 
+exports.getMembership = async (req, res) => {
+  try {
+    const admission = await findLoggedInStudent(req);
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const endDate = admission.endDate ? new Date(admission.endDate) : null;
+    if (endDate) endDate.setHours(0, 0, 0, 0);
+
+    let status = 'Active';
+    let daysRemaining = 0;
+    let canRenew = false;
+
+    if (!endDate) {
+      status = 'Active';
+      daysRemaining = null;
+      canRenew = false;
+    } else if (endDate < today) {
+      status = 'Expired';
+      daysRemaining = 0;
+      canRenew = true;
+    } else {
+      daysRemaining = Math.ceil((endDate - today) / (1000 * 60 * 60 * 24));
+      status = 'Active';
+      const renewalStart = new Date(endDate);
+      renewalStart.setDate(renewalStart.getDate() - 3);
+      canRenew = today >= renewalStart;
+    }
+
+    return res.json({
+      success: true,
+      membership: {
+        plan: admission.feePlan || '',
+        startDate: admission.startDate || null,
+        endDate: admission.endDate || null,
+        status,
+        daysRemaining,
+        canRenew,
+      },
+    });
+  } catch (err) {
+    if (err.message === 'Student not found' || err.message === 'Admission record not found')
+      return res.status(404).json({ success: false, message: err.message });
+    console.error('getMembership error:', err);
+    return res.status(500).json({ success: false, message: 'Server error' });
+  }
+};
+
+exports.createPendingFeeOrder = async (req, res) => {
+  try {
+    const admission = await findLoggedInStudent(req);
+
+    const { payNow } = req.body;
+
+    if (!payNow || Number(payNow) <= 0) {
+      return res.status(400).json({ success: false, message: 'Pay now amount must be greater than 0' });
+    }
+
+    const numPayNow = Number(payNow);
+    const pendingAmount = admission.remainingAmount || 0;
+
+    if (numPayNow > pendingAmount) {
+      return res.status(400).json({
+        success: false,
+        message: `Pay now of ₹${numPayNow.toLocaleString('en-IN')} exceeds pending amount of ₹${pendingAmount.toLocaleString('en-IN')}`,
+      });
+    }
+
+    const amount = Math.round(numPayNow * 100);
+
+    if (amount < 100) {
+      return res.status(400).json({ success: false, message: 'Minimum payable amount is ₹1' });
+    }
+
+    const order = await razorpay.orders.create({
+      amount,
+      currency: 'INR',
+      receipt: `mem_${admission._id.toString().slice(-6)}_${Date.now()}`,
+    });
+
+    return res.json({
+      success: true,
+      order: {
+        orderId: order.id,
+        amount: numPayNow,
+        currency: order.currency,
+        key: process.env.RAZORPAY_KEY_ID,
+      },
+      summary: {
+        totalFee: admission.totalFee || 0,
+        paidAmount: admission.paidAmount || 0,
+        pendingAmount,
+        payNow: numPayNow,
+      },
+    });
+  } catch (err) {
+    if (err.message === 'Student not found' || err.message === 'Admission record not found') {
+      return res.status(404).json({ success: false, message: err.message });
+    }
+    console.error('createPendingFeeOrder error:', err);
+    return res.status(500).json({ success: false, message: 'Server error' });
+  }
+};
+
+exports.verifyPendingFeePayment = async (req, res) => {
+  try {
+    const admission = await findLoggedInStudent(req);
+
+    const {
+      razorpay_order_id,
+      razorpay_payment_id,
+      razorpay_signature,
+      payNow,
+    } = req.body;
+
+    if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
+      return res.status(400).json({ success: false, message: 'Missing Razorpay payment details' });
+    }
+    if (!payNow || Number(payNow) <= 0) {
+      return res.status(400).json({ success: false, message: 'Pay now amount must be greater than 0' });
+    }
+
+    // const generatedSignature = crypto
+    //   .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET)
+    //   .update(`${razorpay_order_id}|${razorpay_payment_id}`)
+    //   .digest('hex');
+
+    // if (generatedSignature !== razorpay_signature) {
+    //   return res.status(400).json({ success: false, message: 'Payment verification failed' });
+    // }
+
+    const studentDoc = await Student.findOne({ admissionId: admission._id })
+      .select('_id')
+      .lean();
+
+    if (!studentDoc) {
+      return res.status(404).json({ success: false, message: 'Student record not found' });
+    }
+
+    const numPayNow = Number(payNow);
+
+    await applyAdmissionPayment({
+      admission,
+      student: studentDoc,
+      amount: numPayNow,
+      paymentMode: 'Bank Transfer',
+      paymentDate: new Date(),
+      description: 'Admission fee payment via Student App',
+      transactionId: razorpay_payment_id,
+      remarks: 'Paid via Student App',
+      organizationId: req.organizationId,
+    });
+
+    return res.json({
+      success: true,
+      message: 'Payment verified successfully',
+      summary: {
+        totalFee: admission.totalFee || 0,
+        paidAmount: admission.paidAmount || 0,
+        pendingAmount: admission.remainingAmount || 0,
+        paidNow: numPayNow,
+      },
+    });
+  } catch (err) {
+    if (err.message === 'Student not found' || err.message === 'Admission record not found') {
+      return res.status(404).json({ success: false, message: err.message });
+    }
+    console.error('verifyPendingFeePayment error:', err);
+    return res.status(500).json({ success: false, message: 'Server error' });
+  }
+};
+
+const VALID_FEE_PLANS = ['Daily', 'Weekly', 'Monthly', 'Quarterly', 'HalfYearly', 'Annual'];
+
+const planFieldMap = {
+  Daily: 'daily',
+  Weekly: 'weekly',
+  Monthly: 'monthly',
+  Quarterly: 'quarterly',
+  HalfYearly: 'halfYearly',
+  Annual: 'annual',
+};
+
+async function validateMembershipRenewal(admission, organizationId, feePlan, startDate) {
+  if (!feePlan || !VALID_FEE_PLANS.includes(feePlan)) {
+    throw new Error(`feePlan must be one of: ${VALID_FEE_PLANS.join(', ')}`);
+  }
+
+  if (!admission.feeTypeId) {
+    throw new Error('No fee type assigned to this admission. Renewal not available.');
+  }
+
+  const feeType = await FeeType.findOne({ _id: admission.feeTypeId, organizationId }).lean();
+  if (!feeType) {
+    throw new Error('Fee type not found');
+  }
+
+  const planKey = planFieldMap[feePlan];
+  const totalFee = feeType[planKey];
+  if (!totalFee || totalFee <= 0) {
+    throw new Error(`No fee amount defined for plan "${feePlan}" in the selected fee type.`);
+  }
+
+  const endDate = admission.endDate ? new Date(admission.endDate) : null;
+  if (endDate) endDate.setHours(0, 0, 0, 0);
+
+  if (!endDate) {
+    throw new Error('No membership end date set. Renewal not available.');
+  }
+
+  let newStartDate;
+  if (startDate) {
+    newStartDate = new Date(startDate);
+    if (isNaN(newStartDate.getTime())) {
+      throw new Error('Invalid startDate format.');
+    }
+    newStartDate.setHours(0, 0, 0, 0);
+    if (newStartDate <= endDate) {
+      throw new Error('Renewal start date must be after the current membership end date.');
+    }
+  } else {
+    newStartDate = new Date(endDate);
+    newStartDate.setDate(newStartDate.getDate() + 1);
+  }
+
+  let newEndDate = new Date(newStartDate);
+  switch (feePlan) {
+    case 'Weekly':    newEndDate.setDate(newEndDate.getDate() + 7); break;
+    case 'Monthly':   newEndDate.setMonth(newEndDate.getMonth() + 1); break;
+    case 'Quarterly': newEndDate.setMonth(newEndDate.getMonth() + 3); break;
+    case 'HalfYearly':newEndDate.setMonth(newEndDate.getMonth() + 6); break;
+    case 'Annual':    newEndDate.setFullYear(newEndDate.getFullYear() + 1); break;
+  }
+
+  return { feeType, feePlan, startDate: newStartDate, endDate: newEndDate, totalFee };
+}
+
+exports.calculateMembershipRenewal = async (req, res) => {
+  try {
+    const admission = await findLoggedInStudent(req);
+    const { feePlan, startDate: requestStartDate } = req.body;
+    const { feeType, startDate: computedStartDate, endDate, totalFee } =
+      await validateMembershipRenewal(admission, req.organizationId, feePlan, requestStartDate);
+
+    return res.json({
+      success: true,
+      calculation: {
+        feeTypeId: feeType._id,
+        plan: feePlan,
+        startDate: computedStartDate.toISOString().split('T')[0],
+        endDate: endDate.toISOString().split('T')[0],
+        totalFee,
+      },
+    });
+  } catch (err) {
+    if (err.message === 'Student not found' || err.message === 'Admission record not found')
+      return res.status(404).json({ success: false, message: err.message });
+    console.error('calculateMembershipRenewal error:', err);
+    return res.status(400).json({ success: false, message: err.message });
+  }
+};
+
+exports.createMembershipRenewalOrder = async (req, res) => {
+  try {
+    const admission = await findLoggedInStudent(req);
+    const { feePlan, startDate: requestStartDate, payNow } = req.body;
+    const { feeType, startDate: computedStartDate, endDate, totalFee } =
+      await validateMembershipRenewal(admission, req.organizationId, feePlan, requestStartDate);
+
+    const numPayNow = Number(payNow);
+    if (!numPayNow || numPayNow <= 0) {
+      return res.status(400).json({ success: false, message: 'payNow must be greater than 0' });
+    }
+    if (numPayNow > totalFee) {
+      return res.status(400).json({ success: false, message: 'payNow cannot exceed totalFee' });
+    }
+
+    const amount = Math.round(numPayNow * 100);
+    if (amount < 100) {
+      return res.status(400).json({ success: false, message: 'Minimum payable amount is ₹1' });
+    }
+
+    const order = await razorpay.orders.create({
+      amount,
+      currency: 'INR',
+      receipt: `mem_renew_${admission.admissionId.slice(-6)}_${Date.now()}`,
+    });
+
+    return res.json({
+      success: true,
+      order: {
+        orderId: order.id,
+        amount: numPayNow,
+        currency: order.currency,
+        key: process.env.RAZORPAY_KEY_ID,
+      },
+      summary: {
+        plan: feePlan,
+        startDate: computedStartDate.toISOString().split('T')[0],
+        endDate: endDate.toISOString().split('T')[0],
+        totalFee,
+        paidNow: numPayNow,
+        pendingAmount: totalFee - numPayNow,
+      },
+    });
+  } catch (err) {
+    if (err.message === 'Student not found' || err.message === 'Admission record not found')
+      return res.status(404).json({ success: false, message: err.message });
+    console.error('createMembershipRenewalOrder error:', err);
+    return res.status(400).json({ success: false, message: err.message });
+  }
+};
+
+exports.verifyMembershipRenewalPayment = async (req, res) => {
+  try {
+    const admission = await findLoggedInStudent(req);
+    const {
+      feePlan, startDate: requestStartDate, payNow,
+      razorpay_order_id, razorpay_payment_id, razorpay_signature,
+    } = req.body;
+
+    if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
+      return res.status(400).json({ success: false, message: 'Missing Razorpay payment details' });
+    }
+
+    const { feeType, startDate: computedStartDate, endDate, totalFee } =
+      await validateMembershipRenewal(admission, req.organizationId, feePlan, requestStartDate);
+
+    const numPayNow = Number(payNow);
+    if (!numPayNow || numPayNow <= 0) {
+      return res.status(400).json({ success: false, message: 'payNow must be greater than 0' });
+    }
+    if (numPayNow > totalFee) {
+      return res.status(400).json({ success: false, message: 'payNow cannot exceed totalFee' });
+    }
+
+    const studentDoc = await Student.findOne({ admissionId: admission._id })
+      .select('_id')
+      .lean();
+    if (!studentDoc) {
+      return res.status(404).json({ success: false, message: 'Student record not found' });
+    }
+
+    const session = await mongoose.startSession();
+
+    try {
+      session.startTransaction();
+
+      const allotment = await FeeAllotment.create([{
+        studentId: studentDoc._id,
+        admissionId: admission._id,
+        description: `Membership Renewal (${feePlan})`,
+        feePlan,
+        amount: totalFee,
+        organizationId: req.organizationId,
+        status: numPayNow >= totalFee ? 'Paid' : 'Pending',
+      }], { session });
+
+      await FeePayment.create([{
+        studentId: studentDoc._id,
+        admissionId: admission._id,
+        allotmentId: allotment[0]._id,
+        description: `Membership Renewal (${feePlan})`,
+        amount: numPayNow,
+        paymentMode: 'Bank Transfer',
+        paymentDate: new Date(),
+        transactionId: razorpay_payment_id,
+        remarks: 'Membership renewed via Student App',
+        organizationId: req.organizationId,
+      }], { session });
+
+      if (!admission.membershipHistory) {
+        admission.membershipHistory = [];
+      }
+      admission.membershipHistory.push({
+        feeTypeId: admission.feeTypeId,
+        feePlan: admission.feePlan,
+        startDate: admission.startDate,
+        endDate: admission.endDate,
+        renewedAt: new Date(),
+      });
+
+      admission.feeTypeId = feeType._id;
+      admission.feePlan = feePlan;
+      admission.startDate = computedStartDate;
+      admission.endDate = endDate;
+
+      admission.totalFee = (admission.totalFee || 0) + totalFee;
+      admission.paidAmount = (admission.paidAmount || 0) + numPayNow;
+      admission.remainingAmount = Math.max(0, (admission.totalFee || 0) - (admission.paidAmount || 0));
+      await admission.save({ session });
+
+      await session.commitTransaction();
+    } catch (txErr) {
+      await session.abortTransaction();
+      session.endSession();
+      console.error('Transaction failed in verifyMembershipRenewalPayment:', txErr.message);
+      return res.status(500).json({ success: false, message: 'Failed to renew membership. Please try again.' });
+    }
+    session.endSession();
+
+    const status = numPayNow >= totalFee ? 'Paid' : 'Pending';
+
+    return res.json({
+      success: true,
+      message: 'Membership renewed successfully',
+      membership: {
+        plan: feePlan,
+        startDate: computedStartDate.toISOString().split('T')[0],
+        endDate: endDate.toISOString().split('T')[0],
+        totalFee,
+        paidAmount: numPayNow,
+        pendingAmount: totalFee - numPayNow,
+        status,
+      },
+    });
+  } catch (err) {
+    if (err.message === 'Student not found' || err.message === 'Admission record not found')
+      return res.status(404).json({ success: false, message: err.message });
+    console.error('verifyMembershipRenewalPayment error:', err);
+    return res.status(400).json({ success: false, message: err.message });
+  }
+};
+
 exports.getTimetable = async (req, res) => {
   try {
     const student = await findLoggedInStudent(req);
@@ -1207,6 +1635,154 @@ exports.getTimetable = async (req, res) => {
       return res.status(404).json({ success: false, message: err.message });
     }
     console.error('getTimetable error:', err);
+    return res.status(500).json({ success: false, message: 'Server error' });
+  }
+};
+
+exports.getDashboard = async (req, res) => {
+  try {
+    const admission = await findLoggedInStudent(req);
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    // 1. Membership
+    const endDate = admission.endDate ? new Date(admission.endDate) : null;
+    if (endDate) endDate.setHours(0, 0, 0, 0);
+
+    let membershipStatus = 'Active';
+    let daysRemaining = 0;
+    if (!endDate) {
+      daysRemaining = null;
+    } else if (endDate < today) {
+      membershipStatus = 'Expired';
+      daysRemaining = 0;
+    } else {
+      daysRemaining = Math.ceil((endDate - today) / (1000 * 60 * 60 * 24));
+      membershipStatus = (admission.remainingAmount || 0) > 0 ? 'Payment Pending' : 'Active';
+    }
+
+    const membership = {
+      plan: admission.feePlan || '',
+      startDate: admission.startDate || null,
+      endDate: admission.endDate || null,
+      status: membershipStatus,
+      daysRemaining,
+      pendingAmount: admission.remainingAmount || 0,
+    };
+
+    // 2. Attendance — current month
+    const year = today.getFullYear();
+    const month = today.getMonth();
+    const monthStartStr = `${year}-${String(month + 1).padStart(2, '0')}-01`;
+    const monthEndDate = new Date(year, month + 1, 0);
+    const monthEndStr = monthEndDate.toISOString().split('T')[0];
+    const monthName = today.toLocaleString('default', { month: 'long' });
+
+    const attendanceRecords = await SchoolAttendance.find({
+      studentId: admission._id,
+      organizationId: req.organizationId,
+      attendanceDate: { $gte: monthStartStr, $lte: monthEndStr },
+    }).lean();
+
+    let present = 0;
+    for (const r of attendanceRecords) {
+      if (r.status === 'Present') present++;
+    }
+    const total = attendanceRecords.length;
+    const percentage = total === 0 ? 0 : Number(((present / total) * 100).toFixed(2));
+
+    const attendance = { month: monthName, present, total, percentage };
+
+    // 3. Reminders — today only
+    const todayEnd = new Date(today);
+    todayEnd.setHours(23, 59, 59, 999);
+
+    const reminders = await SchoolReminder.find({
+      studentId: admission._id,
+      organizationId: req.organizationId,
+      status: 'Active',
+      $or: [
+        { type: 'Daily' },
+        { type: 'OneTime', date: { $gte: today, $lte: todayEnd } },
+      ],
+    }).sort({ createdAt: -1 }).lean();
+
+    // 4. Today's schedule
+    const dayIndexMap = [6, 0, 1, 2, 3, 4, 5];
+    const dayIndex = dayIndexMap[today.getDay()];
+    let todaySchedule = [];
+
+    if (Array.isArray(admission.timetable) && admission.timetable.length > 0) {
+      const todayField = DAY_FIELDS[dayIndex];
+      const rows = admission.timetable;
+
+      const todayPeriodIds = [];
+      const todayActivityIds = [];
+      for (const row of rows) {
+        if (row.periodId) todayPeriodIds.push(row.periodId);
+        if (row[todayField]) todayActivityIds.push(row[todayField]);
+      }
+
+      const [periods, activities] = await Promise.all([
+        todayPeriodIds.length
+          ? TimeTable.find({ _id: { $in: todayPeriodIds } })
+              .select('name startTime endTime').lean()
+          : [],
+        todayActivityIds.length
+          ? Activity.find({ _id: { $in: todayActivityIds } })
+              .select('name staffId').populate('staffId', 'fullName').lean()
+          : [],
+      ]);
+
+      const periodMap = {};
+      for (const p of periods) periodMap[p._id.toString()] = p;
+      const activityMap = {};
+      for (const a of activities) activityMap[a._id.toString()] = a;
+
+      for (const row of rows) {
+        const activityId = row[todayField];
+        const activity = activityMap[activityId?.toString()];
+        const period = periodMap[row.periodId?.toString()];
+        todaySchedule.push({
+          periodName: period?.startTime || '',
+          activityName: activity?.name || '',
+          staffName: activity?.staffId?.fullName || '',
+        });
+      }
+
+      todaySchedule.sort((a, b) => a.periodName.localeCompare(b.periodName));
+    }
+
+    // 5. This week events
+    const dayOfWeek = today.getDay();
+    const monday = new Date(today);
+    if (dayOfWeek === 0) {
+      monday.setDate(today.getDate() - 6);
+    } else {
+      monday.setDate(today.getDate() - (dayOfWeek - 1));
+    }
+    const sunday = new Date(monday);
+    sunday.setDate(monday.getDate() + 6);
+    sunday.setHours(23, 59, 59, 999);
+
+    const weekEvents = await Event.find({
+      organizationId: req.organizationId,
+      date: { $gte: monday, $lte: sunday },
+    }).sort({ date: 1 }).lean();
+
+    return res.json({
+      success: true,
+      membership,
+      attendance,
+      reminders,
+      todaySchedule,
+      weekEvents,
+    });
+  } catch (err) {
+    if (err.message === 'Student not found' || err.message === 'Admission record not found')
+      return res.status(404).json({ success: false, message: err.message });
+    console.error('getDashboard error:', err);
     return res.status(500).json({ success: false, message: 'Server error' });
   }
 };

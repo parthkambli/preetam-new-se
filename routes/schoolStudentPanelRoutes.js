@@ -1,7 +1,8 @@
 const express = require('express');
-const { getProfile, getTimetable, getActivities, getHealthRecords, getHealthRecordById, getFees, getAttendance, getServices, getAvailableServices, calculateService, createServiceOrder, verifyServicePayment, calculateRenewal, createRenewServiceOrder, verifyRenewServicePayment, createReminder, getReminders, updateReminder, deleteReminder } = require('../controllers/schoolStudentPanelController');
+const { getProfile, getTimetable, getActivities, getHealthRecords, getHealthRecordById, getFees, getAttendance, getMembership, createPendingFeeOrder, verifyPendingFeePayment, calculateMembershipRenewal, createMembershipRenewalOrder, verifyMembershipRenewalPayment, getServices, getAvailableServices, calculateService, createServiceOrder, verifyServicePayment, calculateRenewal, createRenewServiceOrder, verifyRenewServicePayment, createReminder, getReminders, updateReminder, deleteReminder, getDashboard } = require('../controllers/schoolStudentPanelController');
 const router = express.Router();
 
+router.get('/dashboard', getDashboard);
 router.get('/profile', getProfile);
 router.get('/timetable', getTimetable);
 router.get('/activities', getActivities);
@@ -9,6 +10,12 @@ router.get('/health-records', getHealthRecords);
 router.get('/health-records/:id', getHealthRecordById);
 router.get('/fees', getFees);
 router.get('/attendance', getAttendance);
+router.get('/membership', getMembership);
+router.post('/membership/renew/calculate', calculateMembershipRenewal);
+router.post('/membership/renew/create-order', createMembershipRenewalOrder);
+router.post('/membership/renew/verify-payment', verifyMembershipRenewalPayment);
+router.post('/fees/pending/create-order', createPendingFeeOrder);
+router.post('/fees/pending/verify-payment', verifyPendingFeePayment);
 router.get('/services', getServices);
 router.get('/services/available', getAvailableServices);
 router.post('/services/calculate', calculateService);

@@ -910,6 +910,7 @@ const {
   validateActivityCapacity,
 } = require('../helpers/occupancyHelpers');
 const { computeAdmissionStatus } = require('../utils/computeAdmissionStatus');
+const { applyAdmissionPayment } = require('../helpers/schoolPaymentHelper');
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -2139,83 +2140,17 @@ exports.collectPayment = async (req, res) => {
       return res.status(400).json({ message: 'No student record linked to this admission.' });
     }
 
-    // ── Find or create FeeAllotment ──────────────────────────────
-    let allotment = await FeeAllotment.findOne({
-      studentId: student._id,
-      admissionId: admission._id,
-      organizationId: req.organizationId,
-      status: 'Pending',
-    }).sort({ createdAt: 1 });
-    if (!allotment) {
-      allotment = await FeeAllotment.create({
-        studentId: student._id,
-        admissionId: admission._id,
-        feeTypeId: admission.feeTypeId || undefined,
-        description: description || admission.feeDescription || 'School Fee',
-        feePlan: admission.feePlan || 'Monthly',
-        amount: admission.totalFee || numAmount,
-        dueDate: admission.nextDueDate || null,
-        organizationId: req.organizationId,
-        status: 'Pending',
-      });
-    }
-
-    // ── Check remaining balance ──────────────────────────────────
-    const totalPaidResult = await FeePayment.aggregate([
-      { $match: { allotmentId: allotment._id, organizationId: req.organizationId } },
-      { $group: { _id: null, total: { $sum: '$amount' } } },
-    ]);
-    const alreadyPaid = totalPaidResult[0]?.total || 0;
-    const totalFee = allotment.amount;
-    const remaining = totalFee - alreadyPaid;
-
-    if (remaining <= 0) {
-      return res.status(409).json({ message: 'This fee is already fully paid.' });
-    }
-    if (numAmount > remaining) {
-      return res.status(400).json({
-        message: `Payment of ₹${numAmount.toLocaleString('en-IN')} exceeds the remaining balance of ₹${remaining.toLocaleString('en-IN')}.`,
-      });
-    }
-
-    // ── Create FeePayment ────────────────────────────────────────
-    const payment = await FeePayment.create({
-      studentId: student._id,
-      admissionId: admission._id,
-      allotmentId: allotment._id,
+    // ── Delegate to shared helper ─────────────────────────────────
+    const { payment } = await applyAdmissionPayment({
+      admission,
+      student,
       amount: numAmount,
-      paymentMode: paymentMode || 'Cash',
+      paymentMode,
       paymentDate: pDate,
-      description: description || allotment.description || '',
-      responsibleStaff: responsibleStaff || null,
+      description,
+      responsibleStaff,
       organizationId: req.organizationId,
     });
-
-    // ── Update allotment status ──────────────────────────────────
-    const newPaid = alreadyPaid + numAmount;
-    if (newPaid >= totalFee) {
-      await FeeAllotment.findByIdAndUpdate(allotment._id, { status: 'Paid' });
-    } else {
-      await FeeAllotment.findByIdAndUpdate(allotment._id, { status: 'Pending' });
-    }
-
-    // ── Sync to SchoolAdmission paymentHistory + amounts ─────────
-    admission.paymentHistory.push({
-      amount: numAmount,
-      paymentDate: pDate,
-      paymentMode: paymentMode || 'Cash',
-      description: description || allotment.description || '',
-      responsibleStaff: responsibleStaff || null,
-    });
-
-    const allPayments = await FeePayment.aggregate([
-      { $match: { admissionId: admission._id, organizationId: req.organizationId } },
-      { $group: { _id: null, total: { $sum: '$amount' } } },
-    ]);
-    const totalPaidForAdmission = allPayments[0]?.total || 0;
-    admission.paidAmount = totalPaidForAdmission;
-    admission.remainingAmount = Math.max(0, (admission.totalFee || 0) - totalPaidForAdmission);
-    await admission.save();
 
     const populated = await FeePayment.findById(payment._id)
       .populate('responsibleStaff', 'fullName');

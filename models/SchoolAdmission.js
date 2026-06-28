@@ -28,6 +28,14 @@ const paymentHistorySchema = new mongoose.Schema({
   responsibleStaff: { type: mongoose.Schema.Types.ObjectId, ref: 'FitnessStaff' },
 }, { _id: false });
 
+const membershipHistorySchema = new mongoose.Schema({
+  feeTypeId: { type: mongoose.Schema.Types.ObjectId, ref: 'FeeType' },
+  feePlan: String,
+  startDate: Date,
+  endDate: Date,
+  renewedAt: { type: Date, default: Date.now },
+}, { _id: false });
+
 const schoolAdmissionSchema = new mongoose.Schema({
   // Personal Information
   fullName: {
@@ -300,6 +308,10 @@ const schoolAdmissionSchema = new mongoose.Schema({
   },
   paymentHistory: {
     type: [paymentHistorySchema],
+    default: []
+  },
+  membershipHistory: {
+    type: [membershipHistorySchema],
     default: []
   },
   nextDueDate: {
