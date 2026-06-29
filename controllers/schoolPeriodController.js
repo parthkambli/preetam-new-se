@@ -216,18 +216,12 @@ exports.updatePeriod = async (req, res) => {
 
     if (req.body.capacity !== undefined) {
       const newCap = Number(req.body.capacity);
-      const maxDay = Math.max(
-        period.dayCounts?.monday || 0,
-        period.dayCounts?.tuesday || 0,
-        period.dayCounts?.wednesday || 0,
-        period.dayCounts?.thursday || 0,
-        period.dayCounts?.friday || 0,
-        period.dayCounts?.saturday || 0
-      );
-      if (newCap < maxDay) {
+      const activityValues = Object.values(period.activityDayCounts || {});
+      const maxActivity = activityValues.length > 0 ? Math.max(...activityValues) : 0;
+      if (newCap < maxActivity) {
         return res.status(400).json({
           success: false,
-          message: `Capacity cannot be less than the highest booked day (${maxDay}).`
+          message: `Capacity cannot be less than the highest booked activity/day (${maxActivity}).`
         });
       }
       period.capacity = newCap;
@@ -263,18 +257,12 @@ exports.deletePeriod = async (req, res) => {
       });
     }
 
-    const maxDay = Math.max(
-      period.dayCounts?.monday || 0,
-      period.dayCounts?.tuesday || 0,
-      period.dayCounts?.wednesday || 0,
-      period.dayCounts?.thursday || 0,
-      period.dayCounts?.friday || 0,
-      period.dayCounts?.saturday || 0
-    );
-    if (maxDay > 0) {
+    const activityValues = Object.values(period.activityDayCounts || {});
+    const maxActivity = activityValues.length > 0 ? Math.max(...activityValues) : 0;
+    if (maxActivity > 0) {
       return res.status(400).json({
         success: false,
-        message: `Cannot delete period: ${maxDay} student(s) are still assigned to it.`,
+        message: `Cannot delete period: ${maxActivity} student(s) are still assigned to it.`,
       });
     }
 

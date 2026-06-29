@@ -143,8 +143,10 @@ const dotenv = require('dotenv');
 const connectDB = require('./config/db');
 const { startMembershipCron } = require('./utils/updateMembershipStatuses');
 const { startBackupCron } = require('./scripts/dbBackup');
+const { startSchoolExpirySync } = require('./utils/syncSchoolExpiredAdmissions');
 require("./cron/generateAbsentAttendance");
 require("./cron/membershipUpgradeCron");
+require("./cron/schoolAbsentCron");
 const auth = require('./middleware/auth');
 const { allowPermissions } = require('./middleware/permissions');
 
@@ -173,6 +175,7 @@ const fitnessSchedule = require('./routes/fitness-Schedule');
 const fitnessFeeRoutes = require('./routes/fitnessFeeRoutes');
 const fitnessEventRoutes = require('./routes/fitnessEventRoutes');
 const fitnessReportsRoutes = require('./routes/fitnessReportsRoutes');
+const schoolReportsRoutes = require('./routes/schoolReportsRoutes');
 
 const userManagementRoutes = require('./routes/userManagementRoutes');
 const accessRoleRoutes = require('./routes/accessRoleRoutes');
@@ -190,6 +193,12 @@ require("./routes/androidSchoolEnqRoutes");
 const serviceRoutes = require("./routes/schoolServiceRoutes");
 const serviceBookingRoutes = require("./routes/schoolServiceBookingRoutes");
 const renewalRoutes = require("./routes/renewals");
+const schoolAttendanceRoutes = require("./routes/schoolAttendanceRoutes");
+const schoolPeriodStudentRoutes = require('./routes/schoolPeriodStudentRoutes');
+
+const schoolStaffPanelRoutes = require('./routes/schoolStaffPanelRoutes');
+const schoolStudentPanelRoutes = require('./routes/schoolStudentPanelRoutes');
+
 
 
 const path = require('path');
@@ -201,6 +210,7 @@ connectDB();
 
 startMembershipCron();
 startBackupCron();
+startSchoolExpirySync();
 
 const app = express();
 
@@ -260,6 +270,7 @@ app.use('/api/events', auth, eventRoutes);
 app.use("/api/school/services", serviceRoutes);
 app.use("/api/school/service-bookings", auth, serviceBookingRoutes);
 app.use("/api/school/renewals", auth, renewalRoutes);
+app.use('/api/school/attendance', auth, schoolAttendanceRoutes);
 
 // ===================== ADMIN (FITNESS) =====================
 
@@ -279,6 +290,7 @@ app.use('/api/fitness/schedules', auth, fitnessSchedule);
 // Reports & dashboards
 app.use('/api/dashboard', auth, dashboardRoutes);
 app.use('/api', auth, fitnessReportsRoutes);
+app.use('/api', auth, schoolReportsRoutes);
 
 // ===================== USER MANAGEMENT =====================
 app.use('/api/user-management', userManagementRoutes);
@@ -289,6 +301,13 @@ app.use("/api/fitness/member-panel",auth, fitnessMemberPanelRoutes);
 
 // Timetable
 app.use('/api/period', auth, schoolPeriodRoutes);
+app.use('/api/school/period-students', auth, schoolPeriodStudentRoutes);
+
+//school staff panel 
+app.use('/api/school-staff', auth, schoolStaffPanelRoutes);
+
+// student panel
+app.use('/api/school/student-panel', auth, schoolStudentPanelRoutes);
 
 
 // ===================== HEALTH =====================

@@ -890,6 +890,7 @@
 const SchoolAdmission = require('../models/SchoolAdmission');
 const Student = require('../models/Student');
 const User = require('../models/User');
+const bcrypt = require('bcryptjs');
 const SchoolEnquiry = require('../models/SchoolEnquiry');
 const FeeAllotment = require('../models/FeeAllotment');
 const FeePayment = require('../models/FeePayment');
@@ -901,6 +902,16 @@ const FitnessStaff = require('../models/FitnessStaff');
 const Service = require('../models/SchoolService');
 const SchoolServiceBooking = require('../models/SchoolServiceBooking');
 const QRCode = require("qrcode");
+const RevenueSchedule = require('../models/RevenueSchedule');
+const {
+  computeTimetableActivityCounts,
+  diffTimetableActivityCounts,
+  negateActivityCounts,
+  buildOccupancyInc,
+  validateActivityCapacity,
+} = require('../helpers/occupancyHelpers');
+const { computeAdmissionStatus } = require('../utils/computeAdmissionStatus');
+const { applyAdmissionPayment } = require('../helpers/schoolPaymentHelper');
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -955,15 +966,15 @@ function parseJSONField(val) {
   return val;
 }
 
-const DAY_FIELDS = ['mondayActivityId', 'tuesdayActivityId', 'wednesdayActivityId', 'thursdayActivityId', 'fridayActivityId', 'saturdayActivityId'];
-const DAY_NAMES = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+const DAY_FIELDS = ['mondayActivityId', 'tuesdayActivityId', 'wednesdayActivityId', 'thursdayActivityId', 'fridayActivityId', 'saturdayActivityId', 'sundayActivityId'];
+const DAY_NAMES = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
 
 function computeTimetableDayCounts(timetable) {
   const counts = {};
   for (const row of (timetable || [])) {
     if (!row.periodId) continue;
     const pid = row.periodId.toString();
-    if (!counts[pid]) counts[pid] = { monday: 0, tuesday: 0, wednesday: 0, thursday: 0, friday: 0, saturday: 0 };
+    if (!counts[pid]) counts[pid] = { monday: 0, tuesday: 0, wednesday: 0, thursday: 0, friday: 0, saturday: 0, sunday: 0 };
     for (let i = 0; i < DAY_FIELDS.length; i++) {
       if (row[DAY_FIELDS[i]]) counts[pid][DAY_NAMES[i]]++;
     }
@@ -977,8 +988,8 @@ function diffTimetableDayCounts(oldTt, newTt) {
   const allPids = new Set([...Object.keys(oldCounts), ...Object.keys(newCounts)]);
   const diff = {};
   for (const pid of allPids) {
-    const old = oldCounts[pid] || { monday: 0, tuesday: 0, wednesday: 0, thursday: 0, friday: 0, saturday: 0 };
-    const cur = newCounts[pid] || { monday: 0, tuesday: 0, wednesday: 0, thursday: 0, friday: 0, saturday: 0 };
+    const old = oldCounts[pid] || { monday: 0, tuesday: 0, wednesday: 0, thursday: 0, friday: 0, saturday: 0, sunday: 0 };
+    const cur = newCounts[pid] || { monday: 0, tuesday: 0, wednesday: 0, thursday: 0, friday: 0, saturday: 0, sunday: 0 };
     const d = {};
     for (const day of DAY_NAMES) {
       const delta = (cur[day] || 0) - (old[day] || 0);
@@ -1000,7 +1011,8 @@ const STUDENT_SYNC_FIELDS = [
   'feePlan', 'feeTypeId', 'feeAmount', 'discount', 'totalFee',
   'paidAmount', 'remainingAmount', 'startDate', 'endDate',
   'amount', 'assignedCaregiver', 'responsibleStaffId',
-  'hobbies', 'games', 'behaviour', 'status'
+  'hobbies', 'games', 'behaviour', 'status',
+  'wakeUpTime', 'breakfastTime', 'lunchTime', 'dinnerTime'
 ];
 
 // ─── Controllers ──────────────────────────────────────────────────────────────
@@ -1051,8 +1063,13 @@ exports.getAllAdmissions = async (req, res) => {
       .skip(skip)
       .limit(limit);
 
+    const admissionsWithStatus = admissions.map(adm => {
+      const statusMeta = computeAdmissionStatus(adm);
+      return { ...adm.toObject(), ...statusMeta };
+    });
+
     res.json({
-      data: admissions,
+      data: admissionsWithStatus,
       pagination: {
         totalRecords,
         currentPage: page,
@@ -1083,13 +1100,32 @@ exports.getAdmissionById = async (req, res) => {
       return res.status(404).json({ message: 'Admission not found.' });
     }
 
-    res.json(admission);
+    const statusMeta = computeAdmissionStatus(admission);
+    const response = { ...admission.toObject(), ...statusMeta };
+    res.json(response);
   } catch (err) {
     if (err.kind === 'ObjectId') {
       return res.status(400).json({ message: 'Invalid admission ID format.' });
     }
     console.error('Error fetching admission:', err.message);
     res.status(500).json({ message: 'Server error while fetching admission.' });
+  }
+};
+
+exports.getAdmissionPayments = async (req, res) => {
+  try {
+    const payments = await FeePayment.find({
+      admissionId: req.params.id,
+      organizationId: req.organizationId,
+    })
+      .populate('responsibleStaff', 'fullName')
+      .populate('allotmentId', 'amount status')
+      .sort({ paymentDate: -1 });
+
+    res.json({ data: payments });
+  } catch (err) {
+    console.error('getAdmissionPayments error:', err.message);
+    res.status(500).json({ message: 'Failed to fetch payment history.' });
   }
 };
 
@@ -1155,6 +1191,27 @@ if (req.files) {
     }
     if (!admissionData.age) {
       return res.status(400).json({ message: 'Age is required.' });
+    }
+    if (!admissionData.gender) {
+      return res.status(400).json({ message: 'Gender is required.' });
+    }
+    if (!admissionData.fullAddress || !admissionData.fullAddress.trim()) {
+      return res.status(400).json({ message: 'Full address is required.' });
+    }
+    if (!admissionData.primaryContactName || !admissionData.primaryContactName.trim()) {
+      return res.status(400).json({ message: 'Primary contact name is required.' });
+    }
+    if (!admissionData.primaryRelation || !admissionData.primaryRelation.trim()) {
+      return res.status(400).json({ message: 'Primary relation is required.' });
+    }
+    if (!admissionData.primaryPhone) {
+      return res.status(400).json({ message: 'Primary phone is required.' });
+    }
+    if (!admissionData.startDate) {
+      return res.status(400).json({ message: 'Start date is required.' });
+    }
+    if (!admissionData.responsibleStaffId) {
+      return res.status(400).json({ message: 'Responsible staff is required.' });
     }
 
     // ── Full name validation ───────────────────────────────────────────────
@@ -1373,6 +1430,11 @@ if (req.files) {
       totalFee += servicesTotal;
 
       paidAmount = Math.max(0, Number(admissionData.paidAmount) || 0);
+      if (paidAmount > totalFee) {
+        return res.status(400).json({
+          message: `Paid amount (₹${paidAmount.toLocaleString('en-IN')}) cannot exceed the total fee (₹${totalFee.toLocaleString('en-IN')}).`
+        });
+      }
       remainingAmount = Math.max(0, totalFee - paidAmount);
       paymentStatus = (remainingAmount <= 0 && paidAmount > 0) ? 'Paid' : 'Pending';
 
@@ -1427,28 +1489,16 @@ if (req.files) {
           }
         }
       }
-      // ── Per-day capacity check ─────────────────────────────────────────
-      const newCounts = computeTimetableDayCounts(rawTimetable);
+      // ── Per‑activity capacity check ──────────────────────────────────
+      const activityCounts = computeTimetableActivityCounts(rawTimetable);
       const periodDocs = await TimeTable.find({
-        _id: { $in: Object.keys(newCounts) },
+        _id: { $in: Object.keys(activityCounts) },
         organizationId: req.organizationId
       }).lean();
       const periodMap = {};
       for (const p of periodDocs) periodMap[p._id.toString()] = p;
-      for (const [pid, days] of Object.entries(newCounts)) {
-        const period = periodMap[pid];
-        if (!period) continue;
-        for (const day of DAY_NAMES) {
-          if (days[day] > 0) {
-            const current = period.dayCounts?.[day] || 0;
-            if (current + days[day] > period.capacity) {
-              refErrors.push(
-                `"${period.name}" on ${day} has only ${period.capacity - current} seat(s) left but needs ${days[day]}.`
-              );
-            }
-          }
-        }
-      }
+      const capErr = validateActivityCapacity(periodMap, activityCounts);
+      if (capErr) refErrors.push(capErr);
     }
 
     if (refErrors.length > 0) {
@@ -1490,18 +1540,14 @@ if (req.files) {
 
     await admission.save();
 
-    // ── Increment period dayCounts for timetable ──────────────────────────
+    // ── Increment period occupancy for timetable ─────────────────────────
     if (rawTimetable && rawTimetable.length > 0) {
-      const newCounts = computeTimetableDayCounts(rawTimetable);
-      for (const [pid, days] of Object.entries(newCounts)) {
-        const inc = {};
-        for (const day of DAY_NAMES) {
-          if (days[day] > 0) inc[`dayCounts.${day}`] = days[day];
-        }
-        if (Object.keys(inc).length > 0) {
-          await TimeTable.findByIdAndUpdate(pid, { $inc: inc });
-        }
-      }
+      const activityCounts = computeTimetableActivityCounts(rawTimetable);
+      const incMap = buildOccupancyInc(activityCounts);
+      const ops = Object.entries(incMap).map(([pid, inc]) => ({
+        updateOne: { filter: { _id: pid }, update: { $inc: inc } }
+      }));
+      if (ops.length > 0) await TimeTable.bulkWrite(ops);
     }
 
     // ── Update enquiry status ──────────────────────────────────────────────
@@ -1538,6 +1584,10 @@ if (req.files) {
       hobbies:              admission.hobbies || [],
       games:                admission.games || [],
       behaviour:            admission.behaviour,
+      wakeUpTime:           admission.wakeUpTime,
+      breakfastTime:        admission.breakfastTime,
+      lunchTime:            admission.lunchTime,
+      dinnerTime:           admission.dinnerTime,
       status:               admission.status,
       organizationId:       req.organizationId
     });
@@ -1562,6 +1612,31 @@ if (req.files) {
       } catch (allotmentErr) {
         console.error('⚠️ Failed to create Fee Allotment:', allotmentErr.message);
       }
+    }
+
+    // ── RevenueSchedule: main admission fee ──────────────────────────────────
+    try {
+      const mainGross = Math.max(0, Number(admission.feeAmount) || 0);
+      const mainDiscount = Math.max(0, Number(admission.discount) || 0);
+      const mainNet = Math.max(0, mainGross - mainDiscount);
+      if (mainNet > 0 && admission.startDate && admission.endDate) {
+        await RevenueSchedule.create({
+          participantId: admission._id,
+          organizationId: req.organizationId,
+          sourceType: 'Admission',
+          sourceReferenceId: admission._id,
+          planId: admission.feeTypeId || undefined,
+          planName: admission.feePlan || 'Monthly',
+          grossAmount: mainGross,
+          discountAmount: mainDiscount,
+          netAmount: mainNet,
+          startDate: new Date(admission.startDate),
+          endDate: new Date(admission.endDate),
+          createdBy: req.admin?.userId || req.staff?.userId || req.user?.userId,
+        });
+      }
+    } catch (revErr) {
+      console.error('⚠️ Failed to create RevenueSchedule (Admission):', revErr.message);
     }
 
     // ── Create SchoolServiceBooking records for each service ───────────
@@ -1594,6 +1669,29 @@ if (req.files) {
           });
 
           await Service.findByIdAndUpdate(s.serviceId, { $inc: { bookedCount: 1 } });
+
+          // ── RevenueSchedule: each service at admission ─────────────
+          try {
+            const svcFee = Number(s.totalFee) || 0;
+            if (svcFee > 0 && s.startDate && s.endDate) {
+              await RevenueSchedule.create({
+                participantId: admission._id,
+                organizationId: req.organizationId,
+                sourceType: 'Service',
+                sourceReferenceId: s.serviceId,
+                planId: s.serviceId,
+                planName: 'Service',
+                grossAmount: svcFee,
+                discountAmount: 0,
+                netAmount: svcFee,
+                startDate: new Date(s.startDate),
+                endDate: new Date(s.endDate),
+                createdBy: req.admin?.userId || req.staff?.userId || req.user?.userId,
+              });
+            }
+          } catch (revErr) {
+            console.error(`⚠️ Failed to create RevenueSchedule (Service ${s.serviceId}):`, revErr.message);
+          }
         } catch (bookingErr) {
           console.error(`⚠️ Failed to create booking for service ${s.serviceId}:`, bookingErr.message);
         }
@@ -1646,9 +1744,11 @@ if (req.files) {
         return res.status(409).json({ message: 'A user account with this login mobile already exists.' });
       }
 
+      const hashedPassword = await bcrypt.hash(admissionData.password, 10);
+
       const user = new User({
         userId:         admission.loginMobile,
-        password:       admissionData.password,
+        password:       hashedPassword,
         role:           'Student',
         mobile:         admission.mobile,
         fullName:       admission.fullName,
@@ -1851,15 +1951,19 @@ if (req.files) {
 
     // ── Capture timetable diff before applying updates ─────────────────
     let timetableDiff = null;
+    let newStatusOccupancy = null;
     if (updateData.timetable !== undefined) {
-      timetableDiff = diffTimetableDayCounts(admission.timetable, updateData.timetable);
-      // Check capacity for additions
+      timetableDiff = diffTimetableActivityCounts(admission.timetable, updateData.timetable);
+      // Extract positive additions for capacity check
       const additions = {};
-      for (const [pid, days] of Object.entries(timetableDiff)) {
-        for (const [day, delta] of Object.entries(days)) {
-          if (delta > 0) {
-            if (!additions[pid]) additions[pid] = {};
-            additions[pid][day] = (additions[pid][day] || 0) + delta;
+      for (const [pid, activities] of Object.entries(timetableDiff)) {
+        for (const [aid, days] of Object.entries(activities)) {
+          for (const [day, delta] of Object.entries(days)) {
+            if (delta > 0) {
+              if (!additions[pid]) additions[pid] = {};
+              if (!additions[pid][aid]) additions[pid][aid] = { monday: 0, tuesday: 0, wednesday: 0, thursday: 0, friday: 0, saturday: 0, sunday: 0 };
+              additions[pid][aid][day] = (additions[pid][aid][day] || 0) + delta;
+            }
           }
         }
       }
@@ -1870,18 +1974,35 @@ if (req.files) {
         }).lean();
         const periodMap = {};
         for (const p of periodDocs) periodMap[p._id.toString()] = p;
-        for (const [pid, days] of Object.entries(additions)) {
-          const period = periodMap[pid];
-          if (!period) continue;
-          for (const [day, needed] of Object.entries(days)) {
-            const current = period.dayCounts?.[day] || 0;
-            if (current + needed > period.capacity) {
-              return res.status(409).json({
-                message: `"${period.name}" on ${day} has only ${period.capacity - current} seat(s) left but needs ${needed}.`
-              });
-            }
-          }
+        const capErr = validateActivityCapacity(periodMap, additions);
+        if (capErr) return res.status(409).json({ message: capErr });
+      }
+    }
+
+    // ── Handle status change occupancy ──────────────────────────────────────
+    if (updateData.status && updateData.status !== admission.status) {
+      if (updateData.status === 'Inactive') {
+        // Active → Inactive: release current occupancy
+        if (admission.status === 'Active') {
+          const counts = computeTimetableActivityCounts(admission.timetable);
+          newStatusOccupancy = buildOccupancyInc(negateActivityCounts(counts));
         }
+      } else if (updateData.status === 'Active') {
+        // Inactive → Active: validate and restore occupancy using final timetable
+        const effectiveTt = updateData.timetable !== undefined ? updateData.timetable : admission.timetable;
+        const counts = computeTimetableActivityCounts(effectiveTt);
+        const pidSet = Object.keys(counts);
+        if (pidSet.length > 0) {
+          const periodDocs = await TimeTable.find({
+            _id: { $in: pidSet },
+            organizationId: req.organizationId
+          }).lean();
+          const periodMap = {};
+          for (const p of periodDocs) periodMap[p._id.toString()] = p;
+          const capErr = validateActivityCapacity(periodMap, counts);
+          if (capErr) return res.status(409).json({ message: capErr });
+        }
+        newStatusOccupancy = buildOccupancyInc(counts);
       }
     }
 
@@ -1894,17 +2015,30 @@ if (req.files) {
     Object.assign(admission, updateFields);
     await admission.save();
 
-    // ── Apply timetable dayCount changes ──────────────────────────
+    // ── Apply occupancy changes (timetable diff + status change) ───────
+    const allOps = {};
     if (timetableDiff) {
-      for (const [pid, days] of Object.entries(timetableDiff)) {
-        const inc = {};
-        for (const [day, delta] of Object.entries(days)) {
-          inc[`dayCounts.${day}`] = delta;
-        }
-        if (Object.keys(inc).length > 0) {
-          await TimeTable.findByIdAndUpdate(pid, { $inc: inc });
+      const incMap = buildOccupancyInc(timetableDiff);
+      for (const [pid, inc] of Object.entries(incMap)) {
+        if (!allOps[pid]) allOps[pid] = {};
+        for (const [key, val] of Object.entries(inc)) {
+          allOps[pid][key] = (allOps[pid][key] || 0) + val;
         }
       }
+    }
+    if (newStatusOccupancy) {
+      for (const [pid, inc] of Object.entries(newStatusOccupancy)) {
+        if (!allOps[pid]) allOps[pid] = {};
+        for (const [key, val] of Object.entries(inc)) {
+          allOps[pid][key] = (allOps[pid][key] || 0) + val;
+        }
+      }
+    }
+    if (Object.keys(allOps).length > 0) {
+      const ops = Object.entries(allOps).map(([pid, inc]) => ({
+        updateOne: { filter: { _id: pid }, update: { $inc: inc } }
+      }));
+      await TimeTable.bulkWrite(ops);
     }
 
     // ── Sync Student record ────────────────────────────────────────────────
@@ -1930,6 +2064,33 @@ if (req.files) {
       if (!updatedStudent) {
         // Log the miss but don't fail the request — admission was saved successfully
         console.warn(`⚠️ Student record not found for admissionId ${admission._id}. Admission updated but Student not synced.`);
+      }
+    }
+
+    // ── Sync User record (password / loginMobile) ─────────────────────────
+    if (updateData.password || updateData.loginMobile) {
+      const studentDoc = await Student.findOne({ admissionId: admission._id }).lean();
+      if (studentDoc) {
+        const userUpdate = {};
+        if (updateData.password) {
+          userUpdate.password = await bcrypt.hash(updateData.password, 10);
+        }
+        if (updateData.loginMobile) {
+          userUpdate.userId = admission.loginMobile;
+        }
+        if (Object.keys(userUpdate).length > 0) {
+          userUpdate.updatedAt = Date.now();
+          const userResult = await User.findOneAndUpdate(
+            { linkedId: studentDoc._id, role: 'Student' },
+            { $set: userUpdate },
+            { new: true }
+          );
+          if (!userResult) {
+            console.warn(`⚠️ User record not found for studentId ${studentDoc._id}. Password/loginMobile not synced.`);
+          }
+        }
+      } else {
+        console.warn(`⚠️ Student record not found for admissionId ${admission._id}. Cannot sync User password/loginMobile.`);
       }
     }
 
@@ -1967,16 +2128,14 @@ exports.deleteAdmission = async (req, res) => {
       return res.status(404).json({ message: 'Admission not found.' });
     }
 
-    // Decrement period dayCounts for the deleted timetable
-    const counts = computeTimetableDayCounts(admission.timetable);
-    for (const [pid, days] of Object.entries(counts)) {
-      const dec = {};
-      for (const day of DAY_NAMES) {
-        if (days[day] > 0) dec[`dayCounts.${day}`] = -days[day];
-      }
-      if (Object.keys(dec).length > 0) {
-        await TimeTable.findByIdAndUpdate(pid, { $inc: dec });
-      }
+    // Decrement occupancy only if Active
+    if (admission.status === 'Active') {
+      const counts = computeTimetableActivityCounts(admission.timetable);
+      const incMap = buildOccupancyInc(negateActivityCounts(counts));
+      const ops = Object.entries(incMap).map(([pid, inc]) => ({
+        updateOne: { filter: { _id: pid }, update: { $inc: inc } }
+      }));
+      if (ops.length > 0) await TimeTable.bulkWrite(ops);
     }
 
     await SchoolAdmission.findByIdAndDelete(admission._id);
@@ -2030,92 +2189,17 @@ exports.collectPayment = async (req, res) => {
       return res.status(400).json({ message: 'No student record linked to this admission.' });
     }
 
-    // ── Find or create FeeAllotment ──────────────────────────────
-    let allotment = await FeeAllotment.findOne({
-      studentId: student._id,
-      admissionId: admission._id,
-      organizationId: req.organizationId,
-      status: { $ne: 'Paid' }
-    }).sort({ _id: -1 });
-
-    if (!allotment) {
-      allotment = await FeeAllotment.findOne({
-        studentId: student._id,
-        admissionId: admission._id,
-        organizationId: req.organizationId,
-      }).sort({ _id: -1 });
-    }
-
-    if (!allotment) {
-      allotment = await FeeAllotment.create({
-        studentId: student._id,
-        admissionId: admission._id,
-        feeTypeId: admission.feeTypeId || undefined,
-        description: description || admission.feeDescription || 'School Fee',
-        feePlan: admission.feePlan || 'Monthly',
-        amount: admission.totalFee || numAmount,
-        dueDate: admission.nextDueDate || null,
-        organizationId: req.organizationId,
-        status: 'Pending',
-      });
-    }
-
-    // ── Check remaining balance ──────────────────────────────────
-    const totalPaidResult = await FeePayment.aggregate([
-      { $match: { allotmentId: allotment._id, organizationId: req.organizationId } },
-      { $group: { _id: null, total: { $sum: '$amount' } } },
-    ]);
-    const alreadyPaid = totalPaidResult[0]?.total || 0;
-    const totalFee = allotment.amount;
-    const remaining = totalFee - alreadyPaid;
-
-    if (remaining <= 0) {
-      return res.status(409).json({ message: 'This fee is already fully paid.' });
-    }
-    if (numAmount > remaining) {
-      return res.status(400).json({
-        message: `Payment of ₹${numAmount.toLocaleString('en-IN')} exceeds the remaining balance of ₹${remaining.toLocaleString('en-IN')}.`,
-      });
-    }
-
-    // ── Create FeePayment ────────────────────────────────────────
-    const payment = await FeePayment.create({
-      studentId: student._id,
-      admissionId: admission._id,
-      allotmentId: allotment._id,
+    // ── Delegate to shared helper ─────────────────────────────────
+    const { payment } = await applyAdmissionPayment({
+      admission,
+      student,
       amount: numAmount,
-      paymentMode: paymentMode || 'Cash',
+      paymentMode,
       paymentDate: pDate,
-      description: description || allotment.description || '',
-      responsibleStaff: responsibleStaff || null,
+      description,
+      responsibleStaff,
       organizationId: req.organizationId,
     });
-
-    // ── Update allotment status ──────────────────────────────────
-    const newPaid = alreadyPaid + numAmount;
-    if (newPaid >= totalFee) {
-      await FeeAllotment.findByIdAndUpdate(allotment._id, { status: 'Paid' });
-    } else {
-      await FeeAllotment.findByIdAndUpdate(allotment._id, { status: 'Pending' });
-    }
-
-    // ── Sync to SchoolAdmission paymentHistory + amounts ─────────
-    admission.paymentHistory.push({
-      amount: numAmount,
-      paymentDate: pDate,
-      paymentMode: paymentMode || 'Cash',
-      description: description || allotment.description || '',
-      responsibleStaff: responsibleStaff || null,
-    });
-
-    const allPayments = await FeePayment.aggregate([
-      { $match: { admissionId: admission._id, organizationId: req.organizationId } },
-      { $group: { _id: null, total: { $sum: '$amount' } } },
-    ]);
-    const totalPaidForAdmission = allPayments[0]?.total || 0;
-    admission.paidAmount = totalPaidForAdmission;
-    admission.remainingAmount = Math.max(0, (admission.totalFee || 0) - totalPaidForAdmission);
-    await admission.save();
 
     const populated = await FeePayment.findById(payment._id)
       .populate('responsibleStaff', 'fullName');

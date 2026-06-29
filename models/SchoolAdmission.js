@@ -8,6 +8,7 @@ const timetableRowSchema = new mongoose.Schema({
   thursdayActivityId: { type: mongoose.Schema.Types.ObjectId, ref: 'Activity' },
   fridayActivityId: { type: mongoose.Schema.Types.ObjectId, ref: 'Activity' },
   saturdayActivityId: { type: mongoose.Schema.Types.ObjectId, ref: 'Activity' },
+  sundayActivityId: { type: mongoose.Schema.Types.ObjectId, ref: 'Activity' },
 }, { _id: false });
 
 const serviceBookingSchema = new mongoose.Schema({
@@ -25,6 +26,14 @@ const paymentHistorySchema = new mongoose.Schema({
   paymentMode: { type: String, enum: ['Cash', 'Bank Transfer'] },
   description: String,
   responsibleStaff: { type: mongoose.Schema.Types.ObjectId, ref: 'FitnessStaff' },
+}, { _id: false });
+
+const membershipHistorySchema = new mongoose.Schema({
+  feeTypeId: { type: mongoose.Schema.Types.ObjectId, ref: 'FeeType' },
+  feePlan: String,
+  startDate: Date,
+  endDate: Date,
+  renewedAt: { type: Date, default: Date.now },
 }, { _id: false });
 
 const schoolAdmissionSchema = new mongoose.Schema({
@@ -301,6 +310,10 @@ const schoolAdmissionSchema = new mongoose.Schema({
     type: [paymentHistorySchema],
     default: []
   },
+  membershipHistory: {
+    type: [membershipHistorySchema],
+    default: []
+  },
   nextDueDate: {
     type: Date
   },
@@ -336,6 +349,43 @@ const schoolAdmissionSchema = new mongoose.Schema({
     type: Date,
     default: Date.now
   }
+}, {
+  toJSON: { virtuals: true },
+  toObject: { virtuals: true }
+});
+
+// Virtuals for remaining days (always computed)
+const msPerDay = 1000 * 60 * 60 * 24;
+
+schoolAdmissionSchema.virtual('feeRemainingDays').get(function() {
+  if (!this.endDate) return '—';
+  const now = new Date();
+  const end = new Date(this.endDate);
+  const start = this.startDate ? new Date(this.startDate) : null;
+
+  if (start && start > now) {
+    const diff = Math.ceil((start - now) / msPerDay);
+    return `Starts in ${diff}d`;
+  }
+  if (end < now) return 'Expired';
+  const diff = Math.ceil((end - now) / msPerDay);
+  return `${diff}d`;
+});
+
+schoolAdmissionSchema.virtual('serviceRemainingDays').get(function() {
+  if (!this.services || this.services.length === 0) return '—';
+  const now = new Date();
+  let latestEnd = null;
+  for (const svc of this.services) {
+    if (svc.endDate) {
+      const d = new Date(svc.endDate);
+      if (!latestEnd || d > latestEnd) latestEnd = d;
+    }
+  }
+  if (!latestEnd) return '—';
+  if (latestEnd < now) return 'Expired';
+  const diff = Math.ceil((latestEnd - now) / msPerDay);
+  return `${diff}d`;
 });
 
 // Generate sequential admission ID before save (PSCYYYYMMDD-001)

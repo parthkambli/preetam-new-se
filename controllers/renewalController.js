@@ -4,6 +4,13 @@ const FeePayment = require('../models/FeePayment');
 const Student = require('../models/Student');
 const SchoolFeeRenewal = require('../models/SchoolFeeRenewal');
 const ServiceRenewal = require('../models/ServiceRenewal');
+const SchoolServiceBooking = require('../models/SchoolServiceBooking');
+const RevenueSchedule = require('../models/RevenueSchedule');
+const TimeTable = require('../models/schoolPeriod');
+const {
+  computeTimetableActivityCounts,
+  buildOccupancyInc,
+} = require('../helpers/occupancyHelpers');
 
 const getPlanEndDate = (startDate, feePlan) => {
   const start = new Date(startDate);
@@ -136,6 +143,29 @@ exports.renew = async (req, res) => {
           createdBy,
         });
 
+        // ── RevenueSchedule: fee renewal ─────────────────────────────────────
+        try {
+          const netAmt = Math.max(0, Number(amount) || 0);
+          if (netAmt > 0 && newStartDate && newEndDate) {
+            await RevenueSchedule.create({
+              participantId: admission._id,
+              organizationId: req.organizationId,
+              sourceType: 'Admission',
+              sourceReferenceId: admission._id,
+              planId: admission.feeTypeId || undefined,
+              planName: newFeePlan,
+              grossAmount: netAmt,
+              discountAmount: 0,
+              netAmount: netAmt,
+              startDate: new Date(newStartDate),
+              endDate: new Date(newEndDate),
+              createdBy,
+            });
+          }
+        } catch (revErr) {
+          console.error('⚠️ Failed to create RevenueSchedule (Renewal fee):', revErr.message);
+        }
+
         admission.feePlan = newFeePlan;
         admission.startDate = newStartDate;
         admission.endDate = newEndDate;
@@ -228,6 +258,40 @@ exports.renew = async (req, res) => {
           organizationId: req.organizationId,
         });
 
+        // ── Sync allotmentId to the booking being renewed ─────────
+        await SchoolServiceBooking.findOneAndUpdate(
+          {
+            admissionId: admission._id,
+            serviceId: oldSvc.serviceId,
+            endDate: oldSvc.endDate,
+            organizationId: req.organizationId,
+          },
+          { allotmentId: allotment._id }
+        );
+
+        // ── RevenueSchedule: service renewal ─────────────────────────────────
+        try {
+          const svcNet = Math.max(0, Number(amount) || 0);
+          if (svcNet > 0 && newStartDate && newEndDate) {
+            await RevenueSchedule.create({
+              participantId: admission._id,
+              organizationId: req.organizationId,
+              sourceType: 'Service',
+              sourceReferenceId: oldSvc.serviceId,
+              planId: oldSvc.serviceId,
+              planName: 'Service',
+              grossAmount: svcNet,
+              discountAmount: 0,
+              netAmount: svcNet,
+              startDate: new Date(newStartDate),
+              endDate: new Date(newEndDate),
+              createdBy,
+            });
+          }
+        } catch (revErr) {
+          console.error('⚠️ Failed to create RevenueSchedule (Service renewal):', revErr.message);
+        }
+
         if (item.payment && Number(item.payment.amount) > 0) {
           const p = item.payment;
           const numAmount = Number(p.amount);
@@ -267,6 +331,17 @@ exports.renew = async (req, res) => {
           amount,
         });
       }
+    }
+
+    // ── Reactivate admission if it was Inactive (renewal — skip capacity validation) ──
+    if (admission.status === 'Inactive') {
+      admission.status = 'Active';
+      const counts = computeTimetableActivityCounts(admission.timetable);
+      const incMap = buildOccupancyInc(counts);
+      const ops = Object.entries(incMap).map(([pid, inc]) => ({
+        updateOne: { filter: { _id: pid }, update: { $inc: inc } }
+      }));
+      if (ops.length > 0) await TimeTable.bulkWrite(ops);
     }
 
     admission.totalFee = (admission.totalFee || 0) + totalNewAmount;

@@ -1,8 +1,10 @@
+const mongoose = require('mongoose');
 const SchoolAdmission = require('../models/SchoolAdmission');
 const Service = require('../models/SchoolService');
 const SchoolServiceBooking = require('../models/SchoolServiceBooking');
 const FeePayment = require('../models/FeePayment');
 const FeeAllotment = require('../models/FeeAllotment');
+const RevenueSchedule = require('../models/RevenueSchedule');
 const Student = require('../models/Student');
 
 async function expireOverdueBookings(organizationId) {
@@ -93,81 +95,78 @@ exports.createBooking = async (req, res) => {
 
     const totalFee = service.oneDayFee * numDuration;
 
-    // ── Create booking document ──────────────────────────────────
-    const booking = await SchoolServiceBooking.create({
-      admissionId: admission._id,
-      serviceId: service._id,
-      studentName: admission.fullName,
-      startDate: sDate,
-      endDate: eDate,
-      duration: numDuration,
-      perDayFee: service.oneDayFee,
-      totalFee,
-      paidAmount: numPaid,
-      paymentMode: numPaid > 0 ? (paymentMode || 'Cash') : undefined,
-      paymentDate: numPaid > 0 ? (paymentDate || new Date()) : undefined,
-      responsibleStaff: responsibleStaff || null,
-      organizationId: req.organizationId,
-      dates,
-    });
+    // ── Find student ───────────────────────────────────────────────
+    const student = await Student.findOne({ admissionId: admission._id }).lean();
 
-    // ── Increment service bookedCount ────────────────────────────
-    await Service.findByIdAndUpdate(service._id, { $inc: { bookedCount: 1 } });
+    // ── Transaction: create FeeAllotment + Booking + update Admission ──
+    const session = await mongoose.startSession();
+    let booking;
+    try {
+      session.startTransaction();
 
-    // ── Push to admission.services (denormalized copy) ──────────
-    admission.services.push({
-      serviceId: service._id,
-      startDate: sDate,
-      endDate: eDate,
-      days: numDuration,
-      perDayFee: service.oneDayFee,
-      totalFee,
-    });
-
-    // ── Update total fee ─────────────────────────────────────────
-    admission.totalFee = (admission.totalFee || 0) + totalFee;
-
-    // ── Find student + sync FeeAllotment ─────────────────────────
-    const student = await Student.findOne({ admissionId: admission._id });
-
-    if (student) {
-      let allotment = await FeeAllotment.findOne({
-        studentId: student._id,
+      // 1. Create FeeAllotment (one per booking, not cumulative)
+      const allotment = await FeeAllotment.create([{
+        studentId: student?._id,
         admissionId: admission._id,
+        feeTypeId: admission.feeTypeId || undefined,
+        description: `Service: ${service.serviceName}`,
+        feePlan: admission.feePlan || 'Monthly',
+        amount: totalFee,
+        dueDate: admission.nextDueDate || null,
         organizationId: req.organizationId,
+        status: 'Pending',
+      }], { session });
+
+      // 2. Create booking with allotmentId
+      booking = await SchoolServiceBooking.create([{
+        admissionId: admission._id,
+        serviceId: service._id,
+        studentName: admission.fullName,
+        startDate: sDate,
+        endDate: eDate,
+        duration: numDuration,
+        perDayFee: service.oneDayFee,
+        totalFee,
+        paidAmount: numPaid,
+        paymentMode: numPaid > 0 ? (paymentMode || 'Cash') : undefined,
+        paymentDate: numPaid > 0 ? (paymentDate || new Date()) : undefined,
+        allotmentId: allotment[0]._id,
+        responsibleStaff: responsibleStaff || null,
+        organizationId: req.organizationId,
+        dates,
+      }], { session });
+
+      // 3. Increment service bookedCount
+      await Service.findByIdAndUpdate(
+        service._id,
+        { $inc: { bookedCount: 1 } },
+        { session }
+      );
+
+      // 4. Push to admission.services + update totals
+      admission.services.push({
+        serviceId: service._id,
+        startDate: sDate,
+        endDate: eDate,
+        days: numDuration,
+        perDayFee: service.oneDayFee,
+        totalFee,
       });
+      admission.totalFee = (admission.totalFee || 0) + totalFee;
 
-      if (allotment) {
-        allotment.amount += totalFee;
-        if (allotment.status === 'Paid') allotment.status = 'Pending';
-        await allotment.save();
-      } else {
-        allotment = await FeeAllotment.create({
+      // 5. Handle payment if paidAmount > 0
+      if (numPaid > 0 && student) {
+        await FeePayment.create([{
           studentId: student._id,
           admissionId: admission._id,
-          feeTypeId: admission.feeTypeId || undefined,
-          description: `Service: ${service.serviceName}`,
-          feePlan: admission.feePlan || 'Monthly',
-          amount: totalFee,
-          dueDate: admission.nextDueDate || null,
-          organizationId: req.organizationId,
-          status: 'Pending',
-        });
-      }
-
-      // ── Handle payment if paidAmount > 0 ─────────────────────────
-      if (numPaid > 0) {
-        await FeePayment.create({
-          studentId: student._id,
-          admissionId: admission._id,
-          allotmentId: allotment._id,
+          allotmentId: allotment[0]._id,
           amount: numPaid,
           paymentMode: paymentMode || 'Cash',
           paymentDate: paymentDate || new Date(),
           description: `Service: ${service.serviceName}`,
           responsibleStaff: responsibleStaff || null,
           organizationId: req.organizationId,
-        });
+        }], { session });
 
         admission.paymentHistory.push({
           amount: numPaid,
@@ -177,34 +176,58 @@ exports.createBooking = async (req, res) => {
           responsibleStaff: responsibleStaff || null,
         });
 
-        // ── Update allotment status ───────────────────────────────
-        const totalPaidForAllotment = await FeePayment.aggregate([
-          { $match: { allotmentId: allotment._id, organizationId: req.organizationId } },
-          { $group: { _id: null, total: { $sum: '$amount' } } },
-        ]);
-        const paidOnAllotment = totalPaidForAllotment[0]?.total || 0;
-        if (paidOnAllotment >= allotment.amount) {
-          await FeeAllotment.findByIdAndUpdate(allotment._id, { status: 'Paid' });
-        } else {
-          await FeeAllotment.findByIdAndUpdate(allotment._id, { status: 'Pending' });
+        if (numPaid >= totalFee) {
+          await FeeAllotment.findByIdAndUpdate(
+            allotment[0]._id,
+            { status: 'Paid' },
+            { session }
+          );
         }
 
-        // ── Sync admission fee amounts ────────────────────────────
         const allPayments = await FeePayment.aggregate([
           { $match: { admissionId: admission._id, organizationId: req.organizationId } },
           { $group: { _id: null, total: { $sum: '$amount' } } },
-        ]);
+        ]).session(session);
         const totalPaidForAdmission = allPayments[0]?.total || 0;
         admission.paidAmount = totalPaidForAdmission;
         admission.remainingAmount = Math.max(0, (admission.totalFee || 0) - totalPaidForAdmission);
       } else {
         admission.remainingAmount = Math.max(0, (admission.totalFee || 0) - (admission.paidAmount || 0));
       }
-    } else {
-      admission.remainingAmount = Math.max(0, (admission.totalFee || 0) - (admission.paidAmount || 0));
-    }
 
-    await admission.save();
+      await admission.save({ session });
+
+      await session.commitTransaction();
+    } catch (txErr) {
+      await session.abortTransaction();
+      session.endSession();
+      console.error('Transaction failed in createBooking:', txErr.message);
+      return res.status(500).json({ message: 'Failed to book service. Please try again.' });
+    }
+    session.endSession();
+
+    // ── RevenueSchedule: service booking (after successful transaction) ──
+    try {
+      const svcFee = Math.max(0, Number(totalFee) || 0);
+      if (svcFee > 0) {
+        await RevenueSchedule.create({
+          participantId: admission._id,
+          organizationId: req.organizationId,
+          sourceType: 'Service',
+          sourceReferenceId: service._id,
+          planId: service._id,
+          planName: 'Service',
+          grossAmount: svcFee,
+          discountAmount: 0,
+          netAmount: svcFee,
+          startDate: new Date(sDate),
+          endDate: new Date(eDate),
+          createdBy: req.admin?.userId || req.staff?.userId || req.user?.userId,
+        });
+      }
+    } catch (revErr) {
+      console.error('⚠️ Failed to create RevenueSchedule (Service booking):', revErr.message);
+    }
 
     // ── Populate for response ───────────────────────────────────
     const populated = await SchoolServiceBooking.findById(booking._id)
@@ -235,7 +258,7 @@ exports.getBookings = async (req, res) => {
 
     const match = { organizationId: req.organizationId };
 
-    if (serviceId) match.serviceId = serviceId;
+    if (serviceId) match.serviceId = new mongoose.Types.ObjectId(serviceId);
     if (dateFrom || dateTo) {
       if (dateFrom && dateTo) {
         match.$and = [
@@ -375,5 +398,48 @@ exports.getAvailableSeats = async (req, res) => {
     }
     console.error('getAvailableSeats error:', err.message);
     res.status(500).json({ message: 'Failed to check availability.' });
+  }
+};
+
+/**
+ * @desc    Get students by service + date range (for Services dashboard)
+ * @route   GET /api/school/service-bookings/students
+ * @query   serviceId, fromDate, toDate
+ */
+exports.getServiceStudents = async (req, res) => {
+  try {
+    const { serviceId, fromDate, toDate } = req.query;
+    if (!serviceId || !fromDate || !toDate) {
+      return res.status(400).json({ message: 'serviceId, fromDate, and toDate query params required' });
+    }
+
+    const sDate = new Date(fromDate);
+    const eDate = new Date(toDate);
+    if (isNaN(sDate.getTime()) || isNaN(eDate.getTime())) {
+      return res.status(400).json({ message: 'Invalid date format.' });
+    }
+
+    const bookings = await SchoolServiceBooking.find({
+      organizationId: req.organizationId,
+      serviceId: new mongoose.Types.ObjectId(serviceId),
+      status: 'Active',
+      startDate: { $lt: eDate },
+      endDate: { $gt: sDate },
+    })
+      .populate('admissionId', 'admissionId')
+      .select('studentName startDate endDate admissionId')
+      .lean();
+
+    const students = bookings.map(b => ({
+      admissionId: b.admissionId?.admissionId || 'N/A',
+      studentName: b.studentName,
+      startDate: b.startDate,
+      endDate: b.endDate,
+    }));
+
+    res.json({ students });
+  } catch (err) {
+    console.error('getServiceStudents error:', err.message);
+    res.status(500).json({ message: 'Failed to fetch students.' });
   }
 };

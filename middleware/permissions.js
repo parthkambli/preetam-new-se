@@ -23,6 +23,13 @@ const allowPermissions = (...requiredPermissions) => {
         return next();
       }
 
+      if (
+  req.user?.role === "FitnessStaff" &&
+  req.organizationId === "school"
+) {
+  return next();
+}
+
       let finalPermissions = [];
 
       // ======================================

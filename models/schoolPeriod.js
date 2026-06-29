@@ -28,6 +28,12 @@ const timeTableSchema = new mongoose.Schema({
     thursday:  { type: Number, default: 0 },
     friday:    { type: Number, default: 0 },
     saturday:  { type: Number, default: 0 },
+    sunday:    { type: Number, default: 0 },
+  },
+  activityDayCounts: {
+    type: Map,
+    of: Number,
+    default: new Map(),
   },
   organizationId: {
     type: String,
