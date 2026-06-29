@@ -13,15 +13,17 @@ exports.applyAdmissionPayment = async ({
   transactionId,
   remarks,
 }) => {
-  let allotment = await FeeAllotment.findOne({
+  // ── Find ALL pending FeeAllotments for this admission ─────────────
+  let allotments = await FeeAllotment.find({
     studentId: student._id,
     admissionId: admission._id,
     organizationId,
     status: 'Pending',
   }).sort({ createdAt: 1 });
 
-  if (!allotment) {
-    allotment = await FeeAllotment.create({
+  // ── Create a new FeeAllotment if none exist ────────────────────────
+  if (allotments.length === 0) {
+    const newAllotment = await FeeAllotment.create({
       studentId: student._id,
       admissionId: admission._id,
       feeTypeId: admission.feeTypeId || undefined,
@@ -32,52 +34,81 @@ exports.applyAdmissionPayment = async ({
       organizationId,
       status: 'Pending',
     });
+    allotments = [newAllotment];
   }
 
-  const totalPaidResult = await FeePayment.aggregate([
-    { $match: { allotmentId: allotment._id, organizationId } },
-    { $group: { _id: null, total: { $sum: '$amount' } } },
-  ]);
-  const alreadyPaid = totalPaidResult[0]?.total || 0;
-  const totalFee = allotment.amount;
-  const remaining = totalFee - alreadyPaid;
+  // ── Calculate total remaining across ALL pending allotments ────────
+  const allotmentDetails = await Promise.all(allotments.map(async (a) => {
+    const paidResult = await FeePayment.aggregate([
+      { $match: { allotmentId: a._id, organizationId } },
+      { $group: { _id: null, total: { $sum: '$amount' } } },
+    ]);
+    const alreadyPaid = paidResult[0]?.total || 0;
+    return {
+      allotment: a,
+      alreadyPaid,
+      remaining: Math.max(0, a.amount - alreadyPaid),
+    };
+  }));
 
-  if (remaining <= 0) {
-    throw new Error('This fee is already fully paid.');
+  const totalRemaining = allotmentDetails.reduce((sum, d) => sum + d.remaining, 0);
+
+  if (totalRemaining <= 0) {
+    throw new Error('All fees are already fully paid.');
   }
-  if (amount > remaining) {
+  if (amount > totalRemaining) {
     throw new Error(
-      `Payment of ₹${amount.toLocaleString('en-IN')} exceeds the remaining balance of ₹${remaining.toLocaleString('en-IN')}.`
+      `Payment of ₹${amount.toLocaleString('en-IN')} exceeds the remaining balance of ₹${totalRemaining.toLocaleString('en-IN')}.`
     );
   }
 
-  const paymentDoc = await FeePayment.create({
-    studentId: student._id,
-    admissionId: admission._id,
-    allotmentId: allotment._id,
-    amount,
-    paymentMode: paymentMode || 'Cash',
-    paymentDate: paymentDate || new Date(),
-    description: description || allotment.description || '',
-    responsibleStaff: responsibleStaff || null,
-    organizationId,
-    ...(transactionId && { transactionId }),
-    ...(remarks && { remarks }),
-  });
+  // ── Distribute payment across allotments sequentially ──────────────
+  let remainingAmount = amount;
+  const paymentDocs = [];
+  const paymentHistoryEntries = [];
 
-  const newPaid = alreadyPaid + amount;
-  if (newPaid >= totalFee) {
-    await FeeAllotment.findByIdAndUpdate(allotment._id, { status: 'Paid' });
+  for (const detail of allotmentDetails) {
+    if (remainingAmount <= 0) break;
+    if (detail.remaining <= 0) continue;
+
+    const payNow = Math.min(remainingAmount, detail.remaining);
+
+    const paymentDoc = await FeePayment.create({
+      studentId: student._id,
+      admissionId: admission._id,
+      allotmentId: detail.allotment._id,
+      amount: payNow,
+      paymentMode: paymentMode || 'Cash',
+      paymentDate: paymentDate || new Date(),
+      description: description || detail.allotment.description || '',
+      responsibleStaff: responsibleStaff || null,
+      organizationId,
+      ...(transactionId && { transactionId }),
+      ...(remarks && { remarks }),
+    });
+    paymentDocs.push(paymentDoc);
+
+    if (detail.alreadyPaid + payNow >= detail.allotment.amount) {
+      await FeeAllotment.findByIdAndUpdate(detail.allotment._id, { status: 'Paid' });
+    }
+
+    paymentHistoryEntries.push({
+      amount: payNow,
+      paymentDate: paymentDate || new Date(),
+      paymentMode: paymentMode || 'Cash',
+      description: description || detail.allotment.description || '',
+      responsibleStaff: responsibleStaff || null,
+    });
+
+    remainingAmount -= payNow;
   }
 
-  admission.paymentHistory.push({
-    amount,
-    paymentDate: paymentDate || new Date(),
-    paymentMode: paymentMode || 'Cash',
-    description: description || allotment.description || '',
-    responsibleStaff: responsibleStaff || null,
-  });
+  // ── Update admission payment history ──────────────────────────────
+  for (const entry of paymentHistoryEntries) {
+    admission.paymentHistory.push(entry);
+  }
 
+  // ── Recalculate admission paid/remaining from ALL payments ────────
   const allPayments = await FeePayment.aggregate([
     { $match: { admissionId: admission._id, organizationId } },
     { $group: { _id: null, total: { $sum: '$amount' } } },
@@ -87,5 +118,5 @@ exports.applyAdmissionPayment = async ({
   admission.remainingAmount = Math.max(0, (admission.totalFee || 0) - totalPaidForAdmission);
   await admission.save();
 
-  return { payment: paymentDoc, admission };
+  return { payment: paymentDocs[0], payments: paymentDocs, admission };
 };
