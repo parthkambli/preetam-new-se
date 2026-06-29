@@ -3,6 +3,41 @@ const SchoolEnquiry = require('../models/SchoolEnquiry');
 const FeePayment = require('../models/FeePayment');
 const FeeAllotment = require('../models/FeeAllotment');
 const SchoolAttendance = require('../models/SchoolAttendance');
+const RevenueSchedule = require('../models/RevenueSchedule');
+
+const MS_PER_DAY = 1000 * 60 * 60 * 24;
+
+const normalizeDate = (d) => {
+  const x = new Date(d);
+  x.setHours(0, 0, 0, 0);
+  return x;
+};
+
+const diffDaysInclusive = (start, end) => {
+  return Math.floor((end - start) / MS_PER_DAY) + 1;
+};
+
+const prorateRevenue = (amount, startDate, endDate, from, to) => {
+  if (!amount || amount <= 0 || !startDate || !endDate) return 0;
+
+  const s = normalizeDate(startDate);
+  const e = normalizeDate(endDate);
+  const totalDays = diffDaysInclusive(s, e);
+  if (totalDays <= 0) return 0;
+
+  if (!from && !to) return amount;
+
+  const fStart = from ? normalizeDate(from) : null;
+  const fEnd = to ? normalizeDate(to) : null;
+
+  const overlapStart = fStart ? new Date(Math.max(s.getTime(), fStart.getTime())) : s;
+  const overlapEnd = fEnd ? new Date(Math.min(e.getTime(), fEnd.getTime())) : e;
+
+  if (overlapStart > overlapEnd) return 0;
+
+  const overlapDays = diffDaysInclusive(overlapStart, overlapEnd);
+  return Math.round((amount / totalDays) * overlapDays * 100) / 100;
+};
 
 const buildDateFilter = (field, fromDate, toDate) => {
   if (!fromDate && !toDate) return {};
@@ -17,7 +52,7 @@ exports.getDashboard = async (req, res) => {
     const orgId = req.organizationId;
     const { fromDate, toDate } = req.query;
 
-    const [totalEnquiries, totalAdmissions, activeParticipants, revenueAgg, pendingData] =
+    const [totalEnquiries, totalAdmissions, activeParticipants, pendingData] =
       await Promise.all([
         SchoolEnquiry.countDocuments({
           organizationId: orgId,
@@ -34,16 +69,6 @@ exports.getDashboard = async (req, res) => {
           status: 'Active',
           ...buildDateFilter('createdAt', fromDate, toDate),
         }),
-
-        FeePayment.aggregate([
-          {
-            $match: {
-              organizationId: orgId,
-              ...buildDateFilter('paymentDate', fromDate, toDate),
-            },
-          },
-          { $group: { _id: null, total: { $sum: '$amount' } } },
-        ]),
 
         FeeAllotment.aggregate([
           {
@@ -81,9 +106,32 @@ exports.getDashboard = async (req, res) => {
         ]),
       ]);
 
-    const totalRevenue = revenueAgg[0]?.total || 0;
     const pendingFees = pendingData[0]?.totalPending || 0;
 
+    // ── Revenue: from RevenueSchedule (append-only contract records) ──
+    let totalRevenue = 0;
+    try {
+      const match = { organizationId: orgId, status: { $ne: 'Cancelled' } };
+      if (fromDate || toDate) {
+        if (fromDate) {
+          match.endDate = { $gte: new Date(fromDate + "T00:00:00.000Z") };
+        }
+        if (toDate) {
+          match.startDate = { $lte: new Date(toDate + "T23:59:59.999Z") };
+        }
+      }
+
+      const schedules = await RevenueSchedule.find(match).lean();
+
+      for (const s of schedules) {
+        totalRevenue += prorateRevenue(s.netAmount, s.startDate, s.endDate, fromDate, toDate);
+      }
+      totalRevenue = Math.round(totalRevenue * 100) / 100;
+    } catch (revErr) {
+      console.error('Revenue calculation error:', revErr.message);
+    }
+
+    // ── Attendance ──
     let todaysAttendance = 0;
     const attendanceMatch = { organizationId: orgId, status: 'Present' };
 

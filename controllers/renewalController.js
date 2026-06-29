@@ -5,6 +5,7 @@ const Student = require('../models/Student');
 const SchoolFeeRenewal = require('../models/SchoolFeeRenewal');
 const ServiceRenewal = require('../models/ServiceRenewal');
 const SchoolServiceBooking = require('../models/SchoolServiceBooking');
+const RevenueSchedule = require('../models/RevenueSchedule');
 const TimeTable = require('../models/schoolPeriod');
 const {
   computeTimetableActivityCounts,
@@ -142,6 +143,29 @@ exports.renew = async (req, res) => {
           createdBy,
         });
 
+        // ── RevenueSchedule: fee renewal ─────────────────────────────────────
+        try {
+          const netAmt = Math.max(0, Number(amount) || 0);
+          if (netAmt > 0 && newStartDate && newEndDate) {
+            await RevenueSchedule.create({
+              participantId: admission._id,
+              organizationId: req.organizationId,
+              sourceType: 'Admission',
+              sourceReferenceId: admission._id,
+              planId: admission.feeTypeId || undefined,
+              planName: newFeePlan,
+              grossAmount: netAmt,
+              discountAmount: 0,
+              netAmount: netAmt,
+              startDate: new Date(newStartDate),
+              endDate: new Date(newEndDate),
+              createdBy,
+            });
+          }
+        } catch (revErr) {
+          console.error('⚠️ Failed to create RevenueSchedule (Renewal fee):', revErr.message);
+        }
+
         admission.feePlan = newFeePlan;
         admission.startDate = newStartDate;
         admission.endDate = newEndDate;
@@ -244,6 +268,29 @@ exports.renew = async (req, res) => {
           },
           { allotmentId: allotment._id }
         );
+
+        // ── RevenueSchedule: service renewal ─────────────────────────────────
+        try {
+          const svcNet = Math.max(0, Number(amount) || 0);
+          if (svcNet > 0 && newStartDate && newEndDate) {
+            await RevenueSchedule.create({
+              participantId: admission._id,
+              organizationId: req.organizationId,
+              sourceType: 'Service',
+              sourceReferenceId: oldSvc.serviceId,
+              planId: oldSvc.serviceId,
+              planName: 'Service',
+              grossAmount: svcNet,
+              discountAmount: 0,
+              netAmount: svcNet,
+              startDate: new Date(newStartDate),
+              endDate: new Date(newEndDate),
+              createdBy,
+            });
+          }
+        } catch (revErr) {
+          console.error('⚠️ Failed to create RevenueSchedule (Service renewal):', revErr.message);
+        }
 
         if (item.payment && Number(item.payment.amount) > 0) {
           const p = item.payment;

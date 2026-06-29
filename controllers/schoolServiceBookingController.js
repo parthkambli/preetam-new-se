@@ -4,6 +4,7 @@ const Service = require('../models/SchoolService');
 const SchoolServiceBooking = require('../models/SchoolServiceBooking');
 const FeePayment = require('../models/FeePayment');
 const FeeAllotment = require('../models/FeeAllotment');
+const RevenueSchedule = require('../models/RevenueSchedule');
 const Student = require('../models/Student');
 
 async function expireOverdueBookings(organizationId) {
@@ -204,6 +205,29 @@ exports.createBooking = async (req, res) => {
       return res.status(500).json({ message: 'Failed to book service. Please try again.' });
     }
     session.endSession();
+
+    // ── RevenueSchedule: service booking (after successful transaction) ──
+    try {
+      const svcFee = Math.max(0, Number(totalFee) || 0);
+      if (svcFee > 0) {
+        await RevenueSchedule.create({
+          participantId: admission._id,
+          organizationId: req.organizationId,
+          sourceType: 'Service',
+          sourceReferenceId: service._id,
+          planId: service._id,
+          planName: 'Service',
+          grossAmount: svcFee,
+          discountAmount: 0,
+          netAmount: svcFee,
+          startDate: new Date(sDate),
+          endDate: new Date(eDate),
+          createdBy: req.admin?.userId || req.staff?.userId || req.user?.userId,
+        });
+      }
+    } catch (revErr) {
+      console.error('⚠️ Failed to create RevenueSchedule (Service booking):', revErr.message);
+    }
 
     // ── Populate for response ───────────────────────────────────
     const populated = await SchoolServiceBooking.findById(booking._id)

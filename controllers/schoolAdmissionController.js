@@ -902,6 +902,7 @@ const FitnessStaff = require('../models/FitnessStaff');
 const Service = require('../models/SchoolService');
 const SchoolServiceBooking = require('../models/SchoolServiceBooking');
 const QRCode = require("qrcode");
+const RevenueSchedule = require('../models/RevenueSchedule');
 const {
   computeTimetableActivityCounts,
   diffTimetableActivityCounts,
@@ -1613,6 +1614,31 @@ if (req.files) {
       }
     }
 
+    // ── RevenueSchedule: main admission fee ──────────────────────────────────
+    try {
+      const mainGross = Math.max(0, Number(admission.feeAmount) || 0);
+      const mainDiscount = Math.max(0, Number(admission.discount) || 0);
+      const mainNet = Math.max(0, mainGross - mainDiscount);
+      if (mainNet > 0 && admission.startDate && admission.endDate) {
+        await RevenueSchedule.create({
+          participantId: admission._id,
+          organizationId: req.organizationId,
+          sourceType: 'Admission',
+          sourceReferenceId: admission._id,
+          planId: admission.feeTypeId || undefined,
+          planName: admission.feePlan || 'Monthly',
+          grossAmount: mainGross,
+          discountAmount: mainDiscount,
+          netAmount: mainNet,
+          startDate: new Date(admission.startDate),
+          endDate: new Date(admission.endDate),
+          createdBy: req.admin?.userId || req.staff?.userId || req.user?.userId,
+        });
+      }
+    } catch (revErr) {
+      console.error('⚠️ Failed to create RevenueSchedule (Admission):', revErr.message);
+    }
+
     // ── Create SchoolServiceBooking records for each service ───────────
     if (rawServices && rawServices.length > 0) {
       for (const s of rawServices) {
@@ -1643,6 +1669,29 @@ if (req.files) {
           });
 
           await Service.findByIdAndUpdate(s.serviceId, { $inc: { bookedCount: 1 } });
+
+          // ── RevenueSchedule: each service at admission ─────────────
+          try {
+            const svcFee = Number(s.totalFee) || 0;
+            if (svcFee > 0 && s.startDate && s.endDate) {
+              await RevenueSchedule.create({
+                participantId: admission._id,
+                organizationId: req.organizationId,
+                sourceType: 'Service',
+                sourceReferenceId: s.serviceId,
+                planId: s.serviceId,
+                planName: 'Service',
+                grossAmount: svcFee,
+                discountAmount: 0,
+                netAmount: svcFee,
+                startDate: new Date(s.startDate),
+                endDate: new Date(s.endDate),
+                createdBy: req.admin?.userId || req.staff?.userId || req.user?.userId,
+              });
+            }
+          } catch (revErr) {
+            console.error(`⚠️ Failed to create RevenueSchedule (Service ${s.serviceId}):`, revErr.message);
+          }
         } catch (bookingErr) {
           console.error(`⚠️ Failed to create booking for service ${s.serviceId}:`, bookingErr.message);
         }

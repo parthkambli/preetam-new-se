@@ -12,6 +12,7 @@ const Service = require('../models/SchoolService');
 const SchoolAttendance = require('../models/SchoolAttendance');
 const SchoolReminder = require('../models/SchoolReminder');
 const Event = require('../models/Event');
+const RevenueSchedule = require('../models/RevenueSchedule');
 const { calculateServiceFee } = require('../helpers/serviceCalculation');
 const { applyAdmissionPayment } = require('../helpers/schoolPaymentHelper');
 const razorpay = require('../config/razorpay');
@@ -635,6 +636,29 @@ if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
       status: numPayNow >= totalFee ? 'Paid' : 'Pending',
     });
 
+    // ── RevenueSchedule: service booking (student app) ─────────────────
+    try {
+      const svcFee = Math.max(0, Number(totalFee) || 0);
+      if (svcFee > 0 && startDate && endDate) {
+        await RevenueSchedule.create({
+          participantId: admission._id,
+          organizationId: req.organizationId,
+          sourceType: 'Service',
+          sourceReferenceId: service._id,
+          planId: service._id,
+          planName: service.serviceName || 'Service',
+          grossAmount: svcFee,
+          discountAmount: 0,
+          netAmount: svcFee,
+          startDate: new Date(startDate),
+          endDate: new Date(endDate),
+          createdBy: req.user?.userId,
+        });
+      }
+    } catch (revErr) {
+      console.error('⚠️ Failed to create RevenueSchedule (Student service):', revErr.message);
+    }
+
     await FeePayment.create({
       studentId: studentDoc._id,
       admissionId: admission._id,
@@ -953,6 +977,29 @@ exports.verifyRenewServicePayment = async (req, res) => {
       return res.status(500).json({ success: false, message: 'Failed to renew service. Please try again.' });
     }
     session.endSession();
+
+    // ── RevenueSchedule: service renewal (student app) ────────────────────
+    try {
+      const svcFee = Math.max(0, Number(totalFee) || 0);
+      if (svcFee > 0 && sDate && endDate) {
+        await RevenueSchedule.create({
+          participantId: admission._id,
+          organizationId: req.organizationId,
+          sourceType: 'Service',
+          sourceReferenceId: service._id,
+          planId: service._id,
+          planName: service.serviceName || 'Service',
+          grossAmount: svcFee,
+          discountAmount: 0,
+          netAmount: svcFee,
+          startDate: new Date(sDate),
+          endDate: new Date(endDate),
+          createdBy: req.user?.userId,
+        });
+      }
+    } catch (revErr) {
+      console.error('⚠️ Failed to create RevenueSchedule (Student service renewal):', revErr.message);
+    }
 
     return res.json({
       success: true,
@@ -1554,6 +1601,29 @@ exports.verifyMembershipRenewalPayment = async (req, res) => {
       return res.status(500).json({ success: false, message: 'Failed to renew membership. Please try again.' });
     }
     session.endSession();
+
+    // ── RevenueSchedule: membership renewal (student app) ─────────────────
+    try {
+      const netAmt = Math.max(0, Number(totalFee) || 0);
+      if (netAmt > 0 && computedStartDate && endDate) {
+        await RevenueSchedule.create({
+          participantId: admission._id,
+          organizationId: req.organizationId,
+          sourceType: 'Admission',
+          sourceReferenceId: admission._id,
+          planId: feeType._id,
+          planName: feePlan,
+          grossAmount: netAmt,
+          discountAmount: 0,
+          netAmount: netAmt,
+          startDate: new Date(computedStartDate),
+          endDate: new Date(endDate),
+          createdBy: req.user?.userId,
+        });
+      }
+    } catch (revErr) {
+      console.error('⚠️ Failed to create RevenueSchedule (Student renewal):', revErr.message);
+    }
 
     const status = numPayNow >= totalFee ? 'Paid' : 'Pending';
 
