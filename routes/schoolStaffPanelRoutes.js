@@ -88,7 +88,7 @@ router.put('/admission/:id', allowPermissions('SCHOOL_EDIT_ADMISSION'), handleUp
 router.delete('/admission/:id', allowPermissions('SCHOOL_DELETE_ADMISSION'), deleteAdmission);
 router.post('/admission/:id/collect-payment', allowPermissions('SCHOOL_EDIT_ADMISSION'), collectPayment);
 
-router.get('/participants', allowPermissions('SCHOOL_VIEW_ADMISSION'), getStudents);
+router.get('/participants', getStudents);
 router.get('/participants/:id', allowPermissions('SCHOOL_VIEW_ADMISSION'), getStudentById);
 router.put('/participants/:id', allowPermissions('SCHOOL_VIEW_ADMISSION'), updateStudent);
 router.put('/participants/:id/emergency-contact', allowPermissions('SCHOOL_VIEW_ADMISSION'), updateEmergencyContact);
