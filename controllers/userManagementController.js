@@ -85,7 +85,7 @@ exports.getUsers = async (req, res) => {
     // STEP B: Base filter
     let filter = {
       organizationId: req.organizationId,
-      role: { $nin: ['Participant'] }
+      role: { $nin: ['Participant', 'Student'] }
     };
 
     // STEP C: Optional search filter

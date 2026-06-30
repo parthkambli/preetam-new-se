@@ -258,7 +258,7 @@ app.use(
 
 // ===================== ADMIN (SCHOOL) =====================
 app.use('/api/school/dashboard', auth, allowPermissions('VIEW_DASHBOARD'), schoolDashboardRoutes);
-app.use('/api/school/enquiry', auth, schoolEnquiryRoutes);
+app.use('/api/school/enquiry', auth, allowPermissions('SCHOOL_VIEW_ADMISSION', 'SCHOOL_ADD_ADMISSION', 'SCHOOL_EDIT_ADMISSION', 'SCHOOL_DELETE_ADMISSION'), schoolEnquiryRoutes);
 app.use('/api/school/admission', auth, schoolAdmissionRoutes);
 app.use('/api/followups', auth, followupRoutes);
 app.use('/api/students', auth, studentRoutes);

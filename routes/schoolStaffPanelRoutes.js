@@ -1,5 +1,7 @@
 const express = require('express');
 const router = express.Router();
+const auth = require('../middleware/auth');
+const { allowPermissions } = require('../middleware/permissions');
 const { upload, handleUpload } = require('../middleware/upload');
 
 const {
@@ -63,10 +65,10 @@ router.get('/dashboard', getDashboard);
 router.get('/my-schedule', getMySchedule);
 router.get('/my-schedule/students', getScheduleStudents);
 router.get('/profile', getProfile);
-router.get('/attendance', getAttendance);
-router.get('/attendance/students', getAttendanceStudents);
-router.get('/attendance/student-periods', getStudentPeriods);
-router.post('/attendance/scan-mark', scanMark);
+router.get('/attendance', allowPermissions('SCHOOL_VIEW_ATTENDANCE'), getAttendance);
+router.get('/attendance/students', allowPermissions('SCHOOL_VIEW_ATTENDANCE'), getAttendanceStudents);
+router.get('/attendance/student-periods', allowPermissions('SCHOOL_VIEW_ATTENDANCE'), getStudentPeriods);
+router.post('/attendance/scan-mark', allowPermissions('SCHOOL_MARK_ATTENDANCE'), scanMark);
 router.get('/events', getEvents);
 
 router.get('/enquiry', getEnquiries);
@@ -78,19 +80,19 @@ router.delete('/enquiry/:id', deleteEnquiry);
 router.get('/followups', getFollowups);
 router.post('/followups', createFollowup);
 
-router.get('/admission', getAdmissions);
-router.get('/admission/:id', getAdmissionById);
-router.get('/admission/:id/payments', getAdmissionPayments);
-router.post('/admission', handleUpload(upload.schoolAdmission), createAdmission);
-router.put('/admission/:id', handleUpload(upload.schoolAdmission), updateAdmission);
-router.delete('/admission/:id', deleteAdmission);
-router.post('/admission/:id/collect-payment', collectPayment);
+router.get('/admission', allowPermissions('SCHOOL_VIEW_ADMISSION'), getAdmissions);
+router.get('/admission/:id', allowPermissions('SCHOOL_VIEW_ADMISSION'), getAdmissionById);
+router.get('/admission/:id/payments', allowPermissions('SCHOOL_VIEW_ADMISSION'), getAdmissionPayments);
+router.post('/admission', allowPermissions('SCHOOL_ADD_ADMISSION'), handleUpload(upload.schoolAdmission), createAdmission);
+router.put('/admission/:id', allowPermissions('SCHOOL_EDIT_ADMISSION'), handleUpload(upload.schoolAdmission), updateAdmission);
+router.delete('/admission/:id', allowPermissions('SCHOOL_DELETE_ADMISSION'), deleteAdmission);
+router.post('/admission/:id/collect-payment', allowPermissions('SCHOOL_EDIT_ADMISSION'), collectPayment);
 
-router.get('/participants', getStudents);
-router.get('/participants/:id', getStudentById);
-router.put('/participants/:id', updateStudent);
-router.put('/participants/:id/emergency-contact', updateEmergencyContact);
-router.delete('/participants/:id/emergency-contact', clearEmergencyContact);
+router.get('/participants', allowPermissions('SCHOOL_VIEW_ADMISSION'), getStudents);
+router.get('/participants/:id', allowPermissions('SCHOOL_VIEW_ADMISSION'), getStudentById);
+router.put('/participants/:id', allowPermissions('SCHOOL_VIEW_ADMISSION'), updateStudent);
+router.put('/participants/:id/emergency-contact', allowPermissions('SCHOOL_VIEW_ADMISSION'), updateEmergencyContact);
+router.delete('/participants/:id/emergency-contact', allowPermissions('SCHOOL_VIEW_ADMISSION'), clearEmergencyContact);
 
 router.get('/services', getServices);
 router.post('/services', createService);
@@ -103,16 +105,16 @@ router.post('/services/bookings', createServiceBooking);
 router.delete('/services/bookings/:id', cancelServiceBooking);
 router.get('/services/bookings/available-seats', getAvailableSeats);
 
-router.get('/fees/types', getFeeTypes);
-router.post('/fees/types', createFeeType);
-router.put('/fees/types/:id', updateFeeType);
-router.delete('/fees/types/:id', deleteFeeType);
+router.get('/fees/types', allowPermissions('SCHOOL_VIEW_FEES'), getFeeTypes);
+router.post('/fees/types', allowPermissions('SCHOOL_VIEW_FEES'), createFeeType);
+router.put('/fees/types/:id', allowPermissions('SCHOOL_VIEW_FEES'), updateFeeType);
+router.delete('/fees/types/:id', allowPermissions('SCHOOL_VIEW_FEES'), deleteFeeType);
 
-router.get('/fees/allotments', getAllotments);
-router.post('/fees/allotments', allotFee);
+router.get('/fees/allotments', allowPermissions('SCHOOL_VIEW_FEES'), getAllotments);
+router.post('/fees/allotments', allowPermissions('SCHOOL_VIEW_FEES'), allotFee);
 
-router.get('/fees/payments', getPayments);
-router.post('/fees/payments', addPayment);
+router.get('/fees/payments', allowPermissions('SCHOOL_VIEW_FEES'), getPayments);
+router.post('/fees/payments', allowPermissions('SCHOOL_VIEW_FEES'), addPayment);
 
 router.get('/health-records', getHealthRecords);
 router.get('/health-records/:id', getHealthRecordById);
@@ -125,6 +127,6 @@ router.get('/activities', getActivities);
 router.get('/renewals/expiring', getExpiring);
 router.post('/renewals/renew', renew);
 
-router.get('/reports', getReports);
+router.get('/reports', allowPermissions('SCHOOL_VIEW_REPORTS'), getReports);
 
 module.exports = router;

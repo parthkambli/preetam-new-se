@@ -18,8 +18,14 @@ const PERMISSIONS = {
 
   // School Staff
   SchoolStaff: [
-    'VIEW_SCHOOL_DASHBOARD',
-    'MANAGE_STUDENTS',
+    'SCHOOL_VIEW_ADMISSION',
+    'SCHOOL_ADD_ADMISSION',
+    'SCHOOL_EDIT_ADMISSION',
+    'SCHOOL_DELETE_ADMISSION',
+    'SCHOOL_VIEW_FEES',
+    'SCHOOL_VIEW_REPORTS',
+    'SCHOOL_VIEW_ATTENDANCE',
+    'SCHOOL_MARK_ATTENDANCE',
   ],
 //fitness member
   Participant: [
