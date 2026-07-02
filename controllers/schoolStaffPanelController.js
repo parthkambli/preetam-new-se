@@ -17,11 +17,170 @@ const Activity = require('../models/Activity');
 const SchoolAdmission = require('../models/SchoolAdmission');
 const SchoolAttendance = require('../models/SchoolAttendance');
 const TimeTable = require('../models/schoolPeriod');
+const Event = require('../models/Event');
 const {
   getTodayIST,
   getDayNameFromDate
 } = require('../utils/date');
-exports.getDashboard = schoolDashboardController.getSchoolDashboard;
+exports.getDashboard = async (req, res) => {
+  try {
+    const organizationId = req.organizationId;
+
+    const emptyShape = {
+      success: true,
+      data: {
+        profile: null,
+        stats: { todayClasses: 0, todayStudents: 0, presentToday: 0, absentToday: 0, pendingToday: 0 },
+        upcomingClasses: [],
+        upcomingEvents: [],
+      },
+    };
+
+    const user = await User.findById(req.user.id).lean();
+    if (!user || !user.mobile) {
+      return res.json(emptyShape);
+    }
+
+    const fitnessStaff = await FitnessStaff.findOne({ mobileNumber: user.mobile }).lean();
+    if (!fitnessStaff) {
+      return res.json(emptyShape);
+    }
+
+    const activities = await Activity.find({
+      staffName: fitnessStaff.fullName,
+      organizationId,
+    }).select('_id name').lean();
+
+    const profile = {
+      name: fitnessStaff.fullName || 'Staff',
+      mobile: fitnessStaff.mobileNumber || '',
+      email: fitnessStaff.emailId || '',
+      role: user.role || fitnessStaff.role || '',
+      assignedActivities: activities.map(a => a.name),
+      profileImage: fitnessStaff.profilePhoto
+        ? `${req.protocol}://${req.get('host')}${fitnessStaff.profilePhoto}`
+        : '',
+    };
+
+    const todayIST = getTodayIST();
+    const dayName = getDayNameFromDate(todayIST);
+    const dayField = dayName.toLowerCase() + 'ActivityId';
+    const [y, m, d] = todayIST.split('-').map(Number);
+
+    const now = new Date();
+    const currentISTTime = new Intl.DateTimeFormat('en-GB', {
+      timeZone: 'Asia/Kolkata',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    }).format(now);
+
+    const activityIds = activities.map(a => a._id);
+
+    const schedule = await SchoolAdmission.aggregate([
+      { $match: { organizationId, status: 'Active' } },
+      { $match: { 'timetable.0': { $exists: true } } },
+      { $unwind: '$timetable' },
+      { $match: { [`timetable.${dayField}`]: { $in: activityIds, $ne: null } } },
+      {
+        $group: {
+          _id: {
+            periodId: '$timetable.periodId',
+            activityId: `$timetable.${dayField}`,
+          },
+          studentCount: { $sum: 1 },
+        },
+      },
+      {
+        $lookup: {
+          from: 'timetables',
+          localField: '_id.periodId',
+          foreignField: '_id',
+          as: 'period',
+        },
+      },
+      { $unwind: { path: '$period', preserveNullAndEmptyArrays: true } },
+      {
+        $lookup: {
+          from: 'activities',
+          localField: '_id.activityId',
+          foreignField: '_id',
+          as: 'activity',
+        },
+      },
+      { $unwind: { path: '$activity', preserveNullAndEmptyArrays: true } },
+      { $sort: { 'period.startTime': 1 } },
+      {
+        $project: {
+          _id: 0,
+          periodId: '$_id.periodId',
+          periodName: { $ifNull: ['$period.name', ''] },
+          startTime: { $ifNull: ['$period.startTime', ''] },
+          endTime: { $ifNull: ['$period.endTime', ''] },
+          activityId: '$_id.activityId',
+          activityName: { $ifNull: ['$activity.name', ''] },
+          studentCount: 1,
+        },
+      },
+    ]);
+
+    const todayClasses = schedule.length;
+    const todayStudents = schedule.reduce((sum, s) => sum + s.studentCount, 0);
+
+    const periodIds = [...new Set(schedule.map(s => s.periodId))];
+    const scheduleActivityIds = [...new Set(schedule.map(s => s.activityId))];
+
+    const [presentToday, absentToday] = await Promise.all([
+      SchoolAttendance.countDocuments({
+        organizationId,
+        attendanceDate: todayIST,
+        status: 'Present',
+        periodId: { $in: periodIds },
+        activityId: { $in: scheduleActivityIds },
+      }),
+      SchoolAttendance.countDocuments({
+        organizationId,
+        attendanceDate: todayIST,
+        status: 'Absent',
+        periodId: { $in: periodIds },
+        activityId: { $in: scheduleActivityIds },
+      }),
+    ]);
+
+    const pendingToday = todayStudents - presentToday - absentToday;
+
+    const upcomingClasses = schedule.filter(s => s.startTime >= currentISTTime);
+
+    const dayIndex = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].indexOf(dayName);
+    const daysUntilSunday = dayIndex === 0 ? 0 : 7 - dayIndex;
+    const todayDate = new Date(Date.UTC(y, m - 1, d));
+    const sundayDate = new Date(Date.UTC(y, m - 1, d + daysUntilSunday, 23, 59, 59, 999));
+
+    const events = await Event.find({
+      organizationId,
+      date: { $gte: todayDate, $lte: sundayDate },
+    }).sort({ date: 1, startTime: 1 }).lean();
+
+    return res.json({
+      success: true,
+      data: {
+        profile,
+        stats: {
+          todayClasses,
+          todayStudents,
+          presentToday,
+          absentToday,
+          pendingToday,
+        },
+        upcomingClasses,
+        upcomingEvents: events,
+      },
+    });
+  } catch (err) {
+    console.error('getDashboard error:', err);
+    return res.status(500).json({ success: false, message: err.message });
+  }
+};
 
 exports.getMySchedule = async (req, res) => {
   try {
