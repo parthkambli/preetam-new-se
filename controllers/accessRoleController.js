@@ -100,7 +100,30 @@ exports.updateRole = async (req, res) => {
     }
 
     role.name = name || role.name;
-    role.permissions = permissions ?? role.permissions;
+
+    // ──────────────────────────────────────────────
+    // MERGE role permissions by prefix so school
+    // (SCHOOL_*) and fitness (rest) don't overwrite
+    // each other when "Set as default role" is used.
+    // ──────────────────────────────────────────────
+    if (permissions !== undefined) {
+      const isSchoolPerm = (p) => p.startsWith('SCHOOL_');
+
+      const incomingSchool = permissions.filter(isSchoolPerm);
+      const incomingFitness = permissions.filter(p => !isSchoolPerm(p));
+      const existingSchool = role.permissions.filter(isSchoolPerm);
+      const existingFitness = role.permissions.filter(p => !isSchoolPerm(p));
+
+      const finalSchool = permissions.some(isSchoolPerm)
+        ? incomingSchool
+        : existingSchool;
+
+      const finalFitness = permissions.some(p => !isSchoolPerm(p))
+        ? incomingFitness
+        : existingFitness;
+
+      role.permissions = [...finalSchool, ...finalFitness];
+    }
 
     await role.save();
     const users = await User.find({

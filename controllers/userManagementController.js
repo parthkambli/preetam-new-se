@@ -262,12 +262,52 @@ exports.updateUserPermissions = async (req, res) => {
       });
     }
 
-    // ✅ Update overrides
-    user.customPermissions =
-      customPermissions || [];
+    const incomingCustom = customPermissions || [];
+    const incomingRemoved = removedPermissions || [];
+    const existingCustom = user.customPermissions || [];
+    const existingRemoved = user.removedPermissions || [];
 
-    user.removedPermissions =
-      removedPermissions || [];
+    const isSchoolPerm = (p) => p.startsWith('SCHOOL_');
+
+    // ──────────────────────────────────────────────
+    // MERGE: replace perms of the context present in
+    // incoming arrays; preserve the other context.
+    //
+    //   SCHOOL_*  → school context
+    //   rest      → fitness context
+    // ──────────────────────────────────────────────
+
+    // Custom permissions
+    const incomingSchoolCustom = incomingCustom.filter(isSchoolPerm);
+    const incomingFitnessCustom = incomingCustom.filter(p => !isSchoolPerm(p));
+    const existingSchoolCustom = existingCustom.filter(isSchoolPerm);
+    const existingFitnessCustom = existingCustom.filter(p => !isSchoolPerm(p));
+
+    const finalSchoolCustom = incomingCustom.some(isSchoolPerm)
+      ? incomingSchoolCustom
+      : existingSchoolCustom;
+
+    const finalFitnessCustom = incomingCustom.some(p => !isSchoolPerm(p))
+      ? incomingFitnessCustom
+      : existingFitnessCustom;
+
+    user.customPermissions = [...finalSchoolCustom, ...finalFitnessCustom];
+
+    // Removed permissions
+    const incomingSchoolRemoved = incomingRemoved.filter(isSchoolPerm);
+    const incomingFitnessRemoved = incomingRemoved.filter(p => !isSchoolPerm(p));
+    const existingSchoolRemoved = existingRemoved.filter(isSchoolPerm);
+    const existingFitnessRemoved = existingRemoved.filter(p => !isSchoolPerm(p));
+
+    const finalSchoolRemoved = incomingRemoved.some(isSchoolPerm)
+      ? incomingSchoolRemoved
+      : existingSchoolRemoved;
+
+    const finalFitnessRemoved = incomingRemoved.some(p => !isSchoolPerm(p))
+      ? incomingFitnessRemoved
+      : existingFitnessRemoved;
+
+    user.removedPermissions = [...finalSchoolRemoved, ...finalFitnessRemoved];
 
     // 🔥 REBUILD FINAL PERMISSIONS
     user.finalPermissions =
