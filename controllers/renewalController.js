@@ -7,6 +7,7 @@ const ServiceRenewal = require('../models/ServiceRenewal');
 const SchoolServiceBooking = require('../models/SchoolServiceBooking');
 const RevenueSchedule = require('../models/RevenueSchedule');
 const TimeTable = require('../models/schoolPeriod');
+const { getTodayIST, formatDateToISTStr } = require('../utils/date');
 const {
   computeTimetableActivityCounts,
   buildOccupancyInc,
@@ -335,13 +336,17 @@ exports.renew = async (req, res) => {
 
     // ── Reactivate admission if it was Inactive (renewal — skip capacity validation) ──
     if (admission.status === 'Inactive') {
-      admission.status = 'Active';
-      const counts = computeTimetableActivityCounts(admission.timetable);
-      const incMap = buildOccupancyInc(counts);
-      const ops = Object.entries(incMap).map(([pid, inc]) => ({
-        updateOne: { filter: { _id: pid }, update: { $inc: inc } }
-      }));
-      if (ops.length > 0) await TimeTable.bulkWrite(ops);
+      const todayStr = getTodayIST();
+      const startStr = admission.startDate ? formatDateToISTStr(admission.startDate) : '';
+      if (startStr && startStr <= todayStr) {
+        admission.status = 'Active';
+        const counts = computeTimetableActivityCounts(admission.timetable);
+        const incMap = buildOccupancyInc(counts);
+        const ops = Object.entries(incMap).map(([pid, inc]) => ({
+          updateOne: { filter: { _id: pid }, update: { $inc: inc } }
+        }));
+        if (ops.length > 0) await TimeTable.bulkWrite(ops);
+      }
     }
 
     admission.totalFee = (admission.totalFee || 0) + totalNewAmount;

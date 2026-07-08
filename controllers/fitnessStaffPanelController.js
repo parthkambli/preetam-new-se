@@ -288,20 +288,13 @@ const canMarkAttendance =
 
 
         // 2. Get attendance records
-       const attendanceRecords =
-  await FitnessAttendance.find({
-    activity: activity._id,
-    attendanceDate: {
-      $gte: new Date(
-        `${selectedDate}T00:00:00.000Z`
-      ),
-      $lt: new Date(
-        `${selectedDate}T23:59:59.999Z`
-      )
-    },
-    organizationId:
-      req.organizationId,
-  }).lean();
+        const attendanceRecords =
+   await FitnessAttendance.find({
+     activity: activity._id,
+     attendanceDay: selectedDate,
+     organizationId:
+       req.organizationId,
+   }).lean();
 
         // 3. Create attendance map
         const attendanceMap = {};

@@ -361,7 +361,9 @@ schoolAdmissionSchema.virtual('feeRemainingDays').get(function() {
   if (!this.endDate) return '—';
   const now = new Date();
   const end = new Date(this.endDate);
+  end.setHours(23, 59, 59, 999);
   const start = this.startDate ? new Date(this.startDate) : null;
+  if (start) start.setHours(0, 0, 0, 0);
 
   if (start && start > now) {
     const diff = Math.ceil((start - now) / msPerDay);

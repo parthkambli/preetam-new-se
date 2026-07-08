@@ -576,23 +576,23 @@ exports.verifyServicePayment = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Pay now amount must be greater than 0' });
     }
 
-    // const generatedSignature = crypto
-    //   .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET)
-    //   .update(`${razorpay_order_id}|${razorpay_payment_id}`)
-    //   .digest('hex');
+    const generatedSignature = crypto
+      .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET)
+      .update(`${razorpay_order_id}|${razorpay_payment_id}`)
+      .digest('hex');
 
-    // if (generatedSignature !== razorpay_signature) {
-    //   return res.status(400).json({ success: false, message: 'Payment verification failed' });
-    // }
+    if (generatedSignature !== razorpay_signature) {
+      return res.status(400).json({ success: false, message: 'Payment verification failed' });
+    }
 
     // TEMP: Skip Razorpay signature verification for local Postman testing
     // TODO: Re-enable before production
-if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
-  return res.status(400).json({
-    success: false,
-    message: 'Missing Razorpay payment details'
-  });
-}
+// if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
+//   return res.status(400).json({
+//     success: false,
+//     message: 'Missing Razorpay payment details'
+//   });
+// }
 //comment out above code after testing
 
     const studentDoc = await Student.findOne({ admissionId: admission._id })
@@ -872,13 +872,13 @@ exports.verifyRenewServicePayment = async (req, res) => {
     } = req.body;
 
     // 1. Verify Razorpay signature
-    // const generatedSignature = crypto
-    //   .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET)
-    //   .update(`${razorpay_order_id}|${razorpay_payment_id}`)
-    //   .digest('hex');
-    // if (generatedSignature !== razorpay_signature) {
-    //   return res.status(400).json({ success: false, message: 'Payment verification failed' });
-    // }
+    const generatedSignature = crypto
+      .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET)
+      .update(`${razorpay_order_id}|${razorpay_payment_id}`)
+      .digest('hex');
+    if (generatedSignature !== razorpay_signature) {
+      return res.status(400).json({ success: false, message: 'Payment verification failed' });
+    }
 
     // 2. Validate renewal request (reuses shared helper)
     const { booking, service, endDate, totalFee } =
@@ -1323,14 +1323,14 @@ exports.verifyPendingFeePayment = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Pay now amount must be greater than 0' });
     }
 
-    // const generatedSignature = crypto
-    //   .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET)
-    //   .update(`${razorpay_order_id}|${razorpay_payment_id}`)
-    //   .digest('hex');
+    const generatedSignature = crypto
+      .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET)
+      .update(`${razorpay_order_id}|${razorpay_payment_id}`)
+      .digest('hex');
 
-    // if (generatedSignature !== razorpay_signature) {
-    //   return res.status(400).json({ success: false, message: 'Payment verification failed' });
-    // }
+    if (generatedSignature !== razorpay_signature) {
+      return res.status(400).json({ success: false, message: 'Payment verification failed' });
+    }
 
     const studentDoc = await Student.findOne({ admissionId: admission._id })
       .select('_id')

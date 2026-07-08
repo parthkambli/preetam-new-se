@@ -58,14 +58,14 @@ exports.createRole = async (req, res) => {
 
       const existingAccessRole = await AccessRole.findOne({
         roleKey,
-        organizationId: req.organizationId
+        organizationId: "fitness"
       });
 
       if (!existingAccessRole) {
         await AccessRole.create({
           name,
           roleKey,
-          organizationId: req.organizationId,
+          organizationId: "fitness",
           permissions: [
             'VIEW_OWN_SCHEDULE',
             'VIEW_ACTIVITIES',

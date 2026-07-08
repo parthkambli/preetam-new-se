@@ -544,17 +544,10 @@ if (value.emailId?.trim()) {
 
 // console.log("FINAL staffData before save:", staffData);
 
-    const savedStaff = await FitnessStaff.create(staffData);
-
-    // Create User Login
-    const staffUserId = `FITSTF${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
-    const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(value.password, salt);
-
-  // 🔥 Fetch selected access role
+  // 🔥 Fetch selected access role (before creating staff to avoid orphan records)
   const accessRole = await AccessRole.findOne({
     name: value.role,
-    organizationId: "fitness",
+    organizationId: { $in: [req.organizationId, "fitness"] },
   }).lean();
 
   if (!accessRole) {
@@ -567,6 +560,13 @@ if (value.emailId?.trim()) {
       "Selected access role not found"
     );
   }
+
+    const savedStaff = await FitnessStaff.create(staffData);
+
+    // Create User Login
+    const staffUserId = `FITSTF${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(value.password, salt);
 
   const createdUser = await User.create({
     userId: staffUserId,

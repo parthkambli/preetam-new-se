@@ -911,6 +911,7 @@ const {
   validateActivityCapacity,
 } = require('../helpers/occupancyHelpers');
 const { computeAdmissionStatus } = require('../utils/computeAdmissionStatus');
+const { getTodayIST, formatDateToISTStr } = require('../utils/date');
 const { applyAdmissionPayment } = require('../helpers/schoolPaymentHelper');
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -1210,6 +1211,9 @@ if (req.files) {
     if (!admissionData.startDate) {
       return res.status(400).json({ message: 'Start date is required.' });
     }
+    const todayStr = getTodayIST();
+    const startStr = formatDateToISTStr(admissionData.startDate);
+    const isFutureStart = startStr > todayStr;
     if (!admissionData.responsibleStaffId) {
       return res.status(400).json({ message: 'Responsible staff is required.' });
     }
@@ -1538,10 +1542,12 @@ if (req.files) {
       organizationId: req.organizationId
     });
 
+    if (isFutureStart) admission.status = 'Inactive';
+
     await admission.save();
 
-    // ── Increment period occupancy for timetable ─────────────────────────
-    if (rawTimetable && rawTimetable.length > 0) {
+    // ── Increment period occupancy for timetable (skip if future start) ──
+    if (!isFutureStart && rawTimetable && rawTimetable.length > 0) {
       const activityCounts = computeTimetableActivityCounts(rawTimetable);
       const incMap = buildOccupancyInc(activityCounts);
       const ops = Object.entries(incMap).map(([pid, inc]) => ({
@@ -1947,6 +1953,15 @@ if (req.files) {
     const feePlan = updateData.feePlan || admission.feePlan;
     if (startDate && feePlan) {
       updateData.endDate = calcEndDate(startDate, feePlan);
+    }
+
+    // ── If startDate is pushed to future, set Inactive and release occupancy ──
+    if (updateData.startDate) {
+      const todayStr = getTodayIST();
+      const startStr = formatDateToISTStr(updateData.startDate);
+      if (startStr > todayStr && admission.status === 'Active') {
+        updateData.status = 'Inactive';
+      }
     }
 
     // ── Capture timetable diff before applying updates ─────────────────

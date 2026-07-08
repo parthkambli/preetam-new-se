@@ -8,8 +8,16 @@ function computeAdmissionStatus(admission) {
     return { computedStatus: 'Active', remainingDays: '-', isExpired: false };
   }
 
+  const start = admission.startDate ? new Date(admission.startDate) : null;
+  if (start) start.setHours(0, 0, 0, 0);
   const end = new Date(admission.endDate);
   end.setHours(23, 59, 59, 999);
+
+  // Future start date — not yet active
+  if (start && start > today) {
+    const diff = Math.ceil((start - today) / msPerDay);
+    return { computedStatus: 'Inactive', remainingDays: `Starts in ${diff}d`, isExpired: false };
+  }
 
   if (end < today) {
     return { computedStatus: 'Inactive', remainingDays: 'Expired', isExpired: true };

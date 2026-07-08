@@ -24,6 +24,12 @@ exports.getTodayIST = () => {
 };
 
 
+exports.formatDateToISTStr = (date) => {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Kolkata",
+  }).format(new Date(date));
+};
+
 exports.getDayNameFromDate = (dateString) => {
   const [year, month, day] = dateString.split('-').map(Number);
 
