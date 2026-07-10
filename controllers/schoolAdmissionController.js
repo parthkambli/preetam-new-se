@@ -1741,19 +1741,22 @@ if (req.files) {
     }
 
     // ── Create User record for login ───────────────────────────────────────
-    if (admissionData.loginMobile && admissionData.password) {
+    if (admissionData.loginMobile || admissionData.mobile) {
+      const userMobileId = admission.loginMobile || admission.mobile;
       const existingUser = await User.findOne({
-        userId: admissionData.loginMobile,
+        userId: userMobileId,
         organizationId: req.organizationId
       });
       if (existingUser) {
         return res.status(409).json({ message: 'A user account with this login mobile already exists.' });
       }
 
-      const hashedPassword = await bcrypt.hash(admissionData.password, 10);
+      const hashedPassword = admissionData.password
+        ? await bcrypt.hash(admissionData.password, 10)
+        : null;
 
       const user = new User({
-        userId:         admission.loginMobile,
+        userId:         userMobileId,
         password:       hashedPassword,
         role:           'Student',
         mobile:         admission.mobile,

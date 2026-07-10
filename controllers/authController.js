@@ -311,3 +311,70 @@ exports.memberMobileLogin = async (req, res) => {
     });
   }
 };
+
+
+exports.studentMobileLogin = async (req, res) => {
+  try {
+    const { mobile } = req.body;
+
+    if (!mobile) {
+      return res.status(400).json({ message: 'Mobile number is required' });
+    }
+
+    if (!/^\d{10,15}$/.test(mobile)) {
+      return res.status(400).json({ message: 'Invalid mobile number' });
+    }
+
+    const user = await User.findOne({
+      mobile: mobile.trim(),
+      role: 'Student',
+      isActive: 'Yes'
+    });
+
+    if (!user) {
+      return res.status(404).json({ message: 'Student not found' });
+    }
+
+    const organizations = [];
+    const allowedOrgs =
+      user.accessibleOrganizations?.length
+        ? user.accessibleOrganizations
+        : [user.organizationId];
+
+    if (allowedOrgs.includes('school')) {
+      organizations.push({
+        id: 'school',
+        name: 'Preetam Senior Citizen School',
+        label: 'Senior Citizen School'
+      });
+    }
+
+    const token = jwt.sign(
+      {
+        id: user._id,
+        userId: user.userId,
+        role: user.role,
+        organizationId: user.organizationId,
+        accessibleOrganizations: allowedOrgs,
+      },
+      process.env.JWT_SECRET,
+      { expiresIn: '30d' }
+    );
+
+    return res.json({
+      success: true,
+      token,
+      user: {
+        id: user._id,
+        userId: user.userId,
+        fullName: user.fullName,
+        role: user.role,
+        mobile: user.mobile,
+        organizationId: user.organizationId,
+      }
+    });
+  } catch (err) {
+    console.error('Student mobile login error:', err);
+    res.status(500).json({ message: 'Server error during student login' });
+  }
+};

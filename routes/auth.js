@@ -1,5 +1,5 @@
     const express = require('express');
-    const { login, getMe, memberMobileLogin } = require('../controllers/authController');
+    const { login, getMe, memberMobileLogin, studentMobileLogin } = require('../controllers/authController');
     const auth = require('../middleware/auth');
 
     const router = express.Router();
@@ -11,6 +11,9 @@
 
     // Member Mobile Login
     router.post('/member-login', memberMobileLogin);
+
+    // Student Mobile Login (OTP via Firebase — no password)
+    router.post('/student-mobile-login', studentMobileLogin);
 
     // GET /api/auth/me
     // @desc    Get current admin info
