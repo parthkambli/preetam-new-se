@@ -1801,7 +1801,7 @@ exports.getDashboard = async (req, res) => {
           : [],
         todayActivityIds.length
           ? Activity.find({ _id: { $in: todayActivityIds } })
-              .select('name staffId').populate('staffId', 'fullName').lean()
+              .select('name staffName').lean()
           : [],
       ]);
 
@@ -1817,7 +1817,7 @@ exports.getDashboard = async (req, res) => {
         todaySchedule.push({
           periodName: period?.startTime || '',
           activityName: activity?.name || '',
-          staffName: activity?.staffId?.fullName || '',
+          staffName: activity?.staffName || '',
         });
       }
 
