@@ -165,6 +165,47 @@ const createUploader = (folderPath, fieldName = 'profilePhoto') => {
   });
 };
 
+// ─── Admission uploader: routes photo → profiles, healthRecord → health-records ──
+const admissionUploadBase = path.join(__dirname, '../uploads/school');
+const admissionFolders = {
+  photo:        path.join(admissionUploadBase, 'profiles'),
+  healthRecord: path.join(admissionUploadBase, 'health-records'),
+};
+
+for (const dir of Object.values(admissionFolders)) {
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+}
+
+const admissionStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const folder = admissionFolders[file.fieldname];
+    cb(null, folder || admissionUploadBase);
+  },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
+    cb(null, `${file.fieldname}-${uniqueSuffix}${path.extname(file.originalname)}`);
+  },
+});
+
+const admissionFileFilter = (req, file, cb) => {
+  const allowedMimes = /image\/(jpeg|jpg|png|webp)|application\/pdf/i;
+  const allowedExts  = /jpeg|jpg|png|webp|pdf/i;
+  if (allowedExts.test(path.extname(file.originalname)) && allowedMimes.test(file.mimetype)) {
+    cb(null, true);
+  } else {
+    const err = new multer.MulterError('LIMIT_UNEXPECTED_FILE', file.fieldname);
+    err.message = 'Only JPG, JPEG, PNG, WEBP, and PDF files are allowed.';
+    err.code    = 'INVALID_FILE_TYPE';
+    cb(err, false);
+  }
+};
+
+const admissionMulter = multer({
+  storage: admissionStorage,
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: admissionFileFilter,
+});
+
 // ─── Centralized upload object ────────────────────────────────────────────────
 const upload = {
   fitnessStaff:      createUploader('fitness/staff').single('profilePhoto'),
@@ -172,7 +213,7 @@ const upload = {
   schoolProfile:     createUploader('school/profiles').single('photo'),
   schoolStaff:       createUploader('school/profiles').single('photo'),
   schoolHealthRecord:createUploader('school/health-records').single('healthRecord'),
-  schoolAdmission:   createUploader('school').fields([
+  schoolAdmission:   admissionMulter.fields([
     { name: 'photo',         maxCount: 1 },
     { name: 'healthRecord',  maxCount: 5 },
   ]),

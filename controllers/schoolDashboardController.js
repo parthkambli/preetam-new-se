@@ -7,6 +7,7 @@ const SchoolAttendance = require('../models/SchoolAttendance');
 const StaffAttendance = require('../models/Staffattendance');
 const FeeAllotment = require('../models/FeeAllotment');
 const FeePayment = require('../models/FeePayment');
+const { formatDateToISTStr } = require('../utils/date');
 
 exports.getSchoolDashboard = async (req, res) => {
   try {
@@ -16,7 +17,7 @@ exports.getSchoolDashboard = async (req, res) => {
     const tomorrow = new Date(today);
     tomorrow.setDate(today.getDate() + 1);
 
-    const todayStr = today.toISOString().split('T')[0];
+    const todayStr = formatDateToISTStr(today);
 
     const [
       totalParticipants,

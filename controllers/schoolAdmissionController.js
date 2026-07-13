@@ -1154,13 +1154,13 @@ if (admissionData.games) {
 if (req.files) {
   // Single photo
   if (req.files.photo && req.files.photo.length > 0) {
-    admissionData.photo = `/uploads/school/${req.files.photo[0].filename}`;
+    admissionData.photo = `/uploads/school/profiles/${req.files.photo[0].filename}`;
   }
 
   // Multiple health records
   if (req.files.healthRecord && req.files.healthRecord.length > 0) {
     admissionData.medicalReports = req.files.healthRecord.map(
-      file => `/uploads/school/${file.filename}`
+      file => `/uploads/school/health-records/${file.filename}`
     );
   }
 }

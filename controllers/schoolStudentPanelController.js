@@ -18,6 +18,7 @@ const { applyAdmissionPayment } = require('../helpers/schoolPaymentHelper');
 const razorpay = require('../config/razorpay');
 const crypto = require('crypto');
 const mongoose = require('mongoose');
+const { formatDateToISTStr } = require('../utils/date');
 
 const findLoggedInStudent = async (req) => {
   const user = await User.findById(req.user.id).lean();
@@ -1450,13 +1451,13 @@ exports.calculateMembershipRenewal = async (req, res) => {
       calculation: {
         feeTypeId: feeType._id,
         plan: feePlan,
-        startDate: computedStartDate.toISOString().split('T')[0],
-        endDate: endDate.toISOString().split('T')[0],
+        startDate: formatDateToISTStr(computedStartDate),
+        endDate: formatDateToISTStr(endDate),
         totalFee,
       },
     });
   } catch (err) {
-    if (err.message === 'Student not found' || err.message === 'Admission record not found')
+    if (err.message === 'Student not found' || err.message === 'Admission not found')
       return res.status(404).json({ success: false, message: err.message });
     console.error('calculateMembershipRenewal error:', err);
     return res.status(400).json({ success: false, message: err.message });
@@ -1499,15 +1500,15 @@ exports.createMembershipRenewalOrder = async (req, res) => {
       },
       summary: {
         plan: feePlan,
-        startDate: computedStartDate.toISOString().split('T')[0],
-        endDate: endDate.toISOString().split('T')[0],
+        startDate: formatDateToISTStr(computedStartDate),
+        endDate: formatDateToISTStr(endDate),
         totalFee,
         paidNow: numPayNow,
         pendingAmount: totalFee - numPayNow,
       },
     });
   } catch (err) {
-    if (err.message === 'Student not found' || err.message === 'Admission record not found')
+    if (err.message === 'Student not found' || err.message === 'Admission not found')
       return res.status(404).json({ success: false, message: err.message });
     console.error('createMembershipRenewalOrder error:', err);
     return res.status(400).json({ success: false, message: err.message });
@@ -1632,8 +1633,8 @@ exports.verifyMembershipRenewalPayment = async (req, res) => {
       message: 'Membership renewed successfully',
       membership: {
         plan: feePlan,
-        startDate: computedStartDate.toISOString().split('T')[0],
-        endDate: endDate.toISOString().split('T')[0],
+        startDate: formatDateToISTStr(computedStartDate),
+        endDate: formatDateToISTStr(endDate),
         totalFee,
         paidAmount: numPayNow,
         pendingAmount: totalFee - numPayNow,
@@ -1746,7 +1747,7 @@ exports.getDashboard = async (req, res) => {
     const month = today.getMonth();
     const monthStartStr = `${year}-${String(month + 1).padStart(2, '0')}-01`;
     const monthEndDate = new Date(year, month + 1, 0);
-    const monthEndStr = monthEndDate.toISOString().split('T')[0];
+    const monthEndStr = formatDateToISTStr(monthEndDate);
     const monthName = today.toLocaleString('default', { month: 'long' });
 
     const attendanceRecords = await SchoolAttendance.find({
