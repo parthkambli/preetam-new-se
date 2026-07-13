@@ -366,11 +366,11 @@ schoolAdmissionSchema.virtual('feeRemainingDays').get(function() {
   if (start) start.setHours(0, 0, 0, 0);
 
   if (start && start > now) {
-    const diff = Math.ceil((start - now) / msPerDay);
+    const diff = Math.floor((start - now) / msPerDay);
     return `Starts in ${diff}d`;
   }
   if (end < now) return 'Expired';
-  const diff = Math.ceil((end - now) / msPerDay);
+  const diff = Math.floor((end - now) / msPerDay);
   return `${diff}d`;
 });
 
@@ -386,7 +386,7 @@ schoolAdmissionSchema.virtual('serviceRemainingDays').get(function() {
   }
   if (!latestEnd) return '—';
   if (latestEnd < now) return 'Expired';
-  const diff = Math.ceil((latestEnd - now) / msPerDay);
+  const diff = Math.floor((latestEnd - now) / msPerDay);
   return `${diff}d`;
 });
 

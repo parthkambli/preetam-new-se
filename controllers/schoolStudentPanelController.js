@@ -18,7 +18,7 @@ const { applyAdmissionPayment } = require('../helpers/schoolPaymentHelper');
 const razorpay = require('../config/razorpay');
 const crypto = require('crypto');
 const mongoose = require('mongoose');
-const { formatDateToISTStr } = require('../utils/date');
+const { formatDateToISTStr, getTodayIST } = require('../utils/date');
 
 const findLoggedInStudent = async (req) => {
   const user = await User.findById(req.user.id).lean();
@@ -1028,33 +1028,96 @@ exports.getAttendance = async (req, res) => {
   try {
     const admission = await findLoggedInStudent(req);
 
-    const attendanceRecords = await SchoolAttendance.find({
-      studentId: admission._id,
-      organizationId: req.organizationId,
-    })
-      .populate('markedBy', 'fullName')
-      .sort({ attendanceDate: -1 })
-      .lean();
+    const requestDate = req.query.date || getTodayIST();
+
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(requestDate)) {
+      return res.status(400).json({ success: false, message: 'Invalid date format. Use YYYY-MM-DD.' });
+    }
+
+    const dateObj = new Date(requestDate + 'T00:00:00Z');
+    const dayIndex = dateObj.getUTCDay();
+    const dayMap = [6, 0, 1, 2, 3, 4, 5];
+    const dayOfWeekIndex = dayMap[dayIndex];
+    const dayFieldName = DAY_FIELDS[dayOfWeekIndex];
+    const dayNameDisplay = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][dayIndex];
+
+    const timetableRows = admission.timetable || [];
+    if (timetableRows.length === 0) {
+      return res.json({
+        success: true,
+        date: requestDate,
+        day: dayNameDisplay,
+        summary: { present: 0, absent: 0, notMarked: 0, totalPeriods: 0 },
+        periods: [],
+      });
+    }
+
+    const periodIds = timetableRows.map(r => r.periodId).filter(Boolean);
+    const activityIds = timetableRows.map(r => r[dayFieldName]).filter(Boolean);
+
+    const [periods, activities, attendanceRecords] = await Promise.all([
+      periodIds.length > 0
+        ? TimeTable.find({ _id: { $in: periodIds } }).select('name startTime endTime').lean()
+        : [],
+      activityIds.length > 0
+        ? Activity.find({ _id: { $in: activityIds } }).select('name staffName').lean()
+        : [],
+      SchoolAttendance.find({
+        studentId: admission._id,
+        attendanceDate: requestDate,
+        organizationId: req.organizationId,
+      }).populate('markedBy', 'fullName').lean(),
+    ]);
+
+    const periodMap = {};
+    for (const p of periods) periodMap[p._id.toString()] = p;
+
+    const activityMap = {};
+    for (const a of activities) activityMap[a._id.toString()] = a;
+
+    const attendanceMap = {};
+    for (const a of attendanceRecords) attendanceMap[a.periodId.toString()] = a;
 
     let present = 0;
     let absent = 0;
-    for (const r of attendanceRecords) {
-      if (r.status === 'Present') present++;
-      else if (r.status === 'Absent') absent++;
-    }
-    const total = attendanceRecords.length;
-    const percentage = total === 0 ? 0 : Number(((present / total) * 100).toFixed(2));
+    let notMarked = 0;
+
+    const periodDetails = timetableRows.map(row => {
+      const period = periodMap[row.periodId?.toString()] || {};
+      const activityId = row[dayFieldName];
+      const activity = activityMap[activityId?.toString()] || {};
+      const attendance = attendanceMap[row.periodId?.toString()];
+
+      let status;
+      if (attendance) {
+        status = attendance.status;
+        if (status === 'Present') present++;
+        else absent++;
+      } else {
+        status = 'Not Marked';
+        notMarked++;
+      }
+
+      return {
+        periodName: period.name || '',
+        startTime: period.startTime || '',
+        endTime: period.endTime || '',
+        activityName: activity.name || '',
+        staffName: activity.staffName || '',
+        status,
+        markedAt: attendance?.markedAt || null,
+        markedBy: attendance?.markedBy?.fullName || '',
+      };
+    });
+
+    periodDetails.sort((a, b) => (a.startTime || '').localeCompare(b.startTime || ''));
 
     return res.json({
       success: true,
-      summary: { present, absent, total, percentage },
-      attendance: attendanceRecords.map(r => ({
-        _id: r._id,
-        attendanceDate: r.attendanceDate,
-        attendanceDay: r.day,
-        status: r.status,
-        markedBy: r.markedBy?.fullName || '',
-      })),
+      date: requestDate,
+      day: dayNameDisplay,
+      summary: { present, absent, notMarked, totalPeriods: timetableRows.length },
+      periods: periodDetails,
     });
   } catch (err) {
     if (err.message === 'Student not found' || err.message === 'Admission record not found')

@@ -1272,7 +1272,7 @@ const pickFields = (body) => ALLOWED_FIELDS.reduce((acc, key) => {
 /** GET /api/health-records */
 exports.getAllHealthRecords = async (req, res) => {
   try {
-    const { search, status, recordType, studentId, from, to } = req.query;
+    const { search, status, recordType, studentId, from, to, page, limit } = req.query;
     const query = { organizationId: req.organizationId };
 
     if (status) query.status = status;
@@ -1290,6 +1290,32 @@ exports.getAllHealthRecords = async (req, res) => {
         { doctorName: { $regex: search, $options: 'i' } },
         { diagnosis: { $regex: search, $options: 'i' } },
       ];
+    }
+
+    const isPaginated = page !== undefined || limit !== undefined;
+
+    if (isPaginated) {
+      const pageNum = Math.max(1, parseInt(page) || 1);
+      const limitNum = Math.min(100, Math.max(1, parseInt(limit) || 10));
+      const skip = (pageNum - 1) * limitNum;
+
+      const totalRecords = await HealthRecord.countDocuments(query);
+
+      const records = await HealthRecord.find(query)
+        .sort({ recordDate: -1 })
+        .populate('studentId', 'fullName studentId admissionIdStr')
+        .skip(skip)
+        .limit(limitNum);
+
+      return res.json({
+        data: records,
+        pagination: {
+          totalRecords,
+          totalPages: Math.ceil(totalRecords / limitNum),
+          page: pageNum,
+          limit: limitNum,
+        }
+      });
     }
 
     const records = await HealthRecord.find(query)

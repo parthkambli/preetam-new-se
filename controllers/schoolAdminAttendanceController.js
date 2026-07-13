@@ -10,7 +10,7 @@ const {
 exports.getAttendanceSummary = async (req, res) => {
   try {
     const organizationId = req.organizationId;
-    const { date, activityId } = req.query;
+    const { date, activityId, page, limit } = req.query;
     const targetDate = date || getTodayIST();
     const dayName = getDayNameFromDate(targetDate);
     const dayField = dayName.toLowerCase() + 'ActivityId';
@@ -21,20 +21,32 @@ exports.getAttendanceSummary = async (req, res) => {
       'timetable.0': { $exists: true },
     };
 
-    const pipeline = [
+    // Base pipeline: match → unwind → filter day → optional activity → group
+    const basePipeline = [
       { $match: matchStage },
       { $unwind: '$timetable' },
       { $match: { [`timetable.${dayField}`]: { $ne: null } } },
-      {
-        $group: {
-          _id: {
-            periodId: '$timetable.periodId',
-            activityId: `$timetable.${dayField}`,
-          },
-          studentCount: { $sum: 1 },
-          students: { $push: '$_id' },
+    ];
+
+    if (activityId) {
+      basePipeline.push({
+        $match: { [`timetable.${dayField}`]: new mongoose.Types.ObjectId(activityId) },
+      });
+    }
+
+    basePipeline.push({
+      $group: {
+        _id: {
+          periodId: '$timetable.periodId',
+          activityId: `$timetable.${dayField}`,
         },
+        studentCount: { $sum: 1 },
+        students: { $push: '$_id' },
       },
+    });
+
+    // Lookup stages (used after grouping)
+    const lookupStages = [
       {
         $lookup: {
           from: 'timetables',
@@ -56,13 +68,81 @@ exports.getAttendanceSummary = async (req, res) => {
       { $sort: { 'period.startTime': 1 } },
     ];
 
-    if (activityId) {
-      pipeline.splice(3, 0, {
-        $match: { [`timetable.${dayField}`]: new mongoose.Types.ObjectId(activityId) },
+    const isPaginated = page !== undefined || limit !== undefined;
+    let schedules;
+
+    if (isPaginated) {
+      const pageNum = Math.max(1, parseInt(page) || 1);
+      const limitNum = Math.min(100, Math.max(1, parseInt(limit) || 10));
+      const skip = (pageNum - 1) * limitNum;
+
+      const [countResult, dataResult] = await Promise.all([
+        SchoolAdmission.aggregate([...basePipeline, { $count: 'totalRecords' }]),
+        SchoolAdmission.aggregate([
+          ...basePipeline,
+          { $sort: { '_id.periodId': 1 } },
+          { $skip: skip },
+          { $limit: limitNum },
+          ...lookupStages,
+        ]),
+      ]);
+
+      const totalRecords = countResult[0]?.totalRecords || 0;
+      schedules = dataResult;
+
+      const periodActivityPairs = schedules.map(s => ({
+        periodId: s._id.periodId,
+        activityId: s._id.activityId,
+      }));
+
+      const attendanceRecords = await SchoolAttendance.find({
+        $or: periodActivityPairs.map(p => ({
+          periodId: p.periodId,
+          activityId: p.activityId,
+        })),
+        attendanceDate: targetDate,
+        organizationId,
+      }).lean();
+
+      const recordMap = {};
+      for (const r of attendanceRecords) {
+        const key = `${r.periodId.toString()}_${r.activityId.toString()}`;
+        if (!recordMap[key]) recordMap[key] = { present: 0, absent: 0 };
+        if (r.status === 'Present') recordMap[key].present++;
+        else if (r.status === 'Absent') recordMap[key].absent++;
+      }
+
+      const result = schedules.map(s => {
+        const key = `${s._id.periodId.toString()}_${s._id.activityId.toString()}`;
+        const counts = recordMap[key] || { present: 0, absent: 0 };
+        return {
+          periodId: s._id.periodId,
+          periodName: s.period?.name || '',
+          startTime: s.period?.startTime || '',
+          endTime: s.period?.endTime || '',
+          activityId: s._id.activityId,
+          activityName: s.activity?.name || '',
+          day: dayName,
+          date: targetDate,
+          totalStudents: s.studentCount,
+          presentCount: counts.present,
+          absentCount: counts.absent,
+        };
+      });
+
+      return res.json({
+        attendance: result,
+        pagination: {
+          totalRecords,
+          totalPages: Math.ceil(totalRecords / limitNum),
+          page: pageNum,
+          limit: limitNum,
+        },
       });
     }
 
-    const schedules = await SchoolAdmission.aggregate(pipeline);
+    // Default: no pagination (backward-compatible)
+    schedules = await SchoolAdmission.aggregate([...basePipeline, ...lookupStages]);
 
     const periodActivityPairs = schedules.map(s => ({
       periodId: s._id.periodId,

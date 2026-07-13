@@ -15,7 +15,7 @@ function computeAdmissionStatus(admission) {
 
   // Future start date — not yet active
   if (start && start > today) {
-    const diff = Math.ceil((start - today) / msPerDay);
+    const diff = Math.floor((start - today) / msPerDay);
     return { computedStatus: 'Inactive', remainingDays: `Starts in ${diff}d`, isExpired: false };
   }
 
@@ -23,7 +23,7 @@ function computeAdmissionStatus(admission) {
     return { computedStatus: 'Inactive', remainingDays: 'Expired', isExpired: true };
   }
 
-  const diff = Math.ceil((end - today) / msPerDay);
+  const diff = Math.floor((end - today) / msPerDay);
   return { computedStatus: 'Active', remainingDays: `${diff}d`, isExpired: false };
 }
 

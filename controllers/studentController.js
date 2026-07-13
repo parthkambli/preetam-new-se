@@ -10,7 +10,7 @@ const SchoolAdmission = require('../models/SchoolAdmission');
  */
 exports.getAllStudents = async (req, res) => {
   try {
-    const { searchName, searchMobile, feePlan, status, studentId } = req.query;
+    const { searchName, searchMobile, feePlan, status, studentId, searchId, page, limit, hasEmergencyContact, searchDate } = req.query;
 
     let query = { organizationId: req.organizationId };
 
@@ -29,17 +29,64 @@ exports.getAllStudents = async (req, res) => {
     if (studentId) {
       query.studentId = { $regex: studentId, $options: 'i' };
     }
+    if (searchId) {
+      query.studentId = { $regex: searchId, $options: 'i' };
+    }
+    if (hasEmergencyContact === 'true') {
+      query.$or = [
+        { primaryContactName: { $exists: true, $ne: null, $ne: '' } },
+        { primaryPhone: { $exists: true, $ne: null, $ne: '' } }
+      ];
+    }
+    if (searchDate) {
+      const start = new Date(searchDate);
+      const end = new Date(searchDate);
+      end.setDate(end.getDate() + 1);
+      query.updatedAt = { $gte: start, $lt: end };
+    }
 
+    // Pagination: only apply when page/limit are explicitly provided
+    const isPaginated = page !== undefined || limit !== undefined;
+
+    if (isPaginated) {
+      const pageNum = Math.max(1, parseInt(page) || 1);
+      const limitNum = Math.min(100, Math.max(1, parseInt(limit) || 10));
+      const skip = (pageNum - 1) * limitNum;
+
+      const totalRecords = await Student.countDocuments(query);
+
+      const students = await Student.find(query)
+        .populate('admissionId', 'admissionId')
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limitNum);
+
+      const studentsWithAdmission = students.map(s => ({
+        ...s.toObject(),
+        admissionIdStr: s.admissionId?.admissionId || 'N/A'
+      }));
+
+      return res.json({
+        data: studentsWithAdmission,
+        pagination: {
+          totalRecords,
+          totalPages: Math.ceil(totalRecords / limitNum),
+          page: pageNum,
+          limit: limitNum,
+        }
+      });
+    }
+
+    // Default: no pagination (backward-compatible plain array)
     const students = await Student.find(query)
       .populate('admissionId', 'admissionId')
       .sort({ createdAt: -1 });
-    
-    // Add admissionId string to each student
+
     const studentsWithAdmission = students.map(s => ({
       ...s.toObject(),
       admissionIdStr: s.admissionId?.admissionId || 'N/A'
     }));
-    
+
     res.json(studentsWithAdmission);
   } catch (err) {
     console.error('Error fetching students:', err.message);
