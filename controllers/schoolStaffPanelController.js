@@ -811,6 +811,7 @@ exports.getAllotments = feeController.getAllotments;
 exports.allotFee = feeController.allotFee;
 exports.getPayments = feeController.getPayments;
 exports.addPayment = feeController.addPayment;
+exports.getFeeStats = feeController.getFeeStats;
 
 exports.getHealthRecords = healthRecordController.getAllHealthRecords;
 exports.getHealthRecordById = healthRecordController.getHealthRecordById;

@@ -10,7 +10,8 @@ const {
   updateAllotment,
 
   getPayments,
-  addPayment
+  addPayment,
+  getFeeStats
 } = require('../controllers/feeController');
 
 const auth = require('../middleware/auth');
@@ -23,6 +24,9 @@ router.get('/types', auth, allowPermissions('SCHOOL_VIEW_FEES'), getFeeTypes);
 router.post('/types', auth, allowPermissions('SCHOOL_VIEW_FEES'), createFeeType);
 router.put('/types/:id', auth, allowPermissions('SCHOOL_VIEW_FEES'), updateFeeType);
 router.delete('/types/:id', auth, allowPermissions('SCHOOL_VIEW_FEES'), deleteFeeType);
+
+// Fee Stats
+router.get('/stats', auth, allowPermissions('SCHOOL_VIEW_FEES'), getFeeStats);
 
 // Fee Allotments
 router.get('/allotments', auth, allowPermissions('SCHOOL_VIEW_FEES'), getAllotments);

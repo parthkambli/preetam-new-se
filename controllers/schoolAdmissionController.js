@@ -935,6 +935,8 @@ const isDateInPast = (dateStr) => {
   return input < today;
 };
 
+const toISTDate = (date) => new Date(new Date(date || Date.now()).toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
+
 // ─── Fee / Date helpers ────────────────────────────────────────────────────────
 const FEE_PLAN_DURATION = {
   Daily: 1, Weekly: 7, Monthly: 1, Quarterly: 3, HalfYearly: 6, Annual: 12
@@ -1713,7 +1715,7 @@ if (req.files) {
           allotmentId: feeAllotment?._id,
           amount:      paidAmount,
           paymentMode: admissionData.paymentMode || 'Cash',
-          paymentDate: admissionData.paymentDate || new Date(),
+          paymentDate: toISTDate(admissionData.paymentDate),
           description: admission.feeDescription || 'Admission Fee',
           responsibleStaff: admissionData.responsibleStaffId || null,
           organizationId: req.organizationId
@@ -1721,7 +1723,7 @@ if (req.files) {
 
         admission.paymentHistory.push({
           amount: paidAmount,
-          paymentDate: admissionData.paymentDate || new Date(),
+          paymentDate: toISTDate(admissionData.paymentDate),
           paymentMode: admissionData.paymentMode || 'Cash',
           description: admission.feeDescription || 'Admission Fee',
           responsibleStaff: admissionData.responsibleStaffId || null,

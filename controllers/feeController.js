@@ -362,6 +362,12 @@ exports.allotFee = async (req, res) => {
       return res.status(404).json({ message: 'Fee type not found.' });
     }
 
+    // ── Find student's admission for linking ────────────────────
+    const studentAdmission = await SchoolAdmission.findOne({
+      _id: student.admissionId,
+      organizationId: req.organizationId,
+    }).select('_id').lean();
+
     // ── Duplicate check ─────────────────────────────────────────
     const duplicate = await FeeAllotment.findOne({
       organizationId: req.organizationId,
@@ -376,12 +382,13 @@ exports.allotFee = async (req, res) => {
 
     // ── Create Allotment ────────────────────────────────────────
     const allotment = new FeeAllotment({
-      studentId: studentId,           // Explicitly pass as string/ObjectId
+      studentId: studentId,
       feeTypeId,
       amount: numAmount,
       feePlan: feePlan || 'Annual',
       paymentMode: paymentMode || 'Cash',
       dueDate: dueDate || null,
+      admissionId: studentAdmission?._id || undefined,
       organizationId: req.organizationId,
       status: 'Pending',
     });
@@ -459,9 +466,14 @@ exports.updateAllotment = async (req, res) => {
       }
     }
 
+    const updateFields = {};
+    if (amount !== undefined && amount !== '') updateFields.amount = Number(amount);
+    if (feePlan) updateFields.feePlan = feePlan;
+    if (dueDate) updateFields.dueDate = dueDate;
+
     const updated = await FeeAllotment.findOneAndUpdate(
       { _id: req.params.id, organizationId: req.organizationId },
-      req.body,
+      updateFields,
       { new: true, runValidators: true }
     ).populate([
       { path: 'studentId', select: 'fullName studentId' },
@@ -646,9 +658,17 @@ exports.addPayment = async (req, res) => {
 
     // ── Save payment ────────────────────────────────────────────
     const payment = new FeePayment({
-      ...req.body,
-      amount: numAmount,
-      organizationId: req.organizationId,
+      studentId:        studentId,
+      admissionId:      allotment.admissionId || undefined,
+      allotmentId:      allotment._id,
+      amount:           numAmount,
+      paymentDate:      pDate,
+      paymentMode:      paymentMode || 'Cash',
+      description:      description || allotment.description || '',
+      responsibleStaff: responsibleStaff || null,
+      transactionId:    req.body.transactionId || undefined,
+      remarks:          req.body.remarks || undefined,
+      organizationId:   req.organizationId,
     });
     await payment.save();
 
@@ -702,5 +722,53 @@ exports.addPayment = async (req, res) => {
       return res.status(400).json({ message: 'Invalid participant or allotment ID.' });
     }
     res.status(500).json({ message: 'Failed to record payment. Please try again.' });
+  }
+};
+
+// ─────────────────────────────────────────────
+// GET /fees/stats  — aggregate totals (no pagination)
+// ─────────────────────────────────────────────
+exports.getFeeStats = async (req, res) => {
+  try {
+    const orgId = req.organizationId;
+
+    const result = await FeeAllotment.aggregate([
+      { $match: { organizationId: orgId } },
+      {
+        $lookup: {
+          from: 'feepayments',
+          localField: '_id',
+          foreignField: 'allotmentId',
+          as: 'payments',
+        },
+      },
+      {
+        $addFields: {
+          paid: { $sum: '$payments.amount' },
+        },
+      },
+      {
+        $group: {
+          _id: null,
+          totalAssigned:  { $sum: '$amount' },
+          totalCollected: { $sum: '$paid' },
+          uniqueStudents: { $addToSet: '$studentId' },
+        },
+      },
+    ]);
+
+    const agg = result[0] || {};
+    const totalAssigned  = agg.totalAssigned  || 0;
+    const totalCollected = agg.totalCollected || 0;
+
+    res.json({
+      totalParticipants: (agg.uniqueStudents || []).length,
+      totalAssigned,
+      totalCollected,
+      totalPending: totalAssigned - totalCollected,
+    });
+  } catch (err) {
+    console.error('Fee stats error:', err);
+    res.status(500).json({ message: 'Failed to fetch fee stats' });
   }
 };

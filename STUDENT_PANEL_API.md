@@ -347,6 +347,27 @@ Get complete fee history — allotments with payments.
 
 > **status** is either `"Paid"` (pendingAmount == 0) or `"Pending"`.
 
+**Flutter Usage — Unified Payment Screen:**
+
+1. Call `GET /fees` → get `feeHistory[]`
+2. **Summary Card** — compute from feeHistory:
+   - `totalFees` = sum of all `feeHistory[].totalFee`
+   - `totalPaid` = sum of all `feeHistory[].paidAmount`
+   - `totalPending` = sum of all `feeHistory[].pendingAmount`
+   - Progress bar = `totalPaid / totalFees * 100`
+3. **Pending Dues** — filter where `status === "Pending"`:
+   - Show allotment `description`, `pendingAmount`, `dueDate`
+   - "Pay Now" button → call `POST /fees/pending/create-order` with `payNow = pendingAmount`
+4. **Payment History** — flatten all payments:
+   - For each allotment → for each payment → create entry with:
+     - `amount` (from payment)
+     - `description` (from parent allotment: "Monthly Admission Fee", "Bus Transport Service", etc.)
+     - `paymentDate` (format to display date)
+     - `paymentMode` ("Bank Transfer")
+     - `transactionId` ("pay_xxxx")
+   - Sort by `paymentDate` descending (newest first)
+   - Group by month for display
+
 ---
 
 ## 8. Pending Fee Payment (Pay Remaining Admission Fee)
@@ -430,38 +451,77 @@ After Razorpay payment succeeds, call this to verify and record.
 
 ### GET `/attendance`
 
-Get all attendance records + summary.
+Get period-wise attendance for a specific date (or today by default).
 
-**No request body needed.**
+**Query Params:**
+| Param | Type | Required | Description |
+|-------|------|----------|-------------|
+| `date` | String (YYYY-MM-DD) | No | Defaults to today |
+
+**Example:**
+```
+GET /attendance                  → today's attendance
+GET /attendance?date=2026-07-13  → attendance for July 13
+```
 
 **Response (200):**
 ```json
 {
   "success": true,
+  "date": "2026-07-13",
+  "day": "Monday",
   "summary": {
-    "present": 18,
-    "absent": 2,
-    "total": 20,
-    "percentage": 90.00
+    "present": 2,
+    "absent": 1,
+    "notMarked": 2,
+    "totalPeriods": 5
   },
-  "attendance": [
+  "periods": [
     {
-      "_id": "671a...",
-      "attendanceDate": "2025-01-15",
-      "attendanceDay": "Wednesday",
+      "periodName": "Morning Yoga",
+      "startTime": "07:00",
+      "endTime": "08:00",
+      "activityName": "Yoga",
+      "staffName": "Suresh Sir",
       "status": "Present",
+      "markedAt": "2026-07-13T07:05:00.000Z",
       "markedBy": "Suresh Sir"
     },
     {
-      "_id": "671b...",
-      "attendanceDate": "2025-01-14",
-      "attendanceDay": "Tuesday",
+      "periodName": "Breakfast",
+      "startTime": "08:00",
+      "endTime": "08:30",
+      "activityName": "Meals",
+      "staffName": "",
+      "status": "Not Marked",
+      "markedAt": null,
+      "markedBy": ""
+    },
+    {
+      "periodName": "Evening Walk",
+      "startTime": "17:00",
+      "endTime": "18:00",
+      "activityName": "Walking",
+      "staffName": "Anita Ma'am",
       "status": "Absent",
-      "markedBy": "Suresh Sir"
+      "markedAt": "2026-07-13T17:10:00.000Z",
+      "markedBy": "Anita Ma'am"
     }
   ]
 }
 ```
+
+**Status values:**
+| Status | Meaning |
+|--------|---------|
+| `"Present"` | Attendance marked, student present |
+| `"Absent"` | Attendance marked, student absent |
+| `"Not Marked"` | Period exists in timetable but no attendance was taken |
+
+**Flutter Usage:**
+- Open screen → call `GET /attendance` → shows today's periods
+- User taps a date on calendar → call `GET /attendance?date=YYYY-MM-DD` → shows that date
+- Each period card shows: period time, activity name, staff, and status (color-coded)
 
 ---
 

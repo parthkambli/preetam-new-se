@@ -1418,13 +1418,15 @@ exports.verifyPendingFeePayment = async (req, res) => {
       organizationId: req.organizationId,
     });
 
+    const updatedAdmission = await SchoolAdmission.findById(admission._id).lean();
+
     return res.json({
       success: true,
       message: 'Payment verified successfully',
       summary: {
-        totalFee: admission.totalFee || 0,
-        paidAmount: admission.paidAmount || 0,
-        pendingAmount: admission.remainingAmount || 0,
+        totalFee: updatedAdmission.totalFee || 0,
+        paidAmount: updatedAdmission.paidAmount || 0,
+        pendingAmount: updatedAdmission.remainingAmount || 0,
         paidNow: numPayNow,
       },
     });

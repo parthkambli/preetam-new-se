@@ -50,6 +50,7 @@ const {
   allotFee,
   getPayments,
   addPayment,
+  getFeeStats,
   getHealthRecords,
   getHealthRecordById,
   createHealthRecord,
@@ -109,6 +110,8 @@ router.get('/fees/types', allowPermissions('SCHOOL_VIEW_FEES'), getFeeTypes);
 router.post('/fees/types', allowPermissions('SCHOOL_VIEW_FEES'), createFeeType);
 router.put('/fees/types/:id', allowPermissions('SCHOOL_VIEW_FEES'), updateFeeType);
 router.delete('/fees/types/:id', allowPermissions('SCHOOL_VIEW_FEES'), deleteFeeType);
+
+router.get('/fees/stats', allowPermissions('SCHOOL_VIEW_FEES'), getFeeStats);
 
 router.get('/fees/allotments', allowPermissions('SCHOOL_VIEW_FEES'), getAllotments);
 router.post('/fees/allotments', allowPermissions('SCHOOL_VIEW_FEES'), allotFee);
