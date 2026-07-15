@@ -28,7 +28,7 @@ const VALID_STATUSES = ['New', 'Follow Up', 'Converted', 'Admitted'];
  */
 exports.getAllEnquiries = async (req, res) => {
   try {
-    const { status, source, search, date } = req.query;
+    const { status, source, search, date, page, limit } = req.query;
 
     let query = { organizationId: req.organizationId };
 
@@ -65,6 +65,27 @@ exports.getAllEnquiries = async (req, res) => {
       const nextDay = new Date(parsed);
       nextDay.setDate(nextDay.getDate() + 1);
       query.date = { $gte: parsed, $lt: nextDay };
+    }
+
+    const isPaginated = page !== undefined || limit !== undefined;
+
+    if (isPaginated) {
+      const pageNum  = Math.max(1, parseInt(page) || 1);
+      const limitNum = Math.min(100, Math.max(1, parseInt(limit) || 10));
+      const skip     = (pageNum - 1) * limitNum;
+
+      const totalRecords = await SchoolEnquiry.countDocuments(query);
+      const enquiries    = await SchoolEnquiry.find(query).sort({ createdAt: -1 }).skip(skip).limit(limitNum);
+
+      return res.json({
+        data: enquiries,
+        pagination: {
+          totalRecords,
+          totalPages: Math.ceil(totalRecords / limitNum),
+          page: pageNum,
+          limit: limitNum,
+        },
+      });
     }
 
     const enquiries = await SchoolEnquiry.find(query).sort({ createdAt: -1 });

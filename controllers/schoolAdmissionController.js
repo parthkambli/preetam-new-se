@@ -1026,11 +1026,7 @@ const STUDENT_SYNC_FIELDS = [
  */
 exports.getAllAdmissions = async (req, res) => {
   try {
-    const page = Math.max(parseInt(req.query.page) || 1, 1);
-    const limit = Math.max(parseInt(req.query.limit) || 10, 1);
-    const skip = (page - 1) * limit;
-
-    const { search, feePlan, status, paymentFilter } = req.query;
+    const { page, limit, search, feePlan, status, paymentFilter } = req.query;
 
     let query = { organizationId: req.organizationId };
 
@@ -1058,30 +1054,43 @@ exports.getAllAdmissions = async (req, res) => {
       query.remainingAmount = { $gt: 0 };
     }
 
-    const totalRecords = await SchoolAdmission.countDocuments(query);
-    const totalPages = Math.ceil(totalRecords / limit);
+    const isPaginated = page !== undefined || limit !== undefined;
 
-    const admissions = await SchoolAdmission.find(query)
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(limit);
+    if (isPaginated) {
+      const pageNum  = Math.max(parseInt(page) || 1, 1);
+      const limitNum = Math.min(100, Math.max(parseInt(limit) || 10, 1));
+      const skip     = (pageNum - 1) * limitNum;
 
+      const totalRecords = await SchoolAdmission.countDocuments(query);
+      const admissions   = await SchoolAdmission.find(query)
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limitNum);
+
+      const admissionsWithStatus = admissions.map(adm => {
+        const statusMeta = computeAdmissionStatus(adm);
+        return { ...adm.toObject(), ...statusMeta };
+      });
+
+      return res.json({
+        data: admissionsWithStatus,
+        pagination: {
+          totalRecords,
+          currentPage: pageNum,
+          totalPages: Math.ceil(totalRecords / limitNum),
+          limit: limitNum,
+          hasNextPage: pageNum < Math.ceil(totalRecords / limitNum),
+          hasPrevPage: pageNum > 1,
+        },
+      });
+    }
+
+    const admissions = await SchoolAdmission.find(query).sort({ createdAt: -1 });
     const admissionsWithStatus = admissions.map(adm => {
       const statusMeta = computeAdmissionStatus(adm);
       return { ...adm.toObject(), ...statusMeta };
     });
-
-    res.json({
-      data: admissionsWithStatus,
-      pagination: {
-        totalRecords,
-        currentPage: page,
-        totalPages,
-        limit,
-        hasNextPage: page < totalPages,
-        hasPrevPage: page > 1,
-      },
-    });
+    res.json(admissionsWithStatus);
   } catch (err) {
     console.error('Error fetching admissions:', err.message);
     res.status(500).json({ message: 'Server error while fetching admissions.' });

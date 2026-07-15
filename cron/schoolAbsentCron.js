@@ -8,9 +8,9 @@ cron.schedule("8 00 * * *", async () => {
     console.log("Running school absent attendance cron...");
 
     const todayIST = getTodayIST();
-    const todayDate = new Date();
     const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-    const todayDay = dayNames[todayDate.getDay()];
+    const [y, m, d] = todayIST.split('-').map(Number);
+    const todayDay = dayNames[new Date(Date.UTC(y, m - 1, d)).getUTCDay()];
 
     const dayField = `${todayDay.toLowerCase()}ActivityId`;
 
