@@ -360,13 +360,14 @@ const msPerDay = 1000 * 60 * 60 * 24;
 schoolAdmissionSchema.virtual('feeRemainingDays').get(function() {
   if (!this.endDate) return '—';
   const now = new Date();
+  now.setHours(0, 0, 0, 0);
   const end = new Date(this.endDate);
   end.setHours(23, 59, 59, 999);
   const start = this.startDate ? new Date(this.startDate) : null;
   if (start) start.setHours(0, 0, 0, 0);
 
-  if (start && start > now) {
-    const diff = Math.floor((start - now) / msPerDay);
+  if (start && start.getTime() > now.getTime()) {
+    const diff = Math.round((start.getTime() - now.getTime()) / msPerDay);
     return `Starts in ${diff}d`;
   }
   if (end < now) return 'Expired';
@@ -377,6 +378,7 @@ schoolAdmissionSchema.virtual('feeRemainingDays').get(function() {
 schoolAdmissionSchema.virtual('serviceRemainingDays').get(function() {
   if (!this.services || this.services.length === 0) return '—';
   const now = new Date();
+  now.setHours(0, 0, 0, 0);
   let latestEnd = null;
   for (const svc of this.services) {
     if (svc.endDate) {

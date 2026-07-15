@@ -14,8 +14,8 @@ function computeAdmissionStatus(admission) {
   end.setHours(23, 59, 59, 999);
 
   // Future start date — not yet active
-  if (start && start > today) {
-    const diff = Math.floor((start - today) / msPerDay);
+  if (start && start.getTime() > today.getTime()) {
+    const diff = Math.round((start.getTime() - today.getTime()) / msPerDay);
     return { computedStatus: 'Inactive', remainingDays: `Starts in ${diff}d`, isExpired: false };
   }
 

@@ -1654,6 +1654,10 @@ exports.verifyMembershipRenewalPayment = async (req, res) => {
       admission.startDate = computedStartDate;
       admission.endDate = endDate;
 
+      if (admission.status === 'Inactive') {
+        admission.status = 'Active';
+      }
+
       admission.totalFee = (admission.totalFee || 0) + totalFee;
       admission.paidAmount = (admission.paidAmount || 0) + numPayNow;
       admission.remainingAmount = Math.max(0, (admission.totalFee || 0) - (admission.paidAmount || 0));
