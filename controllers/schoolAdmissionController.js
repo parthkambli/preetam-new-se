@@ -2096,8 +2096,8 @@ if (req.files) {
       }
     }
 
-    // ── Sync User record (password / loginMobile) ─────────────────────────
-    if (updateData.password || updateData.loginMobile) {
+    // ── Sync User record (password / loginMobile / fullName / mobile) ─────
+    if (updateData.password || updateData.loginMobile || updateData.fullName || updateData.mobile) {
       const studentDoc = await Student.findOne({ admissionId: admission._id }).lean();
       if (studentDoc) {
         const userUpdate = {};
@@ -2107,6 +2107,12 @@ if (req.files) {
         if (updateData.loginMobile) {
           userUpdate.userId = admission.loginMobile;
         }
+        if (updateData.fullName) {
+          userUpdate.fullName = admission.fullName;
+        }
+        if (updateData.mobile) {
+          userUpdate.mobile = admission.mobile;
+        }
         if (Object.keys(userUpdate).length > 0) {
           userUpdate.updatedAt = Date.now();
           const userResult = await User.findOneAndUpdate(
@@ -2115,11 +2121,11 @@ if (req.files) {
             { new: true }
           );
           if (!userResult) {
-            console.warn(`⚠️ User record not found for studentId ${studentDoc._id}. Password/loginMobile not synced.`);
+            console.warn(`⚠️ User record not found for studentId ${studentDoc._id}. User fields not synced.`);
           }
         }
       } else {
-        console.warn(`⚠️ Student record not found for admissionId ${admission._id}. Cannot sync User password/loginMobile.`);
+        console.warn(`⚠️ Student record not found for admissionId ${admission._id}. Cannot sync User fields.`);
       }
     }
 
