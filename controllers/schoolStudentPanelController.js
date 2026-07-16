@@ -1592,6 +1592,15 @@ exports.verifyMembershipRenewalPayment = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Missing Razorpay payment details' });
     }
 
+    const generatedSignature = crypto
+      .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET)
+      .update(`${razorpay_order_id}|${razorpay_payment_id}`)
+      .digest('hex');
+
+    if (generatedSignature !== razorpay_signature) {
+      return res.status(400).json({ success: false, message: 'Payment verification failed' });
+    }
+
     const { feeType, startDate: computedStartDate, endDate, totalFee } =
       await validateMembershipRenewal(admission, req.organizationId, feePlan, requestStartDate);
 
