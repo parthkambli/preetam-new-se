@@ -20,6 +20,11 @@ const serviceBookingSchema = new mongoose.Schema({
   totalFee: Number,
 }, { _id: false });
 
+const additionalChargeSchema = new mongoose.Schema({
+  name: { type: String, trim: true },
+  amount: { type: Number, default: 0 },
+}, { _id: false });
+
 const paymentHistorySchema = new mongoose.Schema({
   amount: { type: Number, required: true },
   paymentDate: Date,
@@ -288,6 +293,24 @@ const schoolAdmissionSchema = new mongoose.Schema({
   services: {
     type: [serviceBookingSchema],
     default: []
+  },
+
+  additionalCharges: {
+    type: [additionalChargeSchema],
+    default: []
+  },
+  additionalChargesTotal: {
+    type: Number,
+    default: 0
+  },
+
+  // Deposit (informational only — no payment logic)
+  depositAmount: {
+    type: Number,
+    default: 0
+  },
+  depositDate: {
+    type: Date
   },
 
   paymentDate: {

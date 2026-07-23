@@ -1188,11 +1188,13 @@ if (req.files) {
     }
     delete admissionData.responsibleStaff;
 
-    // ── Parse timetable / services from JSON strings ───────────────────────
+    // ── Parse timetable / services / additionalCharges from JSON strings ───
     const rawTimetable = parseJSONField(admissionData.timetable);
     const rawServices = parseJSONField(admissionData.services);
+    const rawAdditionalCharges = parseJSONField(admissionData.additionalCharges);
     delete admissionData.timetable;
     delete admissionData.services;
+    delete admissionData.additionalCharges;
 
     // ── Required fields ────────────────────────────────────────────────────
     if (!admissionData.fullName || !admissionData.fullName.trim()) {
@@ -1444,6 +1446,15 @@ if (req.files) {
       }
       totalFee += servicesTotal;
 
+      // Add additional charges to grand total
+      let additionalChargesTotal = 0;
+      if (rawAdditionalCharges && rawAdditionalCharges.length > 0) {
+        for (const c of rawAdditionalCharges) {
+          additionalChargesTotal += Number(c.amount) || 0;
+        }
+      }
+      totalFee += additionalChargesTotal;
+
       paidAmount = Math.max(0, Number(admissionData.paidAmount) || 0);
       if (paidAmount > totalFee) {
         return res.status(400).json({
@@ -1550,6 +1561,10 @@ if (req.files) {
       ...admissionData,
       timetable: rawTimetable || [],
       services: rawServices || [],
+      additionalCharges: rawAdditionalCharges || [],
+      additionalChargesTotal: rawAdditionalCharges
+        ? rawAdditionalCharges.reduce((sum, c) => sum + (Number(c.amount) || 0), 0)
+        : 0,
       organizationId: req.organizationId
     });
 
@@ -1854,6 +1869,13 @@ if (updateData.services) {
   const parsed = parseJSONField(updateData.services);
   if (parsed) updateData.services = parsed;
 }
+if (updateData.additionalCharges) {
+  const parsed = parseJSONField(updateData.additionalCharges);
+  if (parsed) updateData.additionalCharges = parsed;
+  updateData.additionalChargesTotal = parsed
+    ? parsed.reduce((sum, c) => sum + (Number(c.amount) || 0), 0)
+    : 0;
+}
 
 // ── Normalize feePlan (frontend sends lowercase) ───────────────────
 if (updateData.feePlan) {
@@ -1949,6 +1971,16 @@ if (req.files) {
           }
         }
         totalFee += servicesTotal;
+
+        // Include additional charges in total
+        const currentCharges = updateData.additionalCharges || admission.additionalCharges || [];
+        let additionalChargesTotal = 0;
+        if (currentCharges.length > 0) {
+          for (const c of currentCharges) {
+            additionalChargesTotal += Number(c.amount) || 0;
+          }
+        }
+        totalFee += additionalChargesTotal;
 
         let remainingAmount = Math.max(0, totalFee - Math.max(0, paidAmount));
         let paymentStatus = (remainingAmount <= 0 && paidAmount > 0) ? 'Paid' : 'Pending';
